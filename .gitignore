@@ -1,0 +1,6 @@
+*.aux
+*.log
+*.pdf
+bapolar.py
+figures
+pygments.sty

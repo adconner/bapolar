@@ -1,0 +1,463 @@
+\documentclass{amsart}
+\usepackage{amsmath,amssymb,amsthm,mathrsfs,microtype}
+\usepackage{fancyvrb,color,pygments}
+\usepackage[margin=1in]{geometry}
+
+\title{Border apolarity implementation}
+\author{Austin Conner}
+
+\begin{document}
+\maketitle
+
+<<complete=False>>=
+from itertools import *
+
+def Tinfo(T,reps=None):
+    if reps is None:
+        Lg,reps = stabilizer_reps_ss(T)
+
+    xs = [ block_diagonal_matrix([x[i] for x,y,h in reps],subdivide=False)
+            for i in range(len(reps[0][0])) ]
+    hs = [ block_diagonal_matrix([h[i] for x,y,h in reps],subdivide=False)
+            for i in range(len(reps[0][2])) ]
+    T = np.array(list(map(list,T)))
+    vwts = matrix([h.diagonal() for h in hs])
+    return T,vwts,xs
+
+def memoize(obj):
+    cache = obj.cache = {}
+
+    import functools
+    @functools.wraps(obj)
+    def memoizer(*args, **kwargs):
+        if args not in cache:
+            cache[args] = obj(*args, **kwargs)
+        return cache[args]
+    return memoizer
+
+class BorderApolarityNC:
+    def __init__(self, Tinfo, r, F = QQ):
+        self.T, self.vwts, self.xs = Tinfo
+        self.Bxs = basis_of_lie_algebra(self.xs)
+        self.r = r
+        self.F = F
+        self.nvars = sum(self.T.shape)
+        self.nvarsx = self.nvars + len(self.Bxs)
+        self.R0 = self.get_ring()
+        self.vixs = [0]
+        for s in self.T.shape:
+            self.vixs.append(self.vixs[-1] + s)
+
+        self.X = matrix([self.x_weight(x) for x in self.xs])
+        ixs = self.X.pivots()
+        self.Xi = ~self.X[:,ixs]
+
+    def get_ring(self,params=0):
+        if params > 0:
+            params = next(1<<k for k in range(32) if 1<<k >= params )
+        return self.get_ring_exact(params)
+
+    @memoize
+    def get_ring_exact(self, params=0):
+        if params > 0:
+            params = next(1<<k for k in range(32) if 1<<k >= params )
+        # should give cached rings of power of two size
+        lets = 'abcdefghijklmnopqrsuvwyz'
+        B = matrix([x.list() for x in self.Bxs]).T
+        A = FreeAlgebra(self.F,['%s%d' % (lets[i],j) for i in range(self.T.ndim)
+            for j in range(self.T.shape[i])] + 
+                ['x%d'%i for i in range(len(self.Bxs))] + ['t%d' % j for j in range(params)])
+        yvs = A.gens()[:sum(self.T.shape)]
+        xvs = A.gens()[sum(self.T.shape):sum(self.T.shape)+len(self.Bxs)]
+        rels = {}
+        for (xv1,x1),(xv2,x2) in combinations(zip(xvs,self.Bxs),2):
+            x3 = x2*x1 - x1*x2
+            if not x3.is_zero():
+                xv3 = sum(e*yv for e,yv in zip(B.solve_right(vector(x3.list())).list(),xvs))
+                rels[xv2*xv1] = xv1*xv2 + xv3
+        for (xv,x),(yi,yv) in product(zip(xvs,self.Bxs),enumerate(yvs)):
+            xy = x*vector(self.F,self.Bxs[0].nrows(),{yi:1})
+            if not xy.is_zero():
+                xyv = sum(e*yv for e,yv in zip(xy.list(),yvs))
+                rels[xv*yv] = yv*xv + xyv
+        order = TermOrder('degrevlex',sum(self.T.shape)+len(self.Bxs))
+        if params > 0:
+            order = order + TermOrder('degrevlex',params)
+        return A.g_algebra(rels,order=order)
+
+    @memoize
+    def get_vorder(self, tm):
+        if max(tm) == 1:
+            tone = [i for i in range(len(tm)) if tm[i] == 1]
+            tzero = [i for i in range(len(tm)) if tm[i] == 0]
+            Tr = self.T.transpose(tzero+tone)
+            Tr = Tr.reshape(prod(Tr.shape[:len(tzero)]),-1)
+            Tr = matrix(self.F,Tr)
+
+        ivs = [IntegerVectors(t,self.T.shape[ti]) for ti,t in enumerate(tm)]
+        from operator import concat
+        vorder = {}
+        for v in cartesian_product(ivs):
+            v = reduce(concat,map(tuple,v))
+            wt = tuple(self.vwts*vector(v))
+            vorder.setdefault(wt,[]).append(v)
+        mon = lambda m: self.R0.prod(x**k for k,x in zip(m,self.R0.gens()) if k>0)
+        vorder = sorted(vorder.items(),key=lambda wtvs:
+                self.total_order_sort_key(wtvs[0]))
+        allvs = []
+        vsl = []
+        for vi,(wt,vs) in enumerate(vorder):
+            vs.sort(key=mon,reverse=True)
+            if max(tm) == 1: # restrict to Tperp
+                inc = []
+                for v in vs:
+                    vix = 0
+                    for i in tone:
+                        vix *= self.T.shape[i]
+                        vix += next(j for j in range(self.T.shape[i]) if
+                                v[sum(self.T.shape[:i])+j] == 1)
+                    inc.append([1 if i==vix else 0 for i in range(Tr.ncols())])
+                K = (Tr*matrix(inc).T).right_kernel_matrix()
+                vs = [sum(e*mon(vs[i]) for i,e in enumerate(r)) for r in K]
+            else:
+                vs = [mon(v) for v in vs]
+            allvs.extend(vs)
+            vsl.extend([len(allvs)]*len(vs))
+        return (allvs,vsl)
+
+
+    def x_weight(self, x):
+        i,j = x.nonzero_positions()[0]
+        wt = tuple(self.vwts.column(i)-self.vwts.column(j))
+        for i,j in x.nonzero_positions()[1:]:
+            assert wt == tuple(self.vwts.column(i)-self.vwts.column(j))
+        return wt
+
+    def weight_le(self, wta, wtb):
+        dwt = vector(self.F,map(sub,wtb,wta))
+        u = dwt * self.Xi
+        return all(e >= 0 for e in u) and u*self.X == dwt
+
+    # This should be anything consistent with the partial order given by
+    # weight_le. Determines the order the algorithm tries to fill weight spaces
+    def total_order_sort_key(self, wt):
+        return sum(vector(self.F,wt)*self.Xi)
+
+    def lm(self, p, toR0 = False):
+        R = self.R0 if toR0 else p.parent()
+        if p.is_zero():
+            return R.zero()
+        return R.prod(R.gen(x)**k for x,k in 
+                p.lm().exponents()[0][:self.nvars].sparse_iter())
+
+    # J assumed to be twostd(), and returned ideals are also twostd
+    def minimal_relations_killing_leading_term(self,J,p):
+        same = True
+        while True:
+            teqs = []
+            for q in J.gens():
+                if not self.lm(q).is_constant() and \
+                        self.R0.monomial_divides(self.lm(q,True),self.lm(p,True)):
+                    teqs.append(q.coefficient(self.lm(q)))
+            if len(teqs) == 0:
+                return (J,same)
+            else:
+                J = (J+teqs).twostd()
+                same = False
+
+    def enumerate_candidates(self,tm,tmcs,J0=None,xi=0):
+        for J,yi in self.enumerate_tm(tm,J0,xi):
+            ok = True
+            tmnt = [tmcs[0]]
+            for tmc in tmcs[1:]:
+                try:
+                    Je = self.enumerate_tm_bounded(tmc,J).next()
+                    if J != Je:
+                        tmnt.append(tmc)
+                except StopIteration:
+                    ok = False
+                    break
+            if ok:
+                Js = [J]
+                for tmc in tmnt:
+                    Js = list(chain.from_iterable(self.enumerate_tm_bounded(tmc,Jeq)
+                        for Jeq in Js))
+                for Jeq in Js:
+                    yield (Jeq,yi)
+
+    def enumerate_tm(self, tm, J=None, xi=0):
+        if J is None:
+            J = self.get_ring().ideal(side='twosided')
+        J += [p for i,e in enumerate(tm) for p in
+                self.all_monomials((0,)*i+(e+1,)+(0,)*(len(tm)-i-1),J.ring())]
+        J = J.twostd()
+
+        vs, vsl = self.get_vorder(tm)
+        lp = self.get_linear_program((tm,))
+        # lp = self.get_linear_program((tm,),((2,1,0),(1,2,0)))
+
+        def dfs(ii,J,xi,r):
+            if r == 0:
+                J = (J + [liftR(p,J.ring()) for p in vs[ii:]]).twostd()
+                yield (J,xi)
+                return
+            if ii == len(vs):
+                return
+
+            # case 1, vs[ii].lm() already in the leading term ideal, move on
+            if J.reduce(liftR(vs[ii],J.ring())) != liftR(vs[ii],J.ring()):
+                for JJ in dfs(ii+1,J,xi,r):
+                    yield JJ
+                return
+            print ('%s%d' % (' '*ii,r))
+
+            # should also check tm above here?
+            for i,p in enumerate(vs):    
+                if J.reduce(liftR(p,J.ring())) != liftR(p,J.ring()):
+                    # p.lm() definitely already in
+                    lp.set_min(lp[p.lm()],1.0)
+                    lp.set_max(lp[p.lm()],1.0)
+                else:
+                    lp.set_min(lp[p.lm()],0.0)
+                    lp.set_max(lp[p.lm()],0.0 if i<ii else 1.0)
+
+            from sage.numerical.mip import MIPSolverException
+            try:
+                lp.solve()
+            except MIPSolverException:
+                return
+
+            # case 2: vs[ii].lm() is not in the leading term ideal
+            Jnext, _ = self.minimal_relations_killing_leading_term(J,vs[ii])
+            if 1 not in Jnext:
+                for JJ in dfs(ii+1,Jnext,xi,r-1):
+                    yield JJ
+
+            # case 3: put vs[ii].lm() in the leading term ideal
+            cur_params = J.ring().ngens() - self.nvarsx
+            needed_params = xi + vsl[ii] - ii - 1
+            if needed_params > cur_params:
+                R = self.get_ring(needed_params)
+                J = R.ideal([liftR(p,R) for p in J.gens()])
+            R = J.ring()
+
+            p = liftR(vs[ii],R) + R.sum(liftR(vs[j],R)*R.gen(self.nvarsx+xi+j-(ii+1)) 
+                    for j in range(ii+1,vsl[ii]))
+
+            for JJ in dfs(ii+1,(J+p).twostd(),xi+vsl[ii]-(ii+1),r):
+                yield JJ
+
+        for I,yi in dfs(0,J,xi,self.r - self.tm_codim_tperp(tm)):
+            I = I.ring().ideal([p for p in I.gens() if not p.is_zero() and 
+                all([e<=f for e,f in zip(self.polynomial_tm(p),tm)])],side='twosided')
+            I = I.twostd()
+            yield (I,yi)
+
+    # J assumed to be twostd
+    def enumerate_tm_bounded(self, tm, J):
+        # J += [p for i,e in enumerate(tm) for p in
+        #         self.all_monomials((0,)*i+(e+1,)+(0,)*(len(tm)-i-1),J.ring())]
+
+        vs,_ = self.get_vorder(tm)
+        vs = [p(J.ring().gens()[:p.parent().ngens()]) for p in vs]
+
+        def dfs(ii,J,r,checkedIs):
+            # print ('%s%d %d' % (' '*ii,ii,r))
+            if r == 0:
+                yield J
+                return
+            if ii == len(vs):
+                return
+
+            # case 1, vs[ii].lm() is in the leading term ideal, no backtrack needed
+            if J.reduce(vs[ii]).lm() != vs[ii].lm():
+                for I in dfs(ii+1,J,r,checkedIs):
+                    yield I
+                return
+
+            already_in_remaining = 0
+            for p in vs[ii:]:    
+                if J.reduce(p).lm() != p.lm():
+                    already_in_remaining += 1 
+            if len(vs) - ii - already_in_remaining < r:
+                return
+
+            Jnext, same = self.minimal_relations_killing_leading_term(J,vs[ii])
+
+            # case 2: vs[ii].lm() is not in the leading term ideal, no backtrack needed
+            if same:
+                for I in dfs(ii+1,J,r-1,checkedIs):
+                    yield I
+                return
+
+            if any(Jnext <= Jchecked for Jchecked in checkedIs):
+                # case 3: proposed relations are implied by relations which will
+                # be checked in an earlier case 5; no need to check them now.
+                # Don't assume vs[ii].lm() in the leading term ideal and don't
+                # backtrack this decision
+                for I in dfs(ii+1,J,r,checkedIs):
+                    yield I
+                return 
+
+            # case 4: proceed without assuming vs[ii].lm() in the leading
+            # term ideal, and dont check equations implied by Inew in the future
+            # (such will be covered by case 5 here)
+            case5needed = True
+            for I in dfs(ii+1,J,r,checkedIs+[Jnext]):
+                if I <= Jnext:
+                    case5needed = False
+                yield I
+
+            # case 5: add equations excluding vs[ii].lm() out of the leading
+            # term ideal. If we have already encountered a solution which is more
+            # general than Inew, we need not search more
+            if case5needed:
+                for I in dfs(ii+1,Jnext,r-1,checkedIs):
+                    yield I
+
+        for I in dfs(0,J,self.r - self.tm_codim_tperp(tm),[]):
+            # I = I.ring().ideal([p for p in I.gens() if not p.is_zero() and 
+            #     all([e<=f for e,f in zip(self.polynomial_tm(p),tm)])],side='twosided')
+            yield I
+
+    @memoize
+    def tm_dim(self, tm):
+        return prod(binomial(d+t-1,t) for t,d in zip(tm,self.T.shape))
+
+    @memoize
+    def tm_dim_tperp(self, tm):
+        if max(tm) > 1:
+            return self.tm_dim(tm)
+        else:
+            return len(self.get_vorder(tm)[0])
+
+    @memoize
+    def tm_codim_tperp(self, tm):
+        return self.tm_dim(tm) - self.tm_dim_tperp(tm)
+
+    def polynomial_tm(self, p):
+        e = p.exponents()[0]
+        return tuple(sum(k for _,k in e[a:b].sparse_iter()) 
+                for a,b in zip(self.vixs,self.vixs[1:]))
+
+    def polynomial_weight(self, p):
+        e = p.exponents()[0]
+        return tuple(sum(k*self.vwts[:,xi] for xi,k in e.sparse_iter()).list())
+
+    def all_monomials(self, tm, R=None):
+        if R is None:
+            R = self.get_ring()
+        for y in cartesian_product([IntegerVectors(a,d) 
+                for a,d in zip(tm,self.T.shape) ]):
+            yield R.prod(x**k for k,x in 
+                    zip((k for e in y for k in e),R.gens()) if k>0)
+
+    @memoize
+    def get_linear_program(self, tms, tms_triv=()):
+        prog = MixedIntegerLinearProgram()
+        prog.set_binary(prog.default_variable())
+        # prog.set_real(prog.default_variable())
+
+        # constraint that all of ps implies at least one of the qs
+        def le_constraint(ps,qs):
+            prog.add_constraint(prog.sum(1-prog[p.lm()] for p in ps) +\
+                prog.sum(prog[p.lm()] for p in qs) >= 1)
+        for tm in tms:
+            vs,vsl = self.get_vorder(tm)
+            prog.add_constraint(prog.sum(prog[p.lm()] for p in vs) == 
+                    max(self.tm_dim(tm) - self.r,0))
+        for tm in tms_triv:
+            vs,vsl = self.get_vorder(tm)
+            prog.add_constraint(prog.sum(prog[p.lm()] for p in vs) <= 
+                    max(self.tm_dim(tm) - self.r,0))
+        P = Poset((tms+tms_triv,lambda a,b: all(i<=j for i,j in zip(a,b))))
+        for tm,tmr in P.cover_relations():
+            for v in self.get_vorder(tm)[0]:
+                for y in self.all_monomials(tuple(map(sub,tmr,tm))):
+                    le_constraint([v],[v*y])
+        if len(tms) == 0:
+            return prog
+        R = self.get_ring(sum(j-i-1 for tm in tms 
+            for i,j in enumerate(self.get_vorder(tm)[1])))
+        xi = 0
+        tmm = reduce(lambda tma,tmb: tuple(map(max,tma,tmb)),tms+tms_triv)
+        J = R.ideal([p for i,e in enumerate(tmm) for p in
+            self.all_monomials((0,)*i+(e+1,)+(0,)*(len(tm)-i-1),R)],side='twosided')
+        weight_spaces = {}
+        for tm in tms:
+            vs,vsl = self.get_vorder(tm)
+            for i,(plead,piend) in enumerate(zip(vs,vsl)):
+                print plead
+                pafter = vs[i+1:piend]
+                p = liftR(plead,R) + R.sum(liftR(p,R)*t for p,t in
+                    zip(pafter,R.gens()[self.nvarsx+xi:]))
+                xi += len(pafter)
+                Jcur = (J + p).twostd()
+                weight_spaces.setdefault((self.polynomial_tm(p),
+                    self.polynomial_weight(p)),[]).append((p,Jcur))
+
+        def raising_constraints(ps,J):
+            for q in J.gens():
+                if self.polynomial_tm(q) in tms+tms_triv:
+                    oneof = []
+                    have_constant = False
+                    while not q.is_zero():
+                        oneof.append(self.lm(q,True))
+                        if q.coefficient(self.lm(q)).is_constant():
+                            have_constant = True
+                            break
+                        q -= q.coefficient(self.lm(q))*self.lm(q)
+                    if have_constant:
+                        le_constraint([self.lm(p,True) for p in ps],oneof)
+
+        for pJs in weight_spaces.values():
+            for k in range(1,len(pJs)+1):
+                for pJsk in combinations(pJs,k):
+                    ps = [p for p,J in pJsk]
+                    print ps
+                    J = sum([J for p,J in pJsk]).twostd()
+                    raising_constraints(ps,J)
+
+        return prog
+
+    def bounded_gb(self, J, tm):
+        J += [p for i,e in enumerate(tm) for p in
+                self.all_monomials((0,)*i+(e+1,)+(0,)*(len(tm)-i-1),J.ring())]
+        gb = J.twostd().gens()
+        gb = [p for p in gb if all(a<=b for a,b in zip(self.polynomial_tm(p),tm))]
+        return gb
+    
+    # For testing purposes
+    # This gives the monomials not in the leading term ideal for a generic point
+    # in the family of ideals corresponding to J. If the family J is not
+    # irreducible, this gives the intersection of this set of monomials over all
+    # the irreducible components of J
+    # it is assumed that the family J is nonempty (1 not in J)
+    def generic_codim(self,J,tm):
+        msin = set()
+        for p in J.gens():
+            m = self.lm(p,True)
+            if not m.is_constant(): # otherwise a defining equation of the family
+                for n in self.all_monomials(map(sub,tm,self.polynomial_tm(m))):
+                    msin.add(m*n)
+        return [m for m in self.all_monomials(tm) if m not in msin]
+
+
+def liftR(p,R):
+    if p.parent() is R:
+        return p
+    return p(R.gens()[:p.parent().ngens()])
+
+def basis_of_lie_algebra(xs):
+    B = copy(xs)
+    Q = copy(xs)
+    while len(Q) > 0:
+        y = Q.pop()
+        for x in xs:
+            z = x*y-y*x
+            if matrix(t.list() for t in B+[z]).rank() > len(B):
+                B.append(z)
+                Q.append(z)
+    return B
+@
+\end{document}
