@@ -11,13 +11,9 @@ pdfs: $(pdffiles)
 	ptangle $<
 
 %.tex: %.texw
-	pweave -f texpygments $<
+	pweave -f texminted $<
 
-%.pdf: %.tex pygments.sty
-	pdflatex $<
-
-pygments.sty: Makefile
-	pygmentize -f tex -S friendly > pygments.sty
-	# pygmentize -f tex -S tango > pygments.sty
-	# pygmentize -f tex -S lovelace > pygments.sty
+%.pdf: %.tex
+	pdflatex -shell-escape $<
+	pdflatex -shell-escape $<
 

@@ -1,6 +1,6 @@
 \documentclass{amsart}
 \usepackage{amsmath,amssymb,amsthm,mathrsfs,microtype}
-\usepackage{fancyvrb,color,pygments}
+\usepackage{minted}
 \usepackage[margin=1in]{geometry}
 
 \title{Border apolarity implementation}
