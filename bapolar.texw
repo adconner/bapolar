@@ -3,11 +3,252 @@
 \usepackage{minted}
 \usepackage[margin=1in]{geometry}
 
+\newtheorem{theorem}{Theorem}
+\newtheorem{observation}[theorem]{Observation}
+\newtheorem{lemma}[theorem]{Lemma}
+
+\newcommand{\CC}{\mathbb{C}}
+\newcommand{\ot}{\otimes}
+
+\newcommand{\abs}[1]{\lvert #1 \rvert}
+\newcommand{\Abs}[1]{\left\lvert #1 \right\rvert}
+\newcommand{\norm}[1]{\lVert #1 \rVert}
+
+\newcommand{\code}[1]{\mintinline{python}{#1}}
+
 \title{Border apolarity implementation}
 \author{Austin Conner}
 
 \begin{document}
 \maketitle
+\section{Introduction}
+Given a tensor $T \in A \ot B\ot C$, a natural number $r$, and a solvable
+connected Lie group $B \subset \operatorname{GL}(A) \times \operatorname{GL}(B)
+\times \operatorname{GL}(C)$ stabilizing $T$, the routines of this file seek to
+practically implement complete enumeration of multigraded ideals $I\subset
+\operatorname{Sym}(A^* \oplus B^* \oplus C^*)$ satisfying
+\begin{enumerate}
+\item \label{Bfixed} I is $B$-fixed
+\item \label{inTperp} $I \subset T^\perp$
+\item \label{codim} The $(ijk)$-graded component of $I$, $I_{ijk} \subset S^i(A^*)\ot S^j(B^*)
+\ot S^k(C^*)$, has codimension $\min (r, \dim S^i(A^*)\ot S^j(B^*) \ot
+S^k(C^*))$.
+\end{enumerate}
+
+Such ideals may occur in positive dimensional families, so more precisely we
+wish to enumerate computational descriptions of families of ideals which
+together exhaust all ideals satisfying the conditions. The kinds of families of
+ideals manipulated by the program are described in \S\ref{sec:representation}
+and called \emph{representable}. A representable family of ideals $I_t$ always
+satisfies conditions (\ref{Bfixed}) and (\ref{inTperp}) above, and $t$ ranges
+over an affine variety. Hence, the work of the program is to enumerate an
+exhaustive list of representable families satisfying condition (\ref{codim}). 
+The program proceeds by exhaustively enlarging ideals so that condition (\ref{codim}) is
+satisfied one multidegree at a time.
+
+\subsection{Overview of algorithm}
+
+The fundamental unit of computation is the routine \code{enumerate_tm} which
+does this enlargement in a given multigraded component. More precisely, it takes
+as input a representable family $I_t$ and a multidegree $(ijk)$ and produces a list of
+representable families which together exhaust the set of ideals which (i)
+are of the form $I_t + (p_1,\ldots,p_l)$ for some $t$ and $p_1,\ldots,p_l \in
+S^i(A^*)\ot S^j(B^*) \ot S^k(C^*)$ and (ii) satisfy condition (\ref{codim}) in
+multidegree $(ijk)$. Moreover, the families output by \code{enumerate_tm} are
+parameterized combinatorially by the set of leading monomials of polynomials in
+this multidegree. In principle, this routine already is sufficient to perform
+full ideal enumeration, as one could fix a list of all the multidegrees and for
+each $k$ compute all representable families satisfying (\ref{codim}) in the
+first $k$ multidegrees with generators only in these multidegrees. Eventually,
+by the Hilbert basis theorem,
+% is there more here, some theorem about hilbert functions?
+condition (\ref{codim}) will be satisfied in all codimensions. This stopping
+condition can be checked computationally by computing the Hilbert series of the
+common leading term ideal of the family. 
+% this is a little imprecise, maybe I really have to pass to irreducible
+% parameter spaces and generic leading term ideals to fully justify the stopping
+% condition
+In practice, we make the enumeration
+more tractable via the use of two other routines \code{enumerate_tm_bounded} and
+\code{ideal_sum}.
+
+The routine \code{enumerate_tm_bounded} takes as input a multidegree $(ijk)$ and
+a representable family $I_t$, say where $t$ ranges over $X$. It computes the
+family restricted to the subvariety $Y\subset X$ on which $\operatorname{codim}
+(I_t)_{ijk} \le r$. In other words, $t$ is restricted to the subvariety on which
+a necessary condition holds for $I_t$ in the family to be contained in one
+satisfying (\ref{codim}). We speak of \code{enumerate_tm_bounded} as applying
+the $(ijk)$ test.
+The routine \code{ideal_sum} takes a pair of families $I_t$ and $J_s$, say where
+$t\in X$ and $s\in Y$, and computes the family $I_t + J_s$, where $(t,s) \in X
+\times Y$.
+
+A typical approach for border rank lower bounds is to enumerate representable
+families satisfying (\ref{codim}) in multidegree (110) and to apply the (210)
+and (120) tests to each family. Call the results of this the (110)
+\emph{candidates}. For showing $2\times 2$ matrix multiplication has border rank
+at least 7, this is already enough, as there are no candidates already at this
+stage when $r=6$. If we need to continue, we similarly compute the (101) and
+(011) candidates. For each triple of candidates in these multidegrees, we add
+them together and apply the (111) test. This approach shows that $3\times 3$
+matrix multiplication and the $3\times 3$ determinant polynomial each have 
+border rank at least 17.
+
+\subsection{Input description}\label{sec:input}
+Choose bases of $A$, $B$ and $C$ consisting of weight vectors under the
+torus of $B$. The data of the action of $B$ then consists of the weights of
+these distinguished basis vectors along with a faithful representation $\mathfrak{n} \to
+\mathfrak{gl}(A) \oplus \mathfrak{gl}(B)\oplus \mathfrak{gl}(C)\subset
+\mathfrak{gl}(A\oplus B\oplus C)$ of the nilradical $\mathfrak{n}$ of the lie
+algebra of $B$. Concretely, $\mathfrak{n}$ and its representation is described
+by distinguishing lie algebra generators $x_1,\ldots,x_k \in \mathfrak{n}$ and
+providing the matrices of the corresponding actions on the distinguished basis
+of $A\oplus B\oplus C$. This data describing the action of $B$ along with $T$
+expressed in the distinguished bases is the input to the routines in this file.
+% TODO make code correspond to this paragraph. Namely, xs act on primal not on dual
+
+\subsection{Representable families of ideals}\label{sec:representation}
+
+\newcommand{\ba}{\textbf{a}} 
+\newcommand{\bb}{\textbf{b}}
+\newcommand{\bc}{\textbf{c}} 
+
+We wish to describe a computationally efficient
+representation of Borel fixed multigraded ideals which may depend on parameters.
+At core, ideals will be
+represented by Gr\"obner bases with homogeneous generators taken from
+$T^\perp$. Thus, condition (\ref{inTperp}) will be satisfied by construction. 
+The issues which must be addressed then are how to efficiently require ideals
+are Borel fixed and how to represent parameter
+dependence. 
+
+
+\subsubsection{Borel fixed condition} 
+Immediately we can ensure ideals considered are torus invariant by
+insisting generators are weight vectors. In other words the ideals under
+consideration are homogeneous with respect to a finer grading determined by the
+torus weights and can be taken to be generated homogeneously.
+
+Now to enforce condition (\ref{Bfixed}), it is necessary and sufficient to
+insist that the ideal is closed under the Lie algebra action of the generators
+$x_1,\ldots,x_k \in \mathfrak{n}$. One could address this issue in a simple way:
+Whenever a new ideal is constructed, recursively consider all pairs of current
+ideal generators with Lie algebra generators $x_1,\ldots,x_k$ and adjoin as a
+generator the corresponding raising. However, this approach is both slow and
+error prone if one tries to make it efficient. We would like to arrange that
+Gr\"obner basis computations in the underlying CAS automatically adjoin new
+raisings of generators which may be needed. This would remove this burden from
+us and also affords us the benefit of the complex heuristics already developed
+for this kind of task.
+
+Conveniently, this is possible after making some observations. Let $\ba = \dim
+A$, $\bb = \dim B$, $\bc = \dim C$, and write $a_1,\ldots, a_\ba \in A^*$,
+$b_1,\ldots, b_\bb \in B^*$, $c_1,\ldots, c_\bc \in C^*$ for dual bases to the
+distinguished bases of \S\ref{sec:input}. For notational convenience, also let
+$n = \ba+\bb+\bc$ and for $1\le i\le n$, let $y_i$ range over the $n$ elements $
+a_1,\ldots,a_\ba,b_1,\ldots,b_\bb,c_1,\ldots,c_\bc$. Let $x\in \mathfrak{n}$,
+and suppose $x . y_j = \sum_{i=1}^\ba x_{ij} y_i$. The matrix $[x_{ij}]$ is
+block diagonal with three diagonal blocks corresponding to the variables of
+$A^*$, $B^*$, and $C^*$. Define the associated element $\bar x = \sum_{i,j=1}^n
+x_{ij} y_i \partial_{y_j} $ in the Weyl algebra
+$W=\CC[y_1,\ldots,y_n,\partial_{y_1},\ldots,\partial_{y_n}]$.
+
+\begin{observation}\label{lieaction}
+  Suppose $x\in \mathfrak{n}$ and $p \in \CC[y_1,\ldots,y_n] \subset W$.
+  Then, in $W$, $\bar x p - p \bar x = x . p$.
+\end{observation}
+\begin{observation}\label{envelopingalgebra}
+  If $x_1,\ldots,x_k$ generate $\mathfrak{n}$, then the subring of $W$ generated
+  by $\bar x_1,\ldots, \bar x_k$ is the universal enveloping algebra
+  $U(\mathfrak{n})$ 
+\end{observation}
+
+Let $B$ denote the subalgebra of $W$ generated by the $y_i$ and $\bar x_i$,
+where $x_i$ generate $\mathfrak{n}$, and let $A = \CC[y_1,\ldots,y_n] \subset B$
+denote the commutative polynomial ring. Then from Observation \ref{lieaction} it follows
+
+\begin{observation}
+  If $J \subset B$ is a two sided ideal, then $J\cap A$ is closed under the
+  action of $\mathfrak{n}$. Moreover, if $I\subset A$ is an ideal then $BIB \cap R$ is the
+  smallest $\mathfrak{n}$-fixed ideal containing $I$.
+\end{observation}
+
+In particular, to compute with only with Borel fixed multigraded ideals, it
+suffices to work with two sided ideals of $B$ homogeneously generated by
+elements of $A$. How do we work with such objects computationally? If now we
+distinguish a vector space basis $x_1,\ldots, x_k$ of $\mathfrak{n}$, then $B$
+is the noncommutative polynomial ring with indeterminants
+$y_1,\ldots,y_n,x_1\ldots,x_k$ subject to the commutator relations $x_iy_j =
+y_jx_i + x_i. y_j$, $x_ix_j = x_jx_i + [x_i,x_j]$, and the $y_i$ commute with
+each other. This data makes $B$ into what is called a $G$-algebra \cite{}, and,
+in particular, efficient implementations exist for computing Gr\"obner bases of
+two sided ideals of $B$.
+
+% There is an element in the Weyl algebra in the indeterminants
+% $ a_1,\ldots,a_\ba,b_1,\ldots,b_\bb,c_1,\ldots,c_\bc$ corresponding to any
+% element of $\mathfrak{n}$. Namely,
+
+% $\mathbb{C}[a_1,\ldots,a_\ba,b_1,\ldots,b_\bb,c_1,\ldots,c_\bc,
+% \partial_{a_1}, \ldots, \partial_{a_\ba},
+% \partial_{b_1}, \ldots, \partial_{b_\bb},
+% \partial_{c_1}, \ldots, \partial_{c_\bc} ]$ 
+
+\subsubsection{Representation of parameterized families}
+
+Generators of a parameterized family $I_t \subset \CC[y_1,\ldots,y_n]$ are
+essentially represnted as having coefficients in some other polynomial ring, and
+we imagine the family to be parameterized by the different choices of values for
+the new variables. In other words, a parameterized family $I_t$ is represented
+by an ideal $J \subset \CC[y_1,\ldots,y_n,t_1,\ldots,t_k]$. We take the new
+indeterminants $t_1,\ldots,t_k$ to have degree zero, so that a homogeneous
+family $I_t$ is represented by a homogeneous ideal $J$. 
+
+For an family $I_t$ represented by $J$, if $t$ takes a value outside the variety
+$X$ cut out by $J\cap \CC[t_1,\ldots,t_k]$, then by the Nullstellensatz $I_t =
+(1)$. We interpret the family $I_t$ corresponding to $J$ to take parameter
+values $t$ only inside $X$.
+
+Over the course of the ideal enumeration algorithm, it will be required to
+compute the parameter values $t$ for which a given monomial does not occur in
+the leading term ideal $I_t$ . In order that Gr\"obner bases of $J$ yield
+insight into this question, we require that the monomial order is a block order
+with the variable block $y_1,\ldots,y_n$ greater than the variable block
+$t_1,\ldots,t_k$. In other words, we require that $y^{\alpha_1} t^{\beta_1} >
+y^{\alpha_2} t^{\beta_2}$ if and only if $y^{\alpha_1} > y^{\alpha_2} $ or
+$y^{\alpha_1} = y^{\alpha_2} $  and $t^{\beta_1} > t^{\beta_2}$. For $t\in X$,
+write $J(t)$ for the ideal in $\CC[y_1,\ldots,y_n]$ resulting from substituting
+$t$ into each element of $J$. Under a monomial order satisfying this condition,
+we have the following 
+
+\begin{observation}
+  Suppose $X$ is irreducible. Then 
+  $m t^\alpha \in \operatorname{LT}(J)$ for some $\alpha$ if and only if
+  $m \in \operatorname{LT}(J(t))$ for generic $t\in X$.
+\end{observation}
+
+% TODO Are there natural conditions on J such that if $X$ is irreducible then
+% the family has constant hilbert function on all of X or just an open subset?
+
+This observation suggests an algorithm for the task.
+
+(see, e.g.,
+\code{minimal_relations_killing_leading_term})
+
+This monomial order has the effect of grouping together monomials with the same
+exponent in the variables $y_1,\ldots,y_n$, so in particular it is possible to
+view
+read off
+the coefficient of a leading monomial in the variables $y_1,\ldots,y_n$ as a
+polynomial in $\CC[t_1,\ldots,t_k]$.
+
+\subsection{Software used}
+
+The code is written in Python 3, using the libraries provided by SageMath.
+The implementation of $G$-algebras and their arithmetic and ideal computations
+is done under the hood by Plural, a kernel extension of the Singular computer
+algebra system.
+
+\section{Program Listing}
 
 <<complete=False>>=
 from itertools import *
@@ -24,6 +265,14 @@ def Tinfo(T,reps=None):
     vwts = matrix([h.diagonal() for h in hs])
     return T,vwts,xs
 
+@
+
+\code{memoize} is a function decorator used for performance reasons only. A function
+decorated \code{@memoize} will compute its result for a particular argument only
+once, and future runs with the same argument will return the previously computed
+result.
+
+<<complete=False>>=
 def memoize(obj):
     cache = obj.cache = {}
 
@@ -35,7 +284,17 @@ def memoize(obj):
         return cache[args]
     return memoizer
 
-class BorderApolarityNC:
+@
+
+The Python class \code{BorderApolarity} provides a convenient interface to the
+routines of this file which depend on the input data (see \S\ref{sec:input}).
+Other than this data, the only additional state tracked by objects of this class
+are the previously computed cached results from functions marked
+\code{@memoize}.
+
+<<complete=False>>=
+
+class BorderApolarity:
     def __init__(self, Tinfo, r, F = QQ):
         self.T, self.vwts, self.xs = Tinfo
         self.Bxs = basis_of_lie_algebra(self.xs)
@@ -51,7 +310,24 @@ class BorderApolarityNC:
         self.X = matrix([self.x_weight(x) for x in self.xs])
         ixs = self.X.pivots()
         self.Xi = ~self.X[:,ixs]
+@
 
+The function \code{get_ring} implements the logic described in
+\S\ref{sec:representation}, namely, it forms the $G$-algebra generated by the
+variables $a_1,\ldots,a_\ba$, $b_1,\ldots,b_\bb$,
+$c_1,\ldots,c_\bc$, $x_1,\ldots,x_k$, $t_1,\ldots,t_{\text{params}}$ subject to the
+appropriate commutator relations and with 
+degree reverse lexicographic monomial order on the variables 
+$a_1,\ldots,a_\ba$, $b_1,\ldots,b_\bb$,
+$c_1,\ldots,c_\bc$, $x_1,\ldots,x_k$ and $t_1,\ldots,t_{\text{params}}$ seperately,
+with products of monomials between these groups ordered lexicographically. 
+
+The computation of this algebra is expensive, so 
+for performance reasons, calling this function actually chooses the
+next power of two number of parameters larger than the requested number and
+caches the results for the future. 
+
+<<complete=False>>=
     def get_ring(self,params=0):
         if params > 0:
             params = next(1<<k for k in range(32) if 1<<k >= params )
@@ -84,7 +360,11 @@ class BorderApolarityNC:
         if params > 0:
             order = order + TermOrder('degrevlex',params)
         return A.g_algebra(rels,order=order)
+@
 
+\code{get_vorder} implements the logic described in 
+
+<<complete=False>>=
     @memoize
     def get_vorder(self, tm):
         if max(tm) == 1:
@@ -164,6 +444,11 @@ class BorderApolarityNC:
             else:
                 J = (J+teqs).twostd()
                 same = False
+@
+
+\code{enumerate_candidates} 
+
+<<complete=False>>=
 
     def enumerate_candidates(self,tm,tmcs,J0=None,xi=0):
         for J,yi in self.enumerate_tm(tm,J0,xi):
@@ -460,4 +745,12 @@ def basis_of_lie_algebra(xs):
                 Q.append(z)
     return B
 @
+
+
+\begin{thebibliography}{9}
+  \item
+  Levandovskyy, V. Non-commutative Computer Algebra for polynomial algebras:
+  Gr\"obner bases, applications and implementation. Doctoral Thesis,
+  Universit\"at Kaiserslautern, 2005. Available online at http://kluedo.ub.uni-kl.de/volltexte/2005/1883/.articular 
+\end{thebibliography}
 \end{document}
