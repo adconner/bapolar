@@ -27,7 +27,7 @@
 
 \begin{document}
 \maketitle
-\section{Introduction}
+\section{Introduction}\label{sec:intro}
 Given a tensor $T \in A \ot B\ot C$, a natural number $r$, and a solvable
 connected Lie group $B \subset \operatorname{GL}(A) \times \operatorname{GL}(B)
 \times \operatorname{GL}(C)$ stabilizing $T$, the routines of this file seek to
@@ -187,7 +187,8 @@ distinguish a vector space basis $x_1,\ldots, x_k$ of $\mathfrak{n}$, then $S$
 is the noncommutative polynomial ring with indeterminants
 $y_1,\ldots,y_n,x_1\ldots,x_k$ subject to the commutator relations $x_iy_j =
 y_jx_i + x_i. y_j$, $x_ix_j = x_jx_i + [x_i,x_j]$, and the $y_i$ commute with
-each other. This data makes $S$ into what is called a $G$-algebra \cite{}, and,
+each other. This data makes $S$ into what is called a $G$-algebra
+\cite{levandovsky}, and,
 in particular, efficient implementations exist for computing Gr\"obner bases of
 two sided ideals of $S$.
 
@@ -409,7 +410,7 @@ recursively adjoining such leading terms to $J$. This is carried out in \code{mi
 % (see, e.g.,
 % \code{minimal_relations_killing_leading_term})
 
-\subsubsection{Putting it together}
+\subsubsection{Putting it together}\label{sec:representationlast}
 
 To combine the ideas of \S \ref{sec:borelfixed} and \S \ref{sec:parameterized}
 we take as our working ring
@@ -421,11 +422,14 @@ Here the $y_i$ and $x_i$ satisfy the noncommutative relations described in \S
 on the monomial order of \S\ref{sec:borelfixed} here requires that the variable
 block $y_1,\ldots,y_n,x_1,\ldots,x_k$ is greater than the variable block
 $t_1,\ldots,t_{k'}$.
-From now on we consider two-sided ideals $J\subset S$ homogeneously generated
-(including weight homogeneously) by elements of the subring
-$\CC[y_1,\ldots,y_n,t_1,\ldots,t_{k'}]$. The notions of restriction of families
-and trivially missing monomials is carried over unmodified from
-\S\ref{sec:parameterized}.
+A family of ideals $I_t$ is representable (see
+\S\ref{sec:intro}) when it corresponds to a two-sided ideal $J\subset S$
+homogeneously generated (including weight homogeneously) by elements of the
+subring $\CC[y_1,\ldots,y_n,t_1,\ldots,t_{k'}]$. 
+% TODO technically to agree with intro I should require $J \subset Tperp
+The notions of restriction of
+families, evaluation at $t$, and trivially missing monomials are carried over
+unmodified from \S\ref{sec:parameterized}.
 
 In multidegree $(ijk)$ pick an ordering $(m_i)_i$ of the monomials $m_i =
 y^{\alpha_i}$ so that if $\wt(y^{\alpha_i}) \le \wt(y^{\alpha_j})$ in the
@@ -449,7 +453,7 @@ For such an ordering, and under our new conditions on $J$ we have the following
 analogue of observation \ref{missing}:
 
 \begin{observation}\label{missing2}
-  Let $J'$ be a restriction of $J$. % other conditions?
+  Let $J'$ be a restriction of a representable family $J$. % other conditions?
   If $s$ of the largest $m$ monomials of $(m_i)_i$ in multidegree $(ijk)$ are trivially
   missing from $J$, then at least $s$ are trivially missing from $J'$.
 
@@ -585,7 +589,9 @@ caches the results for the future.
         return A.g_algebra(rels,order=order)
 @
 
-\code{get_vorder} implements the logic described in 
+\code{get_vorder} takes a multidegree $ijk$ as argument and 
+computes a basis of 
+$(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
 
 <<complete=False>>=
     @memoize
@@ -653,6 +659,14 @@ caches the results for the future.
         return R.prod(R.gen(x)**k for x,k in 
                 p.lm().exponents()[0][:self.nvars].sparse_iter())
 
+@
+
+\code{minimal_relations_killing_leading_term} implements the recursive procedure
+described in \S\ref{sec:parameterized} and computes the smallest restriction of
+the input family $J$ so that in the result $\Lm(p)$ is trivially missing.
+
+<<complete=False>>=
+
     # J assumed to be twostd(), and returned ideals are also twostd
     def minimal_relations_killing_leading_term(self,J,p):
         same = True
@@ -692,6 +706,11 @@ caches the results for the future.
                         for Jeq in Js))
                 for Jeq in Js:
                     yield (Jeq,yi)
+@
+
+This is the fundamental computation of ideal enumeration.
+
+<<complete=False>>=
 
     def enumerate_tm(self, tm, J=None, xi=0):
         if J is None:
@@ -971,7 +990,7 @@ def basis_of_lie_algebra(xs):
 
 
 \begin{thebibliography}{9}
-  \item
+  \bibitem{levendovsky}
   Levandovskyy, V. Non-commutative Computer Algebra for polynomial algebras:
   Gr\"obner bases, applications and implementation. Doctoral Thesis,
   Universit\"at Kaiserslautern, 2005. Available online at http://kluedo.ub.uni-kl.de/volltexte/2005/1883/.articular 
