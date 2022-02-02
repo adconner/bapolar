@@ -2,10 +2,11 @@ texwfiles=$(wildcard *.texw)
 pyfiles=$(patsubst %.texw,%.py,$(texwfiles))
 pdffiles=$(patsubst %.texw,%.pdf,$(texwfiles))
 
-all: $(pyfiles)
+all: pdfs pys
+
+pys: $(pyfiles)
 
 pdfs: $(pdffiles)
-
 
 %.py: %.texw
 	ptangle $<

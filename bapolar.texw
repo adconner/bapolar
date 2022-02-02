@@ -262,6 +262,11 @@ instance, then $y^\alpha$ is trivially missing if and only if $y^\alpha \notin
 % in LT(J(t)) (2) what happens under restriction
 
 
+% need restriction to not  break test already done. actually not a soundness issue though
+% (completeness)
+% can always just apply necessary tests
+% prove all ideals occur at some point in this process also need
+
 We need the following:
 \begin{observation}\label{missing}
   Let $J'$ be a restriction of $J$. % other conditions?
