@@ -516,6 +516,36 @@ def memoize(obj):
         return cache[args]
     return memoizer
 
+def three_place_ideals_up_to(ba,d):
+    cd2 = [ ba.enumerate_candidates((1,1,0),tmcs=[(2,1,0),(1,2,0)]) ]
+    cd2.append(ba.enumerate_candidates((1,0,1),tmcs=[(2,0,1),(1,0,2)]))
+    cd2.append(ba.enumerate_candidates((0,1,1),tmcs=[(0,2,1),(0,1,2)]))
+    c111 = []
+    for Jxis in product(*cd2):
+        Jxi = ba.sum_ideals(Jxis)
+        try:
+            next(ba.enumerate_tm_bounded((1,1,1),Jxi[0]))
+            c111.append(Jxi)
+        except StopIteration:
+            pass
+    schedule = [(2,0,0),(0,2,0),(0,0,2)]
+    schedule.extend([tuple(tm) for k in range(3,d+1) 
+        for tm in IntegerVectors(k,3)])
+
+    def dfs(Jxi,i): 
+        if i == len(schedule):
+            yield Jxi
+        tm = schedule[i]
+        print (tm)
+        for Jxiup in ba.enumerate_tm(tm,*Jxi):
+        # for Jxiup in ba.enumerate_candidates(tm,[tm[:s]+(tm[s]+1,)+tm[s+1:] for s in range(3)],*Jxi):
+            for Jxifull in dfs(Jxiup,i+1):
+                yield Jxifull
+
+    for Jxi in c111:
+        for Jxifull in dfs(Jxi,0):
+            yield Jxifull
+
 @
 
 The Python class \code{BorderApolarity} provides a convenient interface to the
@@ -974,6 +1004,19 @@ This is the fundamental computation of ideal enumeration.
                     msin.add(m*n)
         return [m for m in self.all_monomials(tm) if m not in msin]
 
+    def sum_ideals(self,Jxis):
+        sxis = sum(xi for J,xi in Jxis)
+        if sxis == 0:
+            return (Jxis[0][0].ring().sum([J for J,_ in Jxis]),0)
+        R = self.get_ring(sxis)
+        JR = []
+        xcum = 0
+        for J,xi in Jxis:
+            JR.append(R.ideal([p(R.gens()[:self.nvars] +
+                R.gens()[self.nvars+xcum:J.ring().ngens()+xcum]) 
+                for p in J.gens()],side='twosided'))
+            xcum += xi
+        return (R.sum(JR),xcum)
 
 def liftR(p,R):
     if p.parent() is R:
