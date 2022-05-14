@@ -570,8 +570,8 @@ class BorderApolarity:
             self.vixs.append(self.vixs[-1] + s)
 
         self.X = matrix([self.x_weight(x) for x in self.xs])
-        ixs = self.X.pivots()
-        self.Xi = ~self.X[:,ixs]
+        self.Xixs = self.X.pivots()
+        self.Xi = ~self.X[:,self.Xixs]
 @
 
 The function \code{get_ring} implements the logic described in
@@ -685,7 +685,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
     # This should be anything consistent with the partial order given by
     # weight_le. Determines the order the algorithm tries to fill weight spaces
     def total_order_sort_key(self, wt):
-        return sum(vector(self.F,wt)*self.Xi)
+        return sum(vector(self.F,[wt[i] for i in self.Xixs])*self.Xi)
 
     def lm(self, p, toR0 = False):
         R = self.R0 if toR0 else p.parent()
