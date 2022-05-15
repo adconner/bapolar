@@ -559,6 +559,8 @@ are the previously computed cached results from functions marked
 class BorderApolarity:
     def __init__(self, Tinfo, r, F = QQ):
         self.T, self.vwts, self.xs = Tinfo
+        self.xs = [-x.T for x in self.xs]
+        self.vwts = -self.vwts
         self.Bxs = basis_of_lie_algebra(self.xs)
         self.r = r
         self.F = F
@@ -647,7 +649,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             vorder.setdefault(wt,[]).append(v)
         mon = lambda m: self.R0.prod(x**k for k,x in zip(m,self.R0.gens()) if k>0)
         vorder = sorted(vorder.items(),key=lambda wtvs:
-                self.total_order_sort_key(wtvs[0]))
+                -self.total_order_sort_key(wtvs[0]))
         allvs = []
         vsl = []
         for vi,(wt,vs) in enumerate(vorder):
@@ -790,24 +792,36 @@ This is the fundamental computation of ideal enumeration.
                 return
 
             # case 2: vs[ii].lm() is not in the leading term ideal
-            Jnext, _ = self.minimal_relations_killing_leading_term(J,vs[ii])
-            if 1 not in Jnext:
-                for JJ in dfs(ii+1,Jnext,xi,r-1):
-                    yield JJ
+            try:
+                lp.set_max(lp[vs[ii].lm()],0.0)
+                lp.solve()
+                Jnext, _ = self.minimal_relations_killing_leading_term(J,vs[ii])
+                if 1 not in Jnext:
+                    for JJ in dfs(ii+1,Jnext,xi,r-1):
+                        yield JJ
+            except MIPSolverException:
+                pass
+                
 
             # case 3: put vs[ii].lm() in the leading term ideal
-            cur_params = J.ring().ngens() - self.nvarsx
-            needed_params = xi + vsl[ii] - ii - 1
-            if needed_params > cur_params:
-                R = self.get_ring(needed_params)
-                J = R.ideal([liftR(p,R) for p in J.gens()])
-            R = J.ring()
+            try:
+                lp.set_max(lp[vs[ii].lm()],1.0)
+                lp.set_min(lp[vs[ii].lm()],1.0)
+                lp.solve()
+                cur_params = J.ring().ngens() - self.nvarsx
+                needed_params = xi + vsl[ii] - ii - 1
+                if needed_params > cur_params:
+                    R = self.get_ring(needed_params)
+                    J = R.ideal([liftR(p,R) for p in J.gens()])
+                R = J.ring()
 
-            p = liftR(vs[ii],R) + R.sum(liftR(vs[j],R)*R.gen(self.nvarsx+xi+j-(ii+1)) 
-                    for j in range(ii+1,vsl[ii]))
+                p = liftR(vs[ii],R) + R.sum(liftR(vs[j],R)*R.gen(self.nvarsx+xi+j-(ii+1)) 
+                        for j in range(ii+1,vsl[ii]))
 
-            for JJ in dfs(ii+1,(J+p).twostd(),xi+vsl[ii]-(ii+1),r):
-                yield JJ
+                for JJ in dfs(ii+1,(J+p).twostd(),xi+vsl[ii]-(ii+1),r):
+                    yield JJ
+            except MIPSolverException:
+                pass
 
         for I,yi in dfs(0,J,xi,self.r - self.tm_codim_tperp(tm)):
             I = I.ring().ideal([p for p in I.gens() if not p.is_zero() and 
