@@ -852,6 +852,11 @@ This is the fundamental computation of ideal enumeration.
                 return
 
             print ('%s%d' % (' '*ii,r))
+            if r == 0 and ii > 0 and ii == vsl[ii-1]:
+                J = (J + [liftR(p,J.ring()) for p in vs[ii:]]).twostd()
+                if 1 not in J:
+                    yield (J,xi)
+                return
 
             # case 2: vs[ii].lm() is not in the leading term ideal
             if lo == 0.0:
