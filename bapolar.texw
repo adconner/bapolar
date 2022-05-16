@@ -582,6 +582,7 @@ def three_place_ideals_up_to(ba,d=1):
     def dfs(Jxi,i): 
         if i == len(schedule):
             yield Jxi
+            return
         tm = schedule[i]
         print (tm)
         for Jxiup in ba.enumerate_candidates(tm,[tm[:s]+(tm[s]+1,)+tm[s+1:] for s in range(3)],*Jxi):
