@@ -1079,7 +1079,7 @@ This is the fundamental computation of ideal enumeration.
 def liftR(p,R):
     if p.parent() is R:
         return p
-    return p(R.gens()[:p.parent().ngens()])
+    return p(R.gens()[:p.parent().ngens()]+(R.zero(),)*(p.parent().ngens()-R.ngens()))
 
 def basis_of_lie_algebra(xs):
     B = copy(xs)
