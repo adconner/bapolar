@@ -584,8 +584,7 @@ def three_place_ideals_up_to(ba,d=1):
             yield Jxi
         tm = schedule[i]
         print (tm)
-        for Jxiup in ba.enumerate_tm(tm,*Jxi):
-        # for Jxiup in ba.enumerate_candidates(tm,[tm[:s]+(tm[s]+1,)+tm[s+1:] for s in range(3)],*Jxi):
+        for Jxiup in ba.enumerate_candidates(tm,[tm[:s]+(tm[s]+1,)+tm[s+1:] for s in range(3)],*Jxi):
             for Jxifull in dfs(Jxiup,i+1):
                 yield Jxifull
 
@@ -799,8 +798,8 @@ This is the fundamental computation of ideal enumeration.
     def enumerate_tm(self, tm, J=None, xi=0):
         if J is None:
             J = self.get_ring().ideal(side='twosided')
-        J += [p for i,e in enumerate(tm) for p in
-                self.all_monomials((0,)*i+(e+1,)+(0,)*(len(tm)-i-1),J.ring())]
+        # J += [p for i,e in enumerate(tm) for p in
+        #         self.all_monomials((0,)*i+(e+1,)+(0,)*(len(tm)-i-1),J.ring())]
         J = J.twostd()
 
         vs, vsl = self.get_vorder(tm)
@@ -869,9 +868,9 @@ This is the fundamental computation of ideal enumeration.
 
         for I,yi in dfs(0,J,xi,self.r - self.tm_codim_tperp(tm)):
             I,yi = self.remove_missing(I)
-            I = I.ring().ideal([p for p in I.gens() if not p.is_zero() and 
-                all([e<=f for e,f in zip(self.polynomial_tm(p),tm)])],side='twosided')
-            I = I.twostd()
+            # I = I.ring().ideal([p for p in I.gens() if not p.is_zero() and 
+            #     all([e<=f for e,f in zip(self.polynomial_tm(p),tm)])],side='twosided')
+            # I = I.twostd()
             yield (I,yi)
 
     # J assumed to be twostd
