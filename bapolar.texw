@@ -1066,14 +1066,15 @@ This is the fundamental computation of ideal enumeration.
     def sum_ideals(self,Jxis):
         sxis = sum(xi for J,xi in Jxis)
         R = self.get_ring(sxis)
-        JR = []
+        gens = []
         xcum = 0
         for J,xi in Jxis:
-            JR.append(R.ideal([p(R.gens()[:self.nvars] +
-                R.gens()[self.nvars+xcum:J.ring().ngens()+xcum]) 
-                for p in J.gens()],side='twosided'))
+            gens.extend([p(R.gens()[:self.nvarsx] +
+                R.gens()[self.nvarsx+xcum:self.nvarsx+xcum+xi] +
+                (R.zero(),) * (J.ring().ngens()-self.nvarsx-xi))
+                for p in J.gens()])
             xcum += xi
-        return (R.ideal(R.sum(JR).gens(),side='twosided'),xcum)
+        return (R.ideal(gens,side='twosided'),xcum)
 
     def remove_missing(self,I):
         R = I.ring()
