@@ -645,6 +645,7 @@ caches the results for the future.
 
     @memoize
     def get_ring_exact(self, params=0):
+        print("get_ring_exact",params)
         if params > 0:
             params = next(1<<k for k in range(32) if 1<<k >= params )
         # should give cached rings of power of two size
@@ -868,10 +869,10 @@ This is the fundamental computation of ideal enumeration.
                     yield JJ
 
         for I,yi in dfs(0,J,xi,self.r - self.tm_codim_tperp(tm)):
-            I,yi = self.remove_missing(I)
+            I += [liftR(p,I.ring()) for p in Jorig.gens()]
+            I,yi = self.quick_simplify(I)
             I = I.ring().ideal([p for p in I.gens() if not p.is_zero() and 
                 all([e<=f for e,f in zip(self.polynomial_tm(p),tm)])],side='twosided')
-            I += Jorig
             I = I.twostd()
             yield (I,yi)
 
@@ -938,7 +939,7 @@ This is the fundamental computation of ideal enumeration.
                     yield I
 
         for I in dfs(0,J,self.r - self.tm_codim_tperp(tm),[]):
-            I,_ = self.remove_missing(I)
+            I,_ = self.quick_simplify(I)
             # I = I.ring().ideal([p for p in I.gens() if not p.is_zero() and 
             #     all([e<=f for e,f in zip(self.polynomial_tm(p),tm)])],side='twosided')
             yield I
@@ -1077,16 +1078,30 @@ This is the fundamental computation of ideal enumeration.
             xcum += xi
         return (R.ideal(gens,side='twosided'),xcum)
 
-    def remove_missing(self,I):
+    def quick_simplify(self,I):
         R = I.ring()
-        tis = set([i for p in I.gens() for e in p.exponents() 
-            for i in e[self.nvarsx:].nonzero_positions()])
+        vals = {}
+        tis = set()
+        for p in I.gens():
+            tiscur = set()
+            for e in p.exponents():
+                for i in e[self.nvarsx:].nonzero_positions():
+                    tiscur.add(i)
+            if len(tiscur) == 1 and self.lm(p).is_constant() and p.degree() == 1:
+                i = tiscur.pop()
+                t0 = -p.monomial_coefficient(p.parent().one()) /\
+                    p.monomial_coefficient(p.parent().gen(self.nvarsx + i))
+                vals[i] = t0
+            else:
+                tis = tis.union(tiscur)
         subs = list(R.gens()[:self.nvarsx])
         j = self.nvarsx
         for i in range(R.ngens()-self.nvarsx):
             if i in tis:
                 subs.append(R.gen(j))
                 j += 1
+            elif i in vals:
+                subs.append(R(vals[i]))
             else:
                 subs.append(R.zero())
         I = R.ideal([p(*subs) for p in I.gens()],side='twosided')
