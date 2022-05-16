@@ -808,19 +808,11 @@ This is the fundamental computation of ideal enumeration.
         # lp = self.get_linear_program((tm,),((2,1,0),(1,2,0)))
 
         def dfs(ii,J,xi,r):
-            if r == 0:
-                J = (J + [liftR(p,J.ring()) for p in vs[ii:]]).twostd()
-                yield (J,xi)
-                return
-            if ii == len(vs):
-                return
-
             # case 1, vs[ii].lm() already in the leading term ideal, move on
-            if J.reduce(liftR(vs[ii],J.ring())) != liftR(vs[ii],J.ring()):
+            if ii < len(vs) and J.reduce(liftR(vs[ii],J.ring())) != liftR(vs[ii],J.ring()):
                 for JJ in dfs(ii+1,J,xi,r):
                     yield JJ
                 return
-            print ('%s%d' % (' '*ii,r))
 
             # should also check tm above here?
             for i,p in enumerate(vs):    
@@ -834,27 +826,34 @@ This is the fundamental computation of ideal enumeration.
 
             from sage.numerical.mip import MIPSolverException
             try:
-                lp.solve()
+                if ii < len(vs):
+                    lp.set_objective(-lp[vs[ii].lm()])
+                    lo = -lp.solve()
+                    lp.set_objective(lp[vs[ii].lm()])
+                    hi = lp.solve()
+                else:
+                    lp.solve()
             except MIPSolverException:
                 return
 
+            print ('%s%d' % (' '*ii,r))
+            if r == 0:
+                J = (J + [liftR(p,J.ring()) for p in vs[ii:]]).twostd()
+                yield (J,xi)
+                return
+            if ii == len(vs):
+                return
+
+
             # case 2: vs[ii].lm() is not in the leading term ideal
-            try:
-                lp.set_max(lp[vs[ii].lm()],0.0)
-                lp.solve()
+            if lo == 0.0:
                 Jnext, _ = self.minimal_relations_killing_leading_term(J,vs[ii])
                 if 1 not in Jnext:
                     for JJ in dfs(ii+1,Jnext,xi,r-1):
                         yield JJ
-            except MIPSolverException:
-                pass
-                
 
             # case 3: put vs[ii].lm() in the leading term ideal
-            try:
-                lp.set_max(lp[vs[ii].lm()],1.0)
-                lp.set_min(lp[vs[ii].lm()],1.0)
-                lp.solve()
+            if hi == 1.0:
                 cur_params = J.ring().ngens() - self.nvarsx
                 needed_params = xi + vsl[ii] - ii - 1
                 if needed_params > cur_params:
@@ -867,8 +866,6 @@ This is the fundamental computation of ideal enumeration.
 
                 for JJ in dfs(ii+1,(J+p).twostd(),xi+vsl[ii]-(ii+1),r):
                     yield JJ
-            except MIPSolverException:
-                pass
 
         for I,yi in dfs(0,J,xi,self.r - self.tm_codim_tperp(tm)):
             I = I.ring().ideal([p for p in I.gens() if not p.is_zero() and 
