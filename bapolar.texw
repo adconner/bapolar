@@ -439,7 +439,7 @@ unmodified from \S\ref{sec:parameterized}.
 In multidegree $(ijk)$ pick an ordering $(m_i)_i$ of the monomials $m_i =
 y^{\alpha_i}$ so that if $\wt(y^{\alpha_i}) \le \wt(y^{\alpha_j})$ in the
 partial order, then $i \ge j$ (note the order reversal), and if
-$\wt(y^{\alpha_i}) \le \wt(y^{\alpha_j})$ and $y^{\alpha_i} < y^{\alpha_j}$,
+$\wt(y^{\alpha_i}) = \wt(y^{\alpha_j})$ and $y^{\alpha_i} < y^{\alpha_j}$,
 then $i \le j$. Hence, the last monomial on this list is the biggest monomial of
 the smallest weight.
 Note, there is no harm in choosing the monomial order on $y_1,\ldots,y_n$ so
@@ -485,6 +485,49 @@ algebra system.
 <<complete=False>>=
 from itertools import *
 
+def check_T_is_stabilized(T,reps):
+    a = len(T)
+    b,c = T[0].dimensions()
+
+    # Check there is one weight for each basis vector
+    assert all(len(wts) == d for d,(wts,_) in zip((a,b,c),reps))
+    # Check the given representations of $\mathfrak{n}$ operate on the correct dimensional space
+    assert all(x.nrows() == d and x.ncols() == d 
+            for d,(_,xs) in zip((a,b,c),reps) for x in xs)
+
+    # Compute roots of the simple roots vectors xs
+    simple_roots = []
+    for xi in range(len(reps[0][1])):
+        for wts,xs in reps:
+            if not xs[xi].is_zero():
+                i,j = xs[xi].nonzero_positions()[0]
+                simple_roots.append(wts[i] - wts[j])
+                break
+
+    # Check xs are actally root vectors for the corresponding roots and that 
+    # the simple roots agree for each rep in reps
+    for wts,xs in reps:
+        assert len(simple_roots) == len(xs)
+        for root,x in zip(simple_roots,xs):
+            for i,j in x.nonzero_positions():
+                assert wts[i]-wts[j] == root
+
+    # Check T is weight zero in $A\ot B\ot C$
+    for i,m in enumerate(T):
+        for j,k in m.nonzero_positions():
+            assert (reps[0][0][i] + reps[1][0][j] + reps[2][0][k]).is_zero()
+    
+    # Check T is closed under $\mathfrak{n}$
+    (_,xsA), (_,xsB), (_,xsC) = reps
+    for xa,xb,xc in zip(xsA, xsB, xsC):
+        xaT = [sum(xa[i,j] * T[j] for j in range(a)) for i in range(a)]
+        xbT = [xb*m for m in T]
+        xcT = [m*xc.T for m in T]
+        # we should have xaT + xbT + xcT = 0
+        assert all((m1+m2+m3).is_zero() for m1,m2,m3 in zip(xaT, xbT, xcT))
+    
+    return simple_roots
+
 def Tinfo(T,reps=None):
     if reps is None:
         Lg,reps = stabilizer_reps_ss(T)
@@ -516,7 +559,7 @@ def memoize(obj):
         return cache[args]
     return memoizer
 
-def three_place_ideals_up_to(ba,d):
+def three_place_ideals_up_to(ba,d=1):
     cd2 = [ ba.enumerate_candidates((1,1,0),tmcs=[(2,1,0),(1,2,0)]) ]
     cd2.append(ba.enumerate_candidates((1,0,1),tmcs=[(2,0,1),(1,0,2)]))
     cd2.append(ba.enumerate_candidates((0,1,1),tmcs=[(0,2,1),(0,1,2)]))
@@ -528,6 +571,10 @@ def three_place_ideals_up_to(ba,d):
             c111.append(Jxi)
         except StopIteration:
             pass
+    if d == 1:
+        for Jxi in c111:
+            yield Jxi
+        return
     schedule = [(2,0,0),(0,2,0),(0,0,2)]
     schedule.extend([tuple(tm) for k in range(3,d+1) 
         for tm in IntegerVectors(k,3)])
