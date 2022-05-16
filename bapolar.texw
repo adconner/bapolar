@@ -809,24 +809,21 @@ This is the fundamental computation of ideal enumeration.
         lp = self.get_linear_program((tm,))
         # lp = self.get_linear_program((tm,),((2,1,0),(1,2,0)))
 
+        for i,p in enumerate(vs):    
+            if J.reduce(liftR(p,J.ring())) != liftR(p,J.ring()):
+                # p.lm() definitely already in
+                lp.set_min(lp[p.lm()],1.0)
+                lp.set_max(lp[p.lm()],1.0)
+
+        from sage.numerical.mip import MIPSolverException
+
         def dfs(ii,J,xi,r):
             # case 1, vs[ii].lm() already in the leading term ideal, move on
-            if ii < len(vs) and J.reduce(liftR(vs[ii],J.ring())) != liftR(vs[ii],J.ring()):
+            if ii < len(vs) and lp.get_min(lp[vs[ii].lm()]) == 1.0:
                 for JJ in dfs(ii+1,J,xi,r):
                     yield JJ
                 return
 
-            # should also check tm above here?
-            for i,p in enumerate(vs):    
-                if J.reduce(liftR(p,J.ring())) != liftR(p,J.ring()):
-                    # p.lm() definitely already in
-                    lp.set_min(lp[p.lm()],1.0)
-                    lp.set_max(lp[p.lm()],1.0)
-                else:
-                    lp.set_min(lp[p.lm()],0.0)
-                    lp.set_max(lp[p.lm()],0.0 if i<ii else 1.0)
-
-            from sage.numerical.mip import MIPSolverException
             try:
                 if ii < len(vs):
                     lp.set_objective(-lp[vs[ii].lm()])
@@ -851,8 +848,10 @@ This is the fundamental computation of ideal enumeration.
             if lo == 0.0:
                 Jnext, _ = self.minimal_relations_killing_leading_term(J,vs[ii])
                 if 1 not in Jnext:
+                    lp.set_max(lp[vs[ii].lm()],0.0)
                     for JJ in dfs(ii+1,Jnext,xi,r-1):
                         yield JJ
+                    lp.set_max(lp[vs[ii].lm()],1.0)
 
             # case 3: put vs[ii].lm() in the leading term ideal
             if hi == 1.0:
@@ -866,8 +865,10 @@ This is the fundamental computation of ideal enumeration.
                 p = liftR(vs[ii],R) + R.sum(liftR(vs[j],R)*R.gen(self.nvarsx+xi+j-(ii+1)) 
                         for j in range(ii+1,vsl[ii]))
 
+                lp.set_min(lp[vs[ii].lm()],1.0)
                 for JJ in dfs(ii+1,(J+p).twostd(),xi+vsl[ii]-(ii+1),r):
                     yield JJ
+                lp.set_min(lp[vs[ii].lm()],0.0)
 
         for I,yi in dfs(0,J,xi,self.r - self.tm_codim_tperp(tm)):
             I = I.ring().ideal([p for p in I.gens() if not p.is_zero() and 
