@@ -1065,8 +1065,6 @@ This is the fundamental computation of ideal enumeration.
 
     def sum_ideals(self,Jxis):
         sxis = sum(xi for J,xi in Jxis)
-        if sxis == 0:
-            return (Jxis[0][0].ring().sum([J for J,_ in Jxis]),0)
         R = self.get_ring(sxis)
         JR = []
         xcum = 0
