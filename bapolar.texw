@@ -868,6 +868,7 @@ This is the fundamental computation of ideal enumeration.
                     yield JJ
 
         for I,yi in dfs(0,J,xi,self.r - self.tm_codim_tperp(tm)):
+            I,yi = self.remove_missing(I)
             I = I.ring().ideal([p for p in I.gens() if not p.is_zero() and 
                 all([e<=f for e,f in zip(self.polynomial_tm(p),tm)])],side='twosided')
             I = I.twostd()
@@ -936,6 +937,7 @@ This is the fundamental computation of ideal enumeration.
                     yield I
 
         for I in dfs(0,J,self.r - self.tm_codim_tperp(tm),[]):
+            I,_ = self.remove_missing(I)
             # I = I.ring().ideal([p for p in I.gens() if not p.is_zero() and 
             #     all([e<=f for e,f in zip(self.polynomial_tm(p),tm)])],side='twosided')
             yield I
@@ -1074,6 +1076,21 @@ This is the fundamental computation of ideal enumeration.
                 for p in J.gens()],side='twosided'))
             xcum += xi
         return (R.ideal(R.sum(JR).gens(),side='twosided'),xcum)
+
+    def remove_missing(self,I):
+        R = I.ring()
+        tis = set([i for p in I.gens() for e in p.exponents() 
+            for i in e[self.nvarsx:].nonzero_positions()])
+        subs = list(R.gens()[:self.nvarsx])
+        j = self.nvarsx
+        for i in range(R.ngens()-self.nvarsx):
+            if i in tis:
+                subs.append(R.gen(j))
+                j += 1
+            else:
+                subs.append(R.zero())
+        I = R.ideal([p(*subs) for p in I.gens()],side='twosided')
+        return (I,len(tis))
 
 def liftR(p,R):
     if p.parent() is R:
