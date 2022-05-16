@@ -806,20 +806,30 @@ This is the fundamental computation of ideal enumeration.
         J = J.twostd()
 
         vs, vsl = self.get_vorder(tm)
+        vsb = [next((j for j in vsl[i::-1] if j != vsl[i]),0) for i in range(len(vsl))]
+
         lp = self.get_linear_program((tm,))
         # lp = self.get_linear_program((tm,),((2,1,0),(1,2,0)))
 
         for i,p in enumerate(vs):    
             if J.reduce(liftR(p,J.ring())) != liftR(p,J.ring()):
-                # p.lm() definitely already in
+                # p.lm() definitely already in, cf case 1 below
                 lp.set_min(lp[p.lm()],1.0)
                 lp.set_max(lp[p.lm()],1.0)
 
         from sage.numerical.mip import MIPSolverException
 
-        vsb = [next((j for j in vsl[i::-1] if j != vsl[i]),0) for i in range(len(vsl))]
-
         def dfs(ii,J,xi,r):
+            # we iterate weight spaces in reverse order, so for soundness,
+            # once we have finished a weight space, kill coefficients of missing
+            # leading terms in order 
+            if ii > 0 and ii == vsl[ii-1]:
+                for i in range(vsb[ii-1],vsl[ii-1]):
+                    if lp.get_max(lp[vs[i].lm()]) == 0.0:
+                        J, _ = self.minimal_relations_killing_leading_term(J,vs[i])
+                        if 1 in J:
+                            return
+
             if ii == len(vs):
                 assert r == 0
                 yield (J,xi)
