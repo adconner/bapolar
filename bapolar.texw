@@ -1074,7 +1074,7 @@ This is the fundamental computation of ideal enumeration.
                 R.gens()[self.nvars+xcum:J.ring().ngens()+xcum]) 
                 for p in J.gens()],side='twosided'))
             xcum += xi
-        return (R.sum(JR),xcum)
+        return (R.ideal(R.sum(JR).gens(),side='twosided'),xcum)
 
 def liftR(p,R):
     if p.parent() is R:
