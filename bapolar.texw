@@ -869,10 +869,10 @@ This is the fundamental computation of ideal enumeration.
                     yield JJ
 
         for I,yi in dfs(0,J,xi,self.r - self.tm_codim_tperp(tm)):
-            I += [liftR(p,I.ring()) for p in Jorig.gens()]
-            I,yi = self.quick_simplify(I)
             I = I.ring().ideal([p for p in I.gens() if not p.is_zero() and 
                 all([e<=f for e,f in zip(self.polynomial_tm(p),tm)])],side='twosided')
+            I += [liftR(p,I.ring()) for p in Jorig.gens()]
+            I,yi = self.quick_simplify(I)
             I = I.twostd()
             yield (I,yi)
 
