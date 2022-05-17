@@ -816,6 +816,9 @@ This is the fundamental computation of ideal enumeration.
                 # p.lm() definitely already in, cf case 1 below
                 lp.set_min(lp[p.lm()],1.0)
                 lp.set_max(lp[p.lm()],1.0)
+            else:
+                lp.set_min(lp[p.lm()],0.0)
+                lp.set_max(lp[p.lm()],1.0)
 
         from sage.numerical.mip import MIPSolverException
 
