@@ -823,7 +823,9 @@ This is the fundamental computation of ideal enumeration.
         from sage.numerical.mip import MIPSolverException
 
         def dfs(ii,J,xi,r):
-            if checkintermediate and ii > 0 and ii == vsl[ii-1]:
+            if checkintermediate and ii > 0 and ii == vsl[ii-1] and\
+                    any(lp.get_max(lp[vs[i].lm()]) == 0.0 for i in range(vsb[ii-1],vsl[ii-1])) and\
+                    any(lp.get_min(lp[vs[i].lm()]) == 1.0 for i in range(vsb[ii-1],vsl[ii-1])):
                 J = J.twostd()
                 for p in vs[:ii]:
                     if lp.get_max(lp[p.lm()]) == 0.0:
