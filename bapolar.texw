@@ -1064,7 +1064,7 @@ This is the fundamental computation of ideal enumeration.
             for i,pend in enumerate(self.get_vorder(tm)[1]):
                 if i != pend-1:
                     continue
-                print self.polynomial_weight(self.get_vorder(tm)[0][i])
+                print self.polynomial_weight(self.get_vorder(tm)[0][i]),
                 ps,Jbound = get_ps_from_coords([(tm,j) for j in range(i,pend)])
                 for k in range(1,len(ps)+1):
                     for qs in combinations(ps,k):
