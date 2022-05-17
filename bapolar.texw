@@ -824,8 +824,8 @@ This is the fundamental computation of ideal enumeration.
         from sage.numerical.mip import MIPSolverException
 
         def dfs(ii,J,xi,r):
-            if checkintermediate and ii > 0 and ii == vsl[ii-1] and\
-                    any(lp.get_max(lp[vs[i].lm()]) == 0.0 for i in range(vsb[ii-1],vsl[ii-1])) and\
+            if checkintermediate and ii > 0 and ii == vsl[ii-1] and xi > 0 and \
+                    any(lp.get_max(lp[vs[i].lm()]) == 0.0 for i in range(vsb[ii-1],vsl[ii-1])) and \
                     any(lp.get_min(lp[vs[i].lm()]) == 1.0 for i in range(vsb[ii-1],vsl[ii-1])):
                 J = J.twostd()
                 for p in vs[:ii]:
@@ -889,21 +889,39 @@ This is the fundamental computation of ideal enumeration.
                 lp.set_min(lp[vs[ix].lm()],0.0)
 
         for I,yi in dfs(0,J,xi,self.r - self.tm_codim_tperp(tm)):
-            I = I.twostd()
-            for p in vs:
-                if lp.get_max(lp[p.lm()]) == 0.0:
-                    I, _ = self.minimal_relations_killing_leading_term(I,p)
-                    if 1 in I:
-                        break
-            if 1 in I:
-                continue
+            if yi == 0:
+                I = I.twostd()
+                bad = False
+                for p in vs:
+                    if lp.get_max(lp[p.lm()]) == 0.0:
+                        if I.reduce(liftR(p.lm(),I.ring())) != liftR(p.lm(),I.ring()):
+                            bad = True
+                            break
+                if bad:
+                    continue
+                I = I.ring().ideal([p for p in I.gens() if not p.is_zero() and 
+                    all([e<=f for e,f in zip(self.polynomial_tm(p),tm)])])
+                I += [liftR(p,I.ring()) for p in Jorig.gens()]
+                I = I.twostd()
+                yield (I,0)
+            else:
+                I = I.twostd()
+                for p in vs:
+                    if lp.get_max(lp[p.lm()]) == 0.0:
+                        I, _ = self.minimal_relations_killing_leading_term(I,p)
+                        if 1 in I:
+                            break
+                if 1 in I:
+                    continue
 
-            I = I.ring().ideal([p for p in I.gens() if not p.is_zero() and 
-                all([e<=f for e,f in zip(self.polynomial_tm(p),tm)])])
-            I += [liftR(p,I.ring()) for p in Jorig.gens()]
-            I,yi = self.quick_simplify(I)
-            I = I.twostd()
-            yield (I,yi)
+                I = I.ring().ideal([p for p in I.gens() if not p.is_zero() and 
+                    all([e<=f for e,f in zip(self.polynomial_tm(p),tm)])])
+                I += [liftR(p,I.ring()) for p in Jorig.gens()]
+                oyi = yi
+                I,yi = self.quick_simplify(I)
+                if yi < oyi:
+                I = I.twostd()
+                yield (I,yi)
 
     # J assumed to be twostd
     def enumerate_tm_bounded(self, tm, J):
