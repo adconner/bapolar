@@ -862,14 +862,7 @@ This is the fundamental computation of ideal enumeration.
                 yield (J,xi)
                 return
 
-            # case 2: vs[ii].lm() is not in the leading term ideal
-            if lo == 0.0:
-                lp.set_max(lp[vs[ix].lm()],0.0)
-                for JJ in dfs(ii+1,J,xi,r-1):
-                    yield JJ
-                lp.set_max(lp[vs[ix].lm()],1.0)
-
-            # case 3: put vs[ii].lm() in the leading term ideal
+            # case 2: put vs[ii].lm() in the leading term ideal
             if hi == 1.0:
                 cur_params = J.ring().ngens() - self.nvarsx
                 needed_params = xi + len([j for j in range(ix+1,vsl[ix]) if 
@@ -887,6 +880,15 @@ This is the fundamental computation of ideal enumeration.
                 for JJ in dfs(ii+1,J+p,needed_params,r):
                     yield JJ
                 lp.set_min(lp[vs[ix].lm()],0.0)
+
+            # case 3: vs[ii].lm() is not in the leading term ideal
+            if lo == 0.0:
+                lp.set_max(lp[vs[ix].lm()],0.0)
+                for JJ in dfs(ii+1,J,xi,r-1):
+                    yield JJ
+                lp.set_max(lp[vs[ix].lm()],1.0)
+
+
 
         for I,yi in dfs(0,J,xi,self.r - self.tm_codim_tperp(tm)):
             if yi == 0:
