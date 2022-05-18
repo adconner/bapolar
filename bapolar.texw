@@ -1113,18 +1113,19 @@ This is the fundamental computation of ideal enumeration.
                         if have_constant:
                             le_constraint([self.lm(p,True) for p in ps],oneof)
 
-        vsb = [next((j for j in vsl[i::-1] if j != vsl[i]),0) for i in range(len(vsl))]
+        vss = {}
         for tm in tms:
-            for i,pend in enumerate(self.get_vorder(tm)[1]):
-                if i != pend-1:
-                    continue
-                i = vsb[i]
-                print self.polynomial_weight(self.get_vorder(tm)[0][i]),
-                ps,Jbound = get_ps_from_coords([(tm,j) for j in range(i,pend)])
-                for k in range(1,len(ps)+1):
-                    for qs in combinations(ps,k):
-                        J = (Jbound+qs).twostd()
-                        raising_constraints(qs,J)
+            _, vsl = self.get_vorder(tm)
+            for pi,e in enumerate(vsl):
+                vss.setdefault((tm,e),[]).append((tm,pi))
+
+        for pis in vss.values():
+            print self.polynomial_weight(self.get_vorder(pis[0][0])[0][pis[0][1]])
+            ps,Jbound = get_ps_from_coords(pis)
+            for k in range(1,len(ps)+1):
+                for qs in combinations(ps,k):
+                    J = (Jbound+qs).twostd()
+                    raising_constraints(qs,J)
 
         return prog
 
