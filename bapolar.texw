@@ -1101,16 +1101,17 @@ This is the fundamental computation of ideal enumeration.
         def raising_constraints(ps,J):
             for q in J.gens():
                 if self.polynomial_tm(q) in tms+tms_triv:
-                    oneof = []
-                    have_constant = False
-                    while not q.is_zero():
-                        oneof.append(self.lm(q,True))
-                        if q.coefficient(self.lm(q)).is_constant():
-                            have_constant = True
-                            break
-                        q -= q.coefficient(self.lm(q))*self.lm(q)
-                    if have_constant:
-                        le_constraint([self.lm(p,True) for p in ps],oneof)
+                    if all(self.lm(q) != self.lm(p) for p in ps):
+                        oneof = []
+                        have_constant = False
+                        while not q.is_zero():
+                            oneof.append(self.lm(q,True))
+                            if q.coefficient(self.lm(q)).is_constant():
+                                have_constant = True
+                                break
+                            q -= q.coefficient(self.lm(q))*self.lm(q)
+                        if have_constant:
+                            le_constraint([self.lm(p,True) for p in ps],oneof)
 
         vsb = [next((j for j in vsl[i::-1] if j != vsl[i]),0) for i in range(len(vsl))]
         for tm in tms:
