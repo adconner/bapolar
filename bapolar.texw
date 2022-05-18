@@ -869,8 +869,10 @@ This is the fundamental computation of ideal enumeration.
             try:
                 lp.set_objective(-lp[vs[ix].lm()])
                 lo = -lp.solve()
+                if abs(lo-round(lo)) < 1e-12: lo = round(lo)
                 lp.set_objective(lp[vs[ix].lm()])
                 hi = lp.solve()
+                if abs(hi-round(hi)) < 1e-12: hi = round(hi)
             except MIPSolverException:
                 return
 
