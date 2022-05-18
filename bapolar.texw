@@ -600,7 +600,7 @@ def three_place_ideals_up_to(ba,d=1):
         print 'triple',[i for i,Iyi in Jxis]
         Jxi = ba.sum_ideals([Iyi for i,Iyi in Jxis])
         try:
-            next(ba.enumerate_tm_bounded((1,1,1),Jxi[0]))
+            next(ba.enumerate_tm_bounded((1,1,1),*Jxi))
             for Jxifull in dfs(Jxi,0):
                 yield Jxifull
         except StopIteration:
@@ -791,19 +791,19 @@ the input family $J$ so that in the result $\Lm(p)$ is trivially missing.
             tmnt = [tmcs[0]]
             for tmc in tmcs[1:]:
                 try:
-                    Je = next(self.enumerate_tm_bounded(tmc,J))
+                    Je = next(self.enumerate_tm_bounded(tmc,J,yi))
                     if J != Je:
                         tmnt.append(tmc)
                 except StopIteration:
                     ok = False
                     break
             if ok:
-                Js = [J]
+                Js = [(J,yi)]
                 for tmc in tmnt:
-                    Js = list(chain.from_iterable(self.enumerate_tm_bounded(tmc,Jeq)
-                        for Jeq in Js))
-                for Jeq in Js:
-                    yield self.quick_simplify(Jeq)
+                    Js = list(chain.from_iterable(self.enumerate_tm_bounded(tmc,J,yi)
+                        for J,yi in Js))
+                for I,_ in Js:
+                    yield self.quick_simplify(I)
 @
 
 This is the fundamental computation of ideal enumeration.
@@ -951,12 +951,23 @@ This is the fundamental computation of ideal enumeration.
                 yield (I,yi)
 
     # J assumed to be twostd
-    def enumerate_tm_bounded(self, tm, J):
+    def enumerate_tm_bounded(self, tm, J, xi):
         # J += [p for i,e in enumerate(tm) for p in
         #         self.all_monomials((0,)*i+(e+1,)+(0,)*(len(tm)-i-1),J.ring())]
 
         vs,_ = self.get_vorder(tm)
-        vs = [p(J.ring().gens()[:p.parent().ngens()]) for p in vs]
+
+        if xi == 0:
+            missing = 0
+            for p in vs[::-1]:
+                if J.reduce(liftR(p.lm(),J.ring())) == liftR(p.lm(),J.ring()):
+                    missing += 1
+                if missing >= self.r:
+                    yield (J,xi)
+                    return
+            return
+
+        vs = [liftR(p,J.ring()) for p in vs]
 
         def dfs(ii,J,r,checkedIs):
             # print ('%s%d %d' % (' '*ii,ii,r))
@@ -1015,7 +1026,7 @@ This is the fundamental computation of ideal enumeration.
         for I in dfs(0,J,self.r - self.tm_codim_tperp(tm),[]):
             # I = I.ring().ideal([p for p in I.gens() if not p.is_zero() and 
             #     all([e<=f for e,f in zip(self.polynomial_tm(p),tm)])],side='twosided')
-            yield I
+            yield (I,xi)
 
     @memoize
     def tm_dim(self, tm):
@@ -1052,9 +1063,9 @@ This is the fundamental computation of ideal enumeration.
     @memoize
     def get_linear_program(self, tms, tms_triv=()):
         prog = MixedIntegerLinearProgram()
-        prog.set_binary(prog.default_variable())
+        # prog.set_binary(prog.default_variable())
         # # if set_real, be sure to change exact comparisons to within machine precision
-        # prog.set_real(prog.default_variable())
+        prog.set_real(prog.default_variable())
 
         # constraint that all of ps implies at least one of the qs
         def le_constraint(ps,qs):
