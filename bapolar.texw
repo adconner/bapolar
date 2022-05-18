@@ -1099,10 +1099,12 @@ This is the fundamental computation of ideal enumeration.
                     if have_constant:
                         le_constraint([self.lm(p,True) for p in ps],oneof)
 
+        vsb = [next((j for j in vsl[i::-1] if j != vsl[i]),0) for i in range(len(vsl))]
         for tm in tms:
             for i,pend in enumerate(self.get_vorder(tm)[1]):
                 if i != pend-1:
                     continue
+                i = vsb[i]
                 print self.polynomial_weight(self.get_vorder(tm)[0][i]),
                 ps,Jbound = get_ps_from_coords([(tm,j) for j in range(i,pend)])
                 for k in range(1,len(ps)+1):
