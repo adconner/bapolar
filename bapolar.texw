@@ -907,7 +907,7 @@ This is the fundamental computation of ideal enumeration.
 
 
 
-        for I,yi in dfs(0,J,xi,self.r - self.tm_codim_tperp(tm)):
+        for I,yi in dfs(0,J,xi,min(self.r - self.tm_codim_tperp(tm),self.tm_dim(tm))):
             if yi == 0:
                 I = I.twostd()
                 print 'end checking yi=0'
