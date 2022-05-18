@@ -571,9 +571,10 @@ def lproduct(*its):
                 for res in product(*pools[:i]+[pool[-1:]]+pools[i+1:]):
                     yield res
             except StopIteration:
-                pass
+                if len(pool) == 0:
+                    return
         if not added:
-            break
+            return
 
 def three_place_ideals_up_to(ba,d=1):
     schedule = []
