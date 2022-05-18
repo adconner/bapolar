@@ -1057,13 +1057,9 @@ This is the fundamental computation of ideal enumeration.
         def le_constraint(ps,qs):
             prog.add_constraint(prog.sum(1-prog[p.lm()] for p in ps) +\
                 prog.sum(prog[p.lm()] for p in qs) >= 1)
-        for tm in tms:
+        for tm in tms+tms_triv:
             vs,vsl = self.get_vorder(tm)
             prog.add_constraint(prog.sum(prog[p.lm()] for p in vs) == 
-                    max(self.tm_dim(tm) - self.r,0))
-        for tm in tms_triv:
-            vs,vsl = self.get_vorder(tm)
-            prog.add_constraint(prog.sum(prog[p.lm()] for p in vs) <= 
                     max(self.tm_dim(tm) - self.r,0))
         P = Poset((tms+tms_triv,lambda a,b: all(i<=j for i,j in zip(a,b))))
         for tm,tmr in P.cover_relations():
