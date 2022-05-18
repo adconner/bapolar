@@ -563,18 +563,17 @@ def lproduct(*its):
     its = [iter(it) for it in its]
     pools = [[] for e in its]
     for k in count():
-        added = []
-        for iti,(pool,it) in enumerate(zip(pools,its)):
+        added = False
+        for i,(pool,it) in enumerate(zip(pools,its)):
             try:
                 pool.append(next(it))
-                added.append(iti)
+                added = True
+                for res in product(*pools[:i]+[pool[-1:]]+pools[i+1:]):
+                    yield res
             except StopIteration:
                 pass
-        if len(added) == 0:
+        if not added:
             break
-        for i in added:
-            for res in product(*[p[:k] for p in pools[:i]]+[pools[i][-1:]]+pools[i+1:]):
-                yield res
 
 def three_place_ideals_up_to(ba,d=1):
     schedule = []
