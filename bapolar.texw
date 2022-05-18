@@ -1127,6 +1127,15 @@ This is the fundamental computation of ideal enumeration.
                     J = (Jbound+qs).twostd()
                     raising_constraints(qs,J)
 
+        for pis,qis in combinations(vss.values(),2):
+            print self.polynomial_weight(self.get_vorder(pis[0][0])[0][pis[0][1]]), \
+                self.polynomial_weight(self.get_vorder(qis[0][0])[0][qis[0][1]])
+            ps,Jbound = get_ps_from_coords(pis+qis,params=False)
+            ps, qs = ps[:len(pis)], ps[len(pis):]
+            for i,j in product(range(len(ps)),range(len(qs))):
+                J = (Jbound+ps[i:]+qs[i:]).twostd()
+                raising_constraints(ps[i:]+qs[i:],J)
+
         return prog
 
     def bounded_gb(self, J, tm):
