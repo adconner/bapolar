@@ -1084,15 +1084,18 @@ This is the fundamental computation of ideal enumeration.
             return prog
         
         tmm = reduce(lambda tma,tmb: tuple(map(max,tma,tmb)),tms+tms_triv)
-        def get_ps_from_coords(pis):
+        def get_ps_from_coords(pis,params=True):
             R = self.get_ring(sum(self.get_vorder(tm)[1][ii]-ii-1 
-                for tm,ii in pis))
+                for tm,ii in pis) if params else 0)
             xi = 0
             ps = []
             for tm,ii in pis:
                 vs,vsl = self.get_vorder(tm)
-                ps.append(liftR(vs[ii],R) + R.sum(liftR(p,R)*t for 
-                        p,t in zip(vs[ii+1:vsl[ii]], R.gens()[self.nvarsx+xi:])))
+                p = liftR(vs[ii],R)
+                if params:
+                    p += R.sum(liftR(p,R)*t for p,t in zip(vs[ii+1:vsl[ii]], 
+                        R.gens()[self.nvarsx+xi:]))
+                ps.append(p)
                 xi += vsl[ii] - ii - 1
             Jbound = R.ideal([p for i,e in enumerate(tmm) for p in
                 self.all_monomials((0,)*i+(e+1,)+(0,)*(len(tm)-i-1),R)],side='twosided')
@@ -1127,14 +1130,17 @@ This is the fundamental computation of ideal enumeration.
                     J = (Jbound+qs).twostd()
                     raising_constraints(qs,J)
 
-        for pis,qis in combinations(vss.values(),2):
-            print self.polynomial_weight(self.get_vorder(pis[0][0])[0][pis[0][1]]), \
-                self.polynomial_weight(self.get_vorder(qis[0][0])[0][qis[0][1]])
-            ps,Jbound = get_ps_from_coords(pis+qis,params=False)
-            ps, qs = ps[:len(pis)], ps[len(pis):]
-            for i,j in product(range(len(ps)),range(len(qs))):
-                J = (Jbound+ps[i:]+qs[i:]).twostd()
-                raising_constraints(ps[i:]+qs[i:],J)
+        # for pis,qis in combinations(vss.values(),2):
+        #     wtp = self.polynomial_weight(self.get_vorder(pis[0][0])[0][pis[0][1]])
+        #     wtq = self.polynomial_weight(self.get_vorder(qis[0][0])[0][qis[0][1]])
+        #     if self.weight_le(wtp,wtq) or self.weight_le(wtq,wtp):
+        #         continue
+        #     ps,Jbound = get_ps_from_coords(pis+qis,params=False)
+        #     ps, qs = ps[:len(pis)], ps[len(pis):]
+        #     for i,j in product(range(len(ps)),range(len(qs))):
+        #         # J = Jbound.ring().ideal(ps[i:]+qs[i:]).twostd()
+        #         J = (Jbound+ps[i:]+qs[i:]).twostd()
+        #         raising_constraints(ps[i:]+qs[i:],J)
 
         return prog
 
