@@ -1127,7 +1127,7 @@ This is the fundamental computation of ideal enumeration.
             ps,Jbound = get_ps_from_coords(pis)
             for k in range(1,len(ps)+1):
                 for qs in combinations(ps,k):
-                    J = (Jbound+qs).twostd()
+                    J = ba.bounded_gb(qs[0].parent().ideal(qs),max(sum(tm) for tm in tms+tms_triv))
                     raising_constraints(qs,J)
 
         # for pis,qis in combinations(vss.values(),2):
@@ -1144,12 +1144,12 @@ This is the fundamental computation of ideal enumeration.
 
         return prog
 
-    def bounded_gb(self, J, tm):
-        J += [p for i,e in enumerate(tm) for p in
-                self.all_monomials((0,)*i+(e+1,)+(0,)*(len(tm)-i-1),J.ring())]
-        gb = J.twostd().gens()
-        gb = [p for p in gb if all(a<=b for a,b in zip(self.polynomial_tm(p),tm))]
-        return gb
+    def bounded_gb(self, J, d):
+        from sage.libs.singular.option import opt,opt_ctx
+        twostd = sage.libs.singular.function_factory.ff.twostd
+        with opt_ctx:
+            opt['deg_bound'] = d
+            return J.ring().ideal(twostd(J),side='twosided')
     
     # For testing purposes
     # This gives the monomials not in the leading term ideal for a generic point
