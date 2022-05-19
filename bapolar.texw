@@ -962,7 +962,7 @@ This is the fundamental computation of ideal enumeration.
             for p in vs[::-1]:
                 if J.reduce(liftR(p.lm(),J.ring())) == liftR(p.lm(),J.ring()):
                     missing += 1
-                if missing >= self.r:
+                if missing >= min(self.r - self.tm_codim_tperp(tm),self.tm_dim_tperp(tm)):
                     yield (J,xi)
                     return
             return
