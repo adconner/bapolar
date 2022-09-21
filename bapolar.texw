@@ -810,7 +810,7 @@ This is the fundamental computation of ideal enumeration.
 
 <<complete=False>>=
 
-    def enumerate_tm(self, tm, J=None, xi=0, checkintermediate=True):
+    def enumerate_tm(self, tm, J=None, xi=0, checkintermediate=False):
         if J is None:
             J = self.get_ring().ideal(side='twosided')
         Jorig = J
@@ -1166,6 +1166,28 @@ This is the fundamental computation of ideal enumeration.
                     msin.add(m*n)
         return [m for m in self.all_monomials(tm) if m not in msin]
 
+    def simple_greedy_extend(self, J, tm):
+        assert J.ring() is self.get_ring()
+        cod = len(self.generic_codim(J,tm))
+        assert cod >= self.r
+        for v in ba.get_vorder(tm)[0]:
+            if v not in J:
+                K = (J + v).twostd()
+
+                codcur = len(self.generic_codim(K,tm))
+                if codcur < self.r:
+                    continue
+                ok = True
+                for s in range(len(tm)):
+                    if len(self.generic_codim(K, tm[:s]+(tm[s]+1,)+tm[s+1:])) < self.r:
+                        ok = False
+                        break
+                if not ok:
+                    continue
+                J = K
+                if codcur == self.r:
+                    return J
+
     def sum_ideals(self,Jxis):
         sxis = sum(xi for J,xi in Jxis)
         R = self.get_ring(sxis)
@@ -1211,6 +1233,8 @@ This is the fundamental computation of ideal enumeration.
 def liftR(p,R):
     if p.parent() is R:
         return p
+    if p.is_zero():
+        return R.zero()
     return p(R.gens()[:p.parent().ngens()]+(R.zero(),)*(p.parent().ngens()-R.ngens()))
 
 def basis_of_lie_algebra(xs):
