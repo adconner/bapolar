@@ -484,6 +484,8 @@ algebra system.
 
 <<complete=False>>=
 from itertools import *
+from operator import sub
+from IPython import embed
 
 def check_T_is_stabilized(T,reps):
     a = len(T)
@@ -748,7 +750,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             vorder.setdefault(wt,[]).append(v)
         mon = lambda m: self.R0.prod(x**k for k,x in zip(m,self.R0.gens()) if k>0)
         vorder = sorted(vorder.items(),key=lambda wtvs:
-                -self.total_order_sort_key(wtvs[0]))
+                self.total_order_sort_key(wtvs[0]))
         allvs = []
         vsl = []
         for vi,(wt,vs) in enumerate(vorder):
@@ -794,6 +796,157 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             return R.zero()
         return R.prod(R.gen(x)**k for x,k in 
                 p.lm().exponents()[0][:self.nvars].sparse_iter())
+@
+
+
+<<complete=False>>=
+                   
+    # adjoining these to the ideal will not necessarily zero out the
+    # corresponding coefficient unless larger monomial
+    # coefficients of the same weight and degree are not
+    # affected
+    # J assumed to be twostd()
+    def leading_term_coefficients(self,J,S,p):
+        ts = []
+        for q in J.gens():
+            if not self.lm(q).is_constant() and \
+                    self.R0.monomial_divides(self.lm(q,True),self.lm(p,True)):
+                ts.append(q.coefficient(self.lm(q)))
+        return ts
+    
+    def get_ideals_for_tm(self,tm,J=None,S=None,xi=0,enumerate_all=True):
+        if J is None:
+            J = self.get_ring().ideal(side='twosided')
+            S = [J.ring().one()]
+        Jorig = J
+        keepi = xi
+        # J += [p for i,e in enumerate(tm) for p in
+        #         self.all_monomials((0,)*i+(e+1,)+(0,)*(len(tm)-i-1),J.ring())]
+        # J = J.twostd()
+
+        vs, vsl = self.get_vorder(tm)
+        vsb = [next((j for j in vsl[i::-1] if j != vsl[i]),0) for i in range(len(vsl))]
+
+        lp = self.get_linear_program((tm,))
+        # lp = self.get_linear_program((tm,),((2,1,0),(1,2,0)))
+        # lp = self.get_linear_program((tm,(2,1,0),(1,2,0)))
+
+        for i,p in enumerate(vs):    
+           Jcur = (J + self.leading_term_coefficients(J,S,p)).twostd()
+           if any(s in Jcur for s in S):
+                # p.lm() definitely already in, cf case 1 below
+                lp.set_min(lp[p.lm()],1.0)
+                lp.set_max(lp[p.lm()],1.0)
+           else:
+                lp.set_min(lp[p.lm()],0.0)
+                lp.set_max(lp[p.lm()],1.0)
+
+        from sage.numerical.mip import MIPSolverException
+        try:
+            lp.solve()
+        except MIPSolverException:
+            print ("get_ideals_for_tm: no solution to start")
+            return
+       
+        def dfs(ii,J,S,xi):
+            if ii == len(vs):
+                yield (J,S,xi)
+                return
+
+            # case 1, vs[ii].lm() already in the leading term ideal, move on
+            if lp.get_min(lp[vs[ii].lm()]) == 1.0:
+                for JJ in dfs(ii+1,J,S,xi):
+                    yield JJ
+                return
+                   
+            # case 2: one of the existing leading coefficients of vs[ii] jis nonzero
+            def getJs(J,S,ts):
+                def dfscur(I,S,ts):
+                    if len(ts) == 0:
+                        yield (I,S,False)
+                        return
+                    t = ts[0]
+                    if t in I:
+                        for IS in dfscur(I,S,ts[1:]):
+                            yield IS
+                        return
+                    yield (I,S+[t],True)
+                    I += [t]
+                    for It in I.minimal_associated_primes(): # need to take I
+                        if any(s in It for s in S):
+                            continue
+                        for IS in dfscur(It,S,ts[1:]):
+                            yield IS
+                if J.ring().ngens() == self.nvarsx:
+                    # no parameters
+                    yield (J,S,len(ts) > 0)
+                    return
+                R = PolynomialRing(ba.F,J.ring().gens()[self.nvarsx:])
+                I = R.ideal([R(p) for p in J.gens() if self.lm(p).is_constant()])
+                S = [R(s) for s in S]
+                ts = [R(t) for t in ts]
+                for I,S,curfull in dfscur(I,S,ts):
+                    yield ((J+[J.ring()(t) for t in I.gens()]).twostd(),
+                           [J.ring()(s) for s in S], curfull)
+
+                    
+            def rec(Jt,St,xi,curfull):
+                sav = set()
+                for q in Jt.gens():
+                    if q.is_zero():
+                        continue
+                    t = q.coefficient(self.lm(q))
+                    Jtt = (Jt + t).twostd()
+                    if any(s in Jtt for s in S):
+                        for m in self.all_monomials( tuple(map(sub,tm,self.polynomial_tm(q))) ,Jtt.ring() ):
+                            qm = q.lt()*m
+                            if lp.get_min(lp[qm.lm()]) != 1.0:
+                                lp.set_min(lp[qm.lm()],1.0)
+                                sav.add(qm)
+                assert lp.get_min(lp[vs[ii].lm()]) == (1.0 if curfull else 0.0)
+                if not curfull and enumerate_all:
+                    lp.set_max(lp[vs[ii].lm()],0.0)
+                
+                try:
+                    lp.solve()
+                    if enumerate_all:
+                        curdim = len([None for p in vs if lp.get_min(lp[p.lm()]) == 1.0])
+                        rem = self.tm_dim(tm) - self.r - curdim
+                        print ('%s xi=%d %s%d' % (str(tm),xi,' '*(ii if len(vs) <= 100 else (ii*100)//len(vs)),rem))
+                    for JSxi in dfs(ii+1,Jt,St,xi):
+                        yield JSxi
+                except MIPSolverException:
+                    return
+                finally:
+                    if not curfull and enumerate_all:
+                        lp.set_max(lp[vs[ii].lm()],1.0)
+                    for m in sav:
+                        lp.set_min(lp[m.lm()],0.0)
+              
+            ts = self.leading_term_coefficients(J,S,vs[ii])
+            ts.sort(key = lambda t: t.degree())
+            for Jt,St,curfull in getJs(J,S,ts):
+                for JSxi in rec(Jt,St,xi,curfull):
+                    yield JSxi
+                if not curfull and enumerate_all:
+                    cur_params = Jt.ring().ngens() - self.nvarsx
+                    needed_params = xi + len([j for j in range(ii+1,vsl[ii]) if 
+                        lp.get_min(lp[vs[j].lm()]) == 0.0])
+                    if needed_params > cur_params:
+                        R = self.get_ring(needed_params)
+                        Jt = R.ideal([liftR(p,R) for p in Jt.gens()])
+                        St = [liftR(s,R) for s in St]
+                    R = Jt.ring()
+                    p = liftR(vs[ii],R) + R.sum(liftR(vs[j],R)*R.gen(self.nvarsx+xi+ji) 
+                            for ji,j in enumerate(j for j in range(ii+1,vsl[ii]) if
+                            lp.get_min(lp[vs[j].lm()]) == 0.0))
+                    for JSxi in rec((Jt+p).twostd(),St,needed_params,True):
+                        yield JSxi
+                        
+        for J,S,xi in dfs(0,J,S,xi):
+            # could postprocess here a bit
+            yield (J,S,xi)
+
 
 @
 
@@ -823,13 +976,33 @@ the input family $J$ so that in the result $\Lm(p)$ is trivially missing.
 
 <<complete=False>>=
 
-    def enumerate_candidates(self,tm,tmcs,J0=None,xi=0):
+    def enumerate_candidates(self,tm,tmcs,J0=None,S0=None,xi=0):
+        for J,S,yi in self.get_ideals_for_tm(tm,J0,S0,xi,enumerate_all=True):
+            ok = True
+            tmnt = [tmcs[0]]
+            for tmc in tmcs[1:]:
+                try:
+                    Je,S,_ = next(self.get_ideals_for_tm(tmc,J,S,yi,enumerate_all=False))
+                    if J != Je:
+                        tmnt.append(tmc)
+                except StopIteration:
+                    ok = False
+                    break
+            if ok:
+                Js = [(J,S,yi)]
+                for tmc in tmnt:
+                    Js = list(chain.from_iterable(self.get_ideals_for_tm(
+                        tmc,J,S,yi,enumerate_all=False) for J,S,yi in Js))
+                for J,S,yi in Js:
+                    yield (J,S,yi)
+                    
+    def enumerate_candidates2(self,tm,tmcs,J0=None,xi=0):
         for J,yi in self.enumerate_tm(tm,J0,xi):
             ok = True
             tmnt = [tmcs[0]]
             for tmc in tmcs[1:]:
                 try:
-                    Je = next(self.enumerate_tm_bounded(tmc,J,yi))
+                    Je,_ = next(self.enumerate_tm_bounded(tmc,J,yi))
                     if J != Je:
                         tmnt.append(tmc)
                 except StopIteration:
