@@ -838,12 +838,15 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
 
         vs = []
         vsl = []
+        tmstarts = {}
         for tm in tms:
             vsc, vslc = self.get_vorder(tm)
+            tmstarts[tm] = len(vs)
             vs.extend(vsc)
             vsl.extend([i+len(vsl) for i in vslc])
         iimid = len(vs)
         for tm in tmcs:
+            tmstarts[tm] = len(vs)
             vsc, vslc = self.get_vorder(tm)
             vs.extend(vsc)
             vsl.extend([i+len(vsl) for i in vslc])
@@ -940,12 +943,13 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     unset.remove(vs[ii].lm())
                 try:
                     lp.solve()
-                    if ii < iimid:
+                    if True or ii < iimid:
                         tm = self.polynomial_tm(vs[ii])
                         curdim = len([None for p in self.get_vorder(tm)[0] if lp.get_min(lp[p.lm()]) == 1.0])
+                        iicur = ii - tmstarts[tm]
                         tmdim = self.tm_dim(tm)
                         rem = tmdim - self.r - curdim
-                        print ('%s xi=%d %s%d' % (str(tm),xi,' '*(ii if tmdim <= 100 else (ii*100)//tmdim),rem))
+                        print ('%s xi=%d %s%d' % (str(tm),xi,' '*(iicur if tmdim <= 100 else (iicur*100)//tmdim),rem))
                     for JSxi in dfs(ii+1,J,S,xi):
                         yield JSxi
                 except MIPSolverException:
