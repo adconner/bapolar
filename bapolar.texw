@@ -943,8 +943,9 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     if ii < iimid:
                         tm = self.polynomial_tm(vs[ii])
                         curdim = len([None for p in self.get_vorder(tm)[0] if lp.get_min(lp[p.lm()]) == 1.0])
-                        rem = self.tm_dim(tm) - self.r - curdim
-                        print ('%s xi=%d %s%d' % (str(tm),xi,' '*(ii if len(vs) <= 100 else (ii*100)//len(vs)),rem))
+                        tmdim = self.tm_dim(tm)
+                        rem = tmdim - self.r - curdim
+                        print ('%s xi=%d %s%d' % (str(tm),xi,' '*(ii if tmdim <= 100 else (ii*100)//tmdim),rem))
                     for JSxi in dfs(ii+1,J,S,xi):
                         yield JSxi
                 except MIPSolverException:
@@ -1094,7 +1095,7 @@ This is the fundamental computation of ideal enumeration.
                             print 'FAILED'
                             return
                 oxi = xi
-                J,xi = self.quick_simplify(J,keepi)
+                J,xi = self.quick_simplify(J,keepi=keepi)
                 if xi != oxi:
                     print "ELIMINATED %d PARAMS" % (oxi-xi)
 
@@ -1446,7 +1447,7 @@ This is the fundamental computation of ideal enumeration.
             xcum += xi
         return (R.ideal(gens,side='twosided'),xcum)
 
-    def quick_simplify(self,I,keepi=0):
+    def quick_simplify(self,I,S=None,keepi=0):
         R = I.ring()
         vals = {}
         tis = set()
@@ -1473,7 +1474,13 @@ This is the fundamental computation of ideal enumeration.
             else:
                 subs.append(R.zero())
         I = R.ideal([p(*subs) for p in I.gens()],side='twosided')
-        return (I,keepi+len(tis))
+        if S is not None:
+            S = [I.reduce(s(*subs)) for s in S]
+            S = [I.ring().one()] + [s for s in S if not s.is_constant()]
+        if S is None:
+            return (I,keepi+len(tis))
+        else:
+            return (I,S,keepi+len(tis))
 
 def liftR(p,R):
     if p.parent() is R:
