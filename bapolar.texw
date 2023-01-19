@@ -806,13 +806,25 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
     # coefficients of the same weight and degree are not
     # affected
     # J assumed to be twostd()
-    def leading_term_coefficients(self,J,S,p):
+    def leading_term_coefficients(self,J,p):
         ts = []
         for q in J.gens():
             if not self.lm(q).is_constant() and \
                     self.R0.monomial_divides(self.lm(q,True),self.lm(p,True)):
                 ts.append(q.coefficient(self.lm(q)))
         return ts
+
+    def get_param_ideal(self,J):
+        if J.ring().ngens() == self.nvarsx:
+            return None,None
+        R = PolynomialRing(ba.F,J.ring().gens()[self.nvarsx:],implementation='singular')
+        I = R.ideal([R(p) for p in J.gens() if self.lm(p).is_constant()])
+        def coerce(t):
+            return R(t)
+        return I,coerce
+
+    def lift_param(self,R,t):
+        return R(t(R.gens()[self.nvarsx:]))
     
     def get_ideals_for_tm(self,tms=[],tmcs=[],J=None,S=None,xi=0):
         if J is None:
@@ -836,15 +848,32 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             vs.extend(vsc)
             vsl.extend([i+len(vsl) for i in vslc])
             
+        def guaranteed_lms(J,S):
+            lms = []
+            if J.ring().ngens() == self.nvarsx:
+                lms = [self.lm(p) for p in J.gens() if not p.is_zero()]
+            else:
+                I,coerce = self.get_param_ideal(J)
+                SI = [coerce(s) for s in S]
+                lms = []
+                for p in J.gens():
+                    if p.is_zero():
+                        continue
+                    It = I + coerce(p.coefficient(self.lm(p)))
+                    if any(s in It for s in SI):
+                        lms.append(self.lm(p,True))
+            return lms
+        
         lp = self.get_linear_program(tuple(tms),tuple(tmcs))
-
-        for i,p in enumerate(vs):    
-           Jcur = (J + self.leading_term_coefficients(J,S,p)).twostd()
-           if any(s in Jcur for s in S):
-                # p.lm() definitely already in, cf case 1 below
+        unset = set()
+        
+        lms = guaranteed_lms(J,S)
+        for p in vs:    
+            if any(self.R0.monomial_divides(m,self.lm(p,True)) for m in lms):
                 lp.set_min(lp[p.lm()],1.0)
                 lp.set_max(lp[p.lm()],1.0)
-           else:
+            else:
+                unset.add(p.lm())
                 lp.set_min(lp[p.lm()],0.0)
                 lp.set_max(lp[p.lm()],1.0)
 
@@ -888,33 +917,27 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     # no parameters
                     yield (J,S,len(ts) > 0)
                     return
-                R = PolynomialRing(ba.F,J.ring().gens()[self.nvarsx:],implementation='singular')
-                I = R.ideal([R(p) for p in J.gens() if self.lm(p).is_constant()])
-                S = [R(s) for s in S]
-                ts = [R(t) for t in ts]
+                I,coerce = self.get_param_ideal(J)
+                S = list(map(coerce,S))
+                ts = list(map(coerce,ts))
                 for I,S,curfull in dfscur(I,S,ts):
-                    yield ((J+[J.ring()(t(J.ring().gens()[self.nvarsx:])) for t in I.gens()]).twostd(),
-                           [J.ring()(s(J.ring().gens()[self.nvarsx:])) for s in S], curfull)
+                    yield ((J+[self.lift_param(J.ring(),t) for t in I.gens()]).twostd(),
+                           [self.lift_param(J.ring(),s) for s in S], curfull)
 
                     
-            def rec(Jt,St,xi,curfull):
+            def rec(J,S,xi,curfull):
+                lms = guaranteed_lms(J,S)
                 sav = set()
-                for q in Jt.gens():
-                    if q.is_zero():
-                        continue
-                    t = q.coefficient(self.lm(q))
-                    Jtt = (Jt + t).twostd()
-                    if any(s in Jtt for s in St):
-                        for tm in tms + tmcs:
-                            for m in self.all_monomials( tuple(map(sub,tm,self.polynomial_tm(q))) ,self.R0 ):
-                                qm = self.lm(q,True)*m
-                                if lp.get_min(lp[qm]) != 1.0:
-                                    lp.set_min(lp[qm],1.0)
-                                    sav.add(qm)
+                for p in unset:
+                    if any(self.R0.monomial_divides(m,p) for m in lms):
+                        lp.set_min(lp[p],1.0)
+                        sav.add(p)
+                for p in sav:
+                    unset.remove(p)
                 assert lp.get_min(lp[vs[ii].lm()]) == (1.0 if curfull else 0.0)
                 if not curfull and ii < iimid:
                     lp.set_max(lp[vs[ii].lm()],0.0)
-                
+                    unset.remove(vs[ii].lm())
                 try:
                     lp.solve()
                     if ii < iimid:
@@ -922,17 +945,19 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         curdim = len([None for p in self.get_vorder(tm)[0] if lp.get_min(lp[p.lm()]) == 1.0])
                         rem = self.tm_dim(tm) - self.r - curdim
                         print ('%s xi=%d %s%d' % (str(tm),xi,' '*(ii if len(vs) <= 100 else (ii*100)//len(vs)),rem))
-                    for JSxi in dfs(ii+1,Jt,St,xi):
+                    for JSxi in dfs(ii+1,J,S,xi):
                         yield JSxi
                 except MIPSolverException:
                     return
                 finally:
                     if not curfull and ii < iimid:
                         lp.set_max(lp[vs[ii].lm()],1.0)
-                    for m in sav:
-                        lp.set_min(lp[m],0.0)
+                        unset.add(vs[ii].lm())
+                    for p in sav:
+                        lp.set_min(lp[p],0.0)
+                        unset.add(p)
               
-            ts = self.leading_term_coefficients(J,S,vs[ii])
+            ts = self.leading_term_coefficients(J,vs[ii])
             ts.sort(key = lambda t: t.degree())
             for Jt,St,curfull in getJs(J,S,ts):
                 for JSxi in rec(Jt,St,xi,curfull):
