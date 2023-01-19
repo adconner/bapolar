@@ -814,22 +814,29 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 ts.append(q.coefficient(self.lm(q)))
         return ts
     
-    def get_ideals_for_tm(self,tm,J=None,S=None,xi=0,enumerate_all=True):
+    def get_ideals_for_tm(self,tms=[],tmcs=[],J=None,S=None,xi=0):
         if J is None:
             J = self.get_ring().ideal(side='twosided')
             S = [J.ring().one()]
-        Jorig = J
-        keepi = xi
-        # J += [p for i,e in enumerate(tm) for p in
-        #         self.all_monomials((0,)*i+(e+1,)+(0,)*(len(tm)-i-1),J.ring())]
+        # Jorig = J
+        # keepi = xi
+        # J += [p for i,e in enumerate(tms[0]) for p in
+        #         self.all_monomials((0,)*i+(e+1,)+(0,)*(len(tms[0])-i-1),J.ring())]
         # J = J.twostd()
 
-        vs, vsl = self.get_vorder(tm)
-        vsb = [next((j for j in vsl[i::-1] if j != vsl[i]),0) for i in range(len(vsl))]
-
-        lp = self.get_linear_program((tm,))
-        # lp = self.get_linear_program((tm,),((2,1,0),(1,2,0)))
-        # lp = self.get_linear_program((tm,(2,1,0),(1,2,0)))
+        vs = []
+        vsl = []
+        for tm in tms:
+            vsc, vslc = self.get_vorder(tm)
+            vs.extend(vsc)
+            vsl.extend([i+len(vsl) for i in vslc])
+        iimid = len(vs)
+        for tm in tmcs:
+            vsc, vslc = self.get_vorder(tm)
+            vs.extend(vsc)
+            vsl.extend([i+len(vsl) for i in vslc])
+            
+        lp = self.get_linear_program(tuple(tms),tuple(tmcs))
 
         for i,p in enumerate(vs):    
            Jcur = (J + self.leading_term_coefficients(J,S,p)).twostd()
@@ -881,13 +888,13 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     # no parameters
                     yield (J,S,len(ts) > 0)
                     return
-                R = PolynomialRing(ba.F,J.ring().gens()[self.nvarsx:])
+                R = PolynomialRing(ba.F,J.ring().gens()[self.nvarsx:],implementation='singular')
                 I = R.ideal([R(p) for p in J.gens() if self.lm(p).is_constant()])
                 S = [R(s) for s in S]
                 ts = [R(t) for t in ts]
                 for I,S,curfull in dfscur(I,S,ts):
-                    yield ((J+[J.ring()(t) for t in I.gens()]).twostd(),
-                           [J.ring()(s) for s in S], curfull)
+                    yield ((J+[J.ring()(t(J.ring().gens()[self.nvarsx:])) for t in I.gens()]).twostd(),
+                           [J.ring()(s(J.ring().gens()[self.nvarsx:])) for s in S], curfull)
 
                     
             def rec(Jt,St,xi,curfull):
@@ -897,20 +904,22 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         continue
                     t = q.coefficient(self.lm(q))
                     Jtt = (Jt + t).twostd()
-                    if any(s in Jtt for s in S):
-                        for m in self.all_monomials( tuple(map(sub,tm,self.polynomial_tm(q))) ,Jtt.ring() ):
-                            qm = q.lt()*m
-                            if lp.get_min(lp[qm.lm()]) != 1.0:
-                                lp.set_min(lp[qm.lm()],1.0)
-                                sav.add(qm)
+                    if any(s in Jtt for s in St):
+                        for tm in tms + tmcs:
+                            for m in self.all_monomials( tuple(map(sub,tm,self.polynomial_tm(q))) ,self.R0 ):
+                                qm = self.lm(q,True)*m
+                                if lp.get_min(lp[qm]) != 1.0:
+                                    lp.set_min(lp[qm],1.0)
+                                    sav.add(qm)
                 assert lp.get_min(lp[vs[ii].lm()]) == (1.0 if curfull else 0.0)
-                if not curfull and enumerate_all:
+                if not curfull and ii < iimid:
                     lp.set_max(lp[vs[ii].lm()],0.0)
                 
                 try:
                     lp.solve()
-                    if enumerate_all:
-                        curdim = len([None for p in vs if lp.get_min(lp[p.lm()]) == 1.0])
+                    if ii < iimid:
+                        tm = self.polynomial_tm(vs[ii])
+                        curdim = len([None for p in self.get_vorder(tm)[0] if lp.get_min(lp[p.lm()]) == 1.0])
                         rem = self.tm_dim(tm) - self.r - curdim
                         print ('%s xi=%d %s%d' % (str(tm),xi,' '*(ii if len(vs) <= 100 else (ii*100)//len(vs)),rem))
                     for JSxi in dfs(ii+1,Jt,St,xi):
@@ -918,17 +927,17 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 except MIPSolverException:
                     return
                 finally:
-                    if not curfull and enumerate_all:
+                    if not curfull and ii < iimid:
                         lp.set_max(lp[vs[ii].lm()],1.0)
                     for m in sav:
-                        lp.set_min(lp[m.lm()],0.0)
+                        lp.set_min(lp[m],0.0)
               
             ts = self.leading_term_coefficients(J,S,vs[ii])
             ts.sort(key = lambda t: t.degree())
             for Jt,St,curfull in getJs(J,S,ts):
                 for JSxi in rec(Jt,St,xi,curfull):
                     yield JSxi
-                if not curfull and enumerate_all:
+                if not curfull and ii < iimid:
                     cur_params = Jt.ring().ngens() - self.nvarsx
                     needed_params = xi + len([j for j in range(ii+1,vsl[ii]) if 
                         lp.get_min(lp[vs[j].lm()]) == 0.0])
