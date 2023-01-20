@@ -577,7 +577,40 @@ def lproduct(*its):
                     return
         if not added:
             return
+        
+def three_place_ideals_up_to3(ba,d=1):
+    def dfs(Jxi,tms): 
+        if len(tms) == 0:
+            yield Jxi
+            return
+        tm = tms[0]
+        print (tm)
+        for Jxiup in ba.get_ideals_for_tm([tm],[tm[:s]+(tm[s]+1,)+tm[s+1:] for s in range(3)],*Jxi):
+            if len(tms) == 1 and sum(tm) < d:
+                tmsnext = [tuple(tm) for tm in IntegerVectors(sum(tm)+1,3)]
+                #tmsnext.sort(key = lambda tm: (len(ba.generic_codim(Jxi[0],tm)), max(tm), tm))
+                #for tm in tmsnext:
+                #    print (tm,len(ba.generic_codim(Jxi[0],tm)))
+            else:
+                tmsnext = tms[1:]
+                
+            for Jxifull in dfs(Jxiup,tmsnext):
+                    yield Jxifull
 
+    cd2 = [ ba.get_ideals_for_tm([(1,1,0)],tmcs=[(2,1,0),(1,2,0)]) ]
+    cd2.append(ba.get_ideals_for_tm([(1,0,1)],tmcs=[(2,0,1),(1,0,2)]))
+    cd2.append(ba.get_ideals_for_tm([(0,1,1)],tmcs=[(0,2,1),(0,1,2)]))
+
+    for Jxis in lproduct(*map(enumerate,cd2)):
+        print 'triple',[i for i,Iyi in Jxis]
+        Jxi = ba.sum_ideals_S([Iyi for i,Iyi in Jxis])
+        try:
+            next(ba.get_ideals_for_tm([],[(1,1,1)],*Jxi))
+            for Jxifull in dfs(Jxi,[(2,0,0),(0,2,0),(0,0,2)] if d >= 2 else []):
+                yield Jxifull
+        except StopIteration:
+            pass
+        
 def three_place_ideals_up_to(ba,d=1):
     def dfs(Jxi,tms): 
         if len(tms) == 0:
@@ -943,7 +976,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     unset.remove(vs[ii].lm())
                 try:
                     lp.solve()
-                    if True or ii < iimid:
+                    if ii < iimid:
                         tm = self.polynomial_tm(vs[ii])
                         curdim = len([None for p in self.get_vorder(tm)[0] if lp.get_min(lp[p.lm()]) == 1.0])
                         iicur = ii - tmstarts[tm]
@@ -965,6 +998,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             ts = self.leading_term_coefficients(J,vs[ii])
             ts.sort(key = lambda t: t.degree())
             for Jt,St,curfull in getJs(J,S,ts):
+                #tscur = self.leading_term_coefficients(Jt,vs[ii])
+                #assert len(tscur) == 0 or any(s in (Jt+t).twostd() for t in tscur for s in St)
                 for JSxi in rec(Jt,St,xi,curfull):
                     yield JSxi
                 if not curfull and ii < iimid:
@@ -979,6 +1014,9 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     p = liftR(vs[ii],R) + R.sum(liftR(vs[j],R)*R.gen(self.nvarsx+xi+ji) 
                             for ji,j in enumerate(j for j in range(ii+1,vsl[ii]) if
                             lp.get_min(lp[vs[j].lm()]) == 0.0))
+                    #Jtt = (Jt+p).twostd()
+                    #tscur = self.leading_term_coefficients(Jtt,vs[ii])
+                    #assert len(tscur) == 0 or any(s in (Jtt+t).twostd() for t in tscur for s in St)
                     for JSxi in rec((Jt+p).twostd(),St,needed_params,True):
                         yield JSxi
                         
@@ -1335,21 +1373,17 @@ This is the fundamental computation of ideal enumeration.
         
         tmm = reduce(lambda tma,tmb: tuple(map(max,tma,tmb)),tms+tms_triv)
         def get_ps_from_coords(pis,params=True):
-            R = self.get_ring(sum(self.get_vorder(tm)[1][ii]-ii-1 
-                for tm,ii in pis) if params else 0)
-            xi = 0
+            R = self.get_ring(1)
+            t = R.gen(self.nvarsx)
             ps = []
             for tm,ii in pis:
                 vs,vsl = self.get_vorder(tm)
                 p = liftR(vs[ii],R)
                 if params:
-                    p += R.sum(liftR(p,R)*t for p,t in zip(vs[ii+1:vsl[ii]], 
-                        R.gens()[self.nvarsx+xi:]))
+                    p += R.sum(liftR(p,R)*t*self.F(ZZ.random_element(10**5))
+                               for p in vs[ii+1:vsl[ii]])
                 ps.append(p)
-                xi += vsl[ii] - ii - 1
-            Jbound = R.ideal([p for i,e in enumerate(tmm) for p in
-                self.all_monomials((0,)*i+(e+1,)+(0,)*(len(tm)-i-1),R)],side='twosided')
-            return ps,Jbound
+            return ps
 
         def raising_constraints(ps,J):
             for q in J.gens():
@@ -1374,9 +1408,10 @@ This is the fundamental computation of ideal enumeration.
 
         for pis in vss.values():
             print self.polynomial_weight(self.get_vorder(pis[0][0])[0][pis[0][1]])
-            ps,Jbound = get_ps_from_coords(pis)
+            ps = get_ps_from_coords(pis)
             for k in range(1,len(ps)+1):
                 for qs in combinations(ps,k):
+                    print(qs)
                     J = ba.bounded_gb(qs[0].parent().ideal(qs),max(sum(tm) for tm in tms+tms_triv))
                     raising_constraints(qs,J)
 
@@ -1450,6 +1485,24 @@ This is the fundamental computation of ideal enumeration.
                 for p in J.gens()])
             xcum += xi
         return (R.ideal(gens,side='twosided'),xcum)
+    
+    def sum_ideals_S(self,Jxis):
+        sxis = sum(xi for J,S,xi in Jxis)
+        R = self.get_ring(sxis)
+        gens = []
+        Sgens = []
+        xcum = 0
+        for J,S,xi in Jxis:
+            gens.extend([p(R.gens()[:self.nvarsx] +
+                R.gens()[self.nvarsx+xcum:self.nvarsx+xcum+xi] +
+                (R.zero(),) * (J.ring().ngens()-self.nvarsx-xi))
+                for p in J.gens()])
+            Sgens.extend([ p(R.gens()[:self.nvarsx] +
+                R.gens()[self.nvarsx+xcum:self.nvarsx+xcum+xi] +
+                (R.zero(),) * (J.ring().ngens()-self.nvarsx-xi))
+                for p in S ])
+            xcum += xi
+        return (R.ideal(gens,side='twosided'),Sgens,xcum)
 
     def quick_simplify(self,I,S=None,keepi=0):
         R = I.ring()
@@ -1504,6 +1557,13 @@ def basis_of_lie_algebra(xs):
                 B.append(z)
                 Q.append(z)
     return B
+
+def irrelevant_tm_generators(tms):
+    R = PolynomialRing(QQ,'x',len(tms[0]))
+    Is = [R.ideal([t**(e+1) for e,t in zip(tm,R.gens())]) for tm in tms]
+    I = Is[0].intersection(*Is[1:])
+    return [tuple(m.exponents()[0]) for m in I.gens()]
+    
 @
 
 
