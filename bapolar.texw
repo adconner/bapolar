@@ -785,7 +785,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         vorder = sorted(vorder.items(),key=lambda wtvs:
                 self.total_order_sort_key(wtvs[0]))
         allvs = []
-        vsl = []
+        vsb = []
         for vi,(wt,vs) in enumerate(vorder):
             vs.sort(key=mon,reverse=True)
             if max(tm) == 1: # restrict to Tperp
@@ -801,9 +801,9 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 vs = [sum(e*mon(vs[i]) for i,e in enumerate(r)) for r in K]
             else:
                 vs = [mon(v) for v in vs]
-            allvs.extend(vs)
-            vsl.extend([len(allvs)]*len(vs))
-        return (allvs,vsl)
+            vsb.extend([len(allvs)]*len(vs))
+            allvs.extend(reversed(vs))
+        return (allvs,vsb)
 
 
     def x_weight(self, x):
@@ -870,19 +870,19 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         # J = J.twostd()
 
         vs = []
-        vsl = []
+        vsb = []
         tmstarts = {}
         for tm in tms:
-            vsc, vslc = self.get_vorder(tm)
+            vsc, vsbc = self.get_vorder(tm)
             tmstarts[tm] = len(vs)
             vs.extend(vsc)
-            vsl.extend([i+len(vsl) for i in vslc])
+            vsb.extend([i+len(vsb) for i in vsbc])
         iimid = len(vs)
         for tm in tmcs:
             tmstarts[tm] = len(vs)
-            vsc, vslc = self.get_vorder(tm)
+            vsc, vsbc = self.get_vorder(tm)
             vs.extend(vsc)
-            vsl.extend([i+len(vsl) for i in vslc])
+            vsb.extend([i+len(vsb) for i in vsbc])
             
         def guaranteed_lms(J,S):
             lms = []
@@ -1004,7 +1004,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     yield JSxi
                 if not curfull and ii < iimid:
                     cur_params = Jt.ring().ngens() - self.nvarsx
-                    needed_params = xi + len([j for j in range(ii+1,vsl[ii]) if 
+                    needed_params = xi + len([j for j in range(vsb[ii],ii) if 
                         lp.get_min(lp[vs[j].lm()]) == 0.0])
                     if needed_params > cur_params:
                         R = self.get_ring(needed_params)
@@ -1012,7 +1012,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         St = [liftR(s,R) for s in St]
                     R = Jt.ring()
                     p = liftR(vs[ii],R) + R.sum(liftR(vs[j],R)*R.gen(self.nvarsx+xi+ji) 
-                            for ji,j in enumerate(j for j in range(ii+1,vsl[ii]) if
+                            for ji,j in enumerate(j for j in range(vsb[ii],ii) if
                             lp.get_min(lp[vs[j].lm()]) == 0.0))
                     #Jtt = (Jt+p).twostd()
                     #tscur = self.leading_term_coefficients(Jtt,vs[ii])
@@ -1360,7 +1360,7 @@ This is the fundamental computation of ideal enumeration.
             prog.add_constraint(prog.sum(1-prog[p.lm()] for p in ps) +\
                 prog.sum(prog[p.lm()] for p in qs) >= 1)
         for tm in tms+tms_triv:
-            vs,vsl = self.get_vorder(tm)
+            vs,_ = self.get_vorder(tm)
             prog.add_constraint(prog.sum(prog[p.lm()] for p in vs) == 
                     max(self.tm_dim(tm) - self.r,0))
         P = Poset((tms+tms_triv,lambda a,b: all(i<=j for i,j in zip(a,b))))
@@ -1377,11 +1377,11 @@ This is the fundamental computation of ideal enumeration.
             t = R.gen(self.nvarsx)
             ps = []
             for tm,ii in pis:
-                vs,vsl = self.get_vorder(tm)
+                vs,vsb = self.get_vorder(tm)
                 p = liftR(vs[ii],R)
                 if params:
                     p += R.sum(liftR(p,R)*t*self.F(ZZ.random_element(10**5))
-                               for p in vs[ii+1:vsl[ii]])
+                               for p in vs[vsb[ii]:ii])
                 ps.append(p)
             return ps
 
@@ -1402,8 +1402,8 @@ This is the fundamental computation of ideal enumeration.
 
         vss = {}
         for tm in tms:
-            _, vsl = self.get_vorder(tm)
-            for pi,e in enumerate(vsl):
+            _, vsb = self.get_vorder(tm)
+            for pi,e in enumerate(vsb):
                 vss.setdefault((tm,e),[]).append((tm,pi))
 
         for pis in vss.values():
