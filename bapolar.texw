@@ -585,12 +585,26 @@ def three_place_ideals_up_to3(ba,d=1):
             return
         tm = tms[0]
         print (tm)
-        for Jxiup in ba.get_ideals_for_tm([tm],[tm[:s]+(tm[s]+1,)+tm[s+1:] for s in range(3)],*Jxi):
+        J,S,xi = Jxi
+        for Jxiup in ba.get_ideals_for_tm([tm],[tm[:s]+(tm[s]+1,)+tm[s+1:] for s in range(3)],J,S,xi,sum(tm) >= 3):
             if len(tms) == 1 and sum(tm) < d:
-                tmsnext = [tuple(tm) for tm in IntegerVectors(sum(tm)+1,3)]
-                #tmsnext.sort(key = lambda tm: (len(ba.generic_codim(Jxi[0],tm)), max(tm), tm))
-                #for tm in tmsnext:
-                #    print (tm,len(ba.generic_codim(Jxi[0],tm)))
+                ltIcontains = []
+                for p in J.gens():
+                    if not ba.lm(p).is_constant():
+                        t = p.coefficient(ba.lm(p))
+                        Jt = (J+t).twostd()
+                        if any(s in Jt for s in S):
+                            ltIcontains.append(ba.lm(p,True))
+                ltIcontains = ba.get_ring().ideal(ltIcontains)
+                tmsnext = []
+                for tm in IntegerVectors(sum(tm)+1,3):
+                    tm = tuple(tm)
+                    codim_upper_bound = len([m for m in ba.all_monomials(tm) if m not in ltIcontains])
+                    if codim_upper_bound > ba.r:
+                        tmsnext.append((tm,codim_upper_bound))
+                tmsnext.sort(key = lambda p: (p[1], max(p[0]), p[0]))
+                print(tmsnext)
+                tmsnext = [tm for tm,_ in tmsnext]
             else:
                 tmsnext = tms[1:]
                 
@@ -859,7 +873,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
     def lift_param(self,R,t):
         return R(t(R.gens()[self.nvarsx:]))
     
-    def get_ideals_for_tm(self,tms=[],tmcs=[],J=None,S=None,xi=0):
+    def get_ideals_for_tm(self,tms=[],tmcs=[],J=None,S=None,xi=0,simple_lp=False):
         if J is None:
             J = self.get_ring().ideal(side='twosided')
             S = [J.ring().one()]
@@ -900,7 +914,10 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         lms.append(self.lm(p,True))
             return lms
         
-        lp = self.get_linear_program(tuple(tms),tuple(tmcs))
+        if simple_lp:
+            lp = self.get_linear_program((),tuple(tms)+tuple(tmcs))
+        else:
+            lp = self.get_linear_program(tuple(tms),tuple(tmcs))
         unset = set()
         
         lms = guaranteed_lms(J,S)
@@ -1022,7 +1039,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         
         for J,S,xi in dfs(0,J,S,xi):
             # could postprocess here a bit
-            yield (J,S,xi)
+            yield self.quick_simplify(J,S)
+            #yield (J,S,xi)
 
 
 @
@@ -1380,7 +1398,7 @@ This is the fundamental computation of ideal enumeration.
                 vs,vsb = self.get_vorder(tm)
                 p = liftR(vs[ii],R)
                 if params:
-                    p += R.sum(liftR(p,R)*t*self.F(ZZ.random_element(10**5))
+                    p += R.sum(liftR(p,R)*t*self.F(ZZ.random_element(10**3))
                                for p in vs[vsb[ii]:ii])
                 ps.append(p)
             return ps
