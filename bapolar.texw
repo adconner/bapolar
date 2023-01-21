@@ -1581,6 +1581,36 @@ def irrelevant_tm_generators(tms):
     Is = [R.ideal([t**(e+1) for e,t in zip(tm,R.gens())]) for tm in tms]
     I = Is[0].intersection(*Is[1:])
     return [tuple(m.exponents()[0]) for m in I.gens()]
+
+def write_JS(J,S,f):
+    print 'writing %s' %f
+    f = open(f,'w')
+    for s in S:
+        f.write(str(s)+'\n')
+    f.write('\n')
+    for p in J.gens():
+        f.write(str(p)+'\n')
+    f.close()
+    
+def read_JS(ba,f):
+    f = open(f).read()
+    import re
+    tmax = max(map(eval,re.findall('t([0-9]+)',f)))+1
+    R = ba.get_ring(tmax)
+    locals = {str(x):x for x in R.gens()}
+    f = f.split('\n')
+    S = []
+    J = []
+    inS = True
+    for l in f:
+        if len(l) == 0:
+            inS = False
+            continue
+        if inS:
+            S.append(sage_eval(l,locals=locals))
+        else:
+            J.append(sage_eval(l,locals=locals))
+    return R.ideal(J,side='twosided'),S,tmax
     
 @
 
