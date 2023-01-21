@@ -1502,7 +1502,7 @@ This is the fundamental computation of ideal enumeration.
                 (R.zero(),) * (J.ring().ngens()-self.nvarsx-xi))
                 for p in S ])
             xcum += xi
-        return (R.ideal(gens,side='twosided'),Sgens,xcum)
+        return (R.ideal(gens,side='twosided').twostd(),Sgens,xcum)
 
     def quick_simplify(self,I,S=None,keepi=0):
         R = I.ring()
