@@ -952,7 +952,6 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         lms.append(self.lm(p,True))
             return lms
         
-        print(vs)
         if simple_lp:
             lp = self.get_linear_program((),tms+tmcs)
         else:
@@ -986,7 +985,6 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 vkbelowcnt[wk] -= 1
                 if vkbelowcnt[wk] == 0:
                     vkstart.add(wk)
-            print '%s%s'%(' '*height[0],str(vk))
             height[0] += 1
             try:
                 tm,wt,vi = vk
@@ -1036,7 +1034,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                             sav.add(p)
                     for p in sav:
                         unset.remove(p)
-                    assert lp.get_min(lp[v.lm()]) == (1.0 if curfull else 0.0)
+                        assert lp.get_min(lp[v.lm()]) == (1.0 if curfull else 0.0)
                     if not curfull and vk in tmsvks:
                         lp.set_max(lp[v.lm()],0.0)
                         unset.remove(v.lm())
@@ -1047,9 +1045,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                             curdim = len([None for p in self.get_vs(tm) if lp.get_min(lp[p.lm()]) == 1.0])
                             tmdim = self.tm_dim(tm)
                             rem = tmdim - self.r - curdim
-                            #print (vk,rem)
-                        #    iicur = ii - tmstarts[tm]
-                        #    print ('%s xi=%d %s%d' % (str(tm),xi,' '*(iicur if tmdim <= 100 else (iicur*100)//tmdim),rem))
+                            print ('%s xi=%d %s%d' % (str(tm),xi,' '*height[0],rem))
                         for JSxi in dfs(J,S,xi):
                             yield JSxi
                     except MIPSolverException:
@@ -1086,7 +1082,6 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         for JSxi in rec((Jt+p).twostd(),St,needed_params,True):
                             yield JSxi
             finally:
-                print '%sending %s'%(' '*height[0],str(vk))
                 height[0] -= 1
                 for wk in wkabove.get(vk,[]):
                     if vkbelowcnt[wk] == 0:
