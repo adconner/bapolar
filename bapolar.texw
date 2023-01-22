@@ -930,6 +930,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         # J += [p for i,e in enumerate(tms[0]) for p in
         #         self.all_monomials((0,)*i+(e+1,)+(0,)*(len(tms[0])-i-1),J.ring())]
         # J = J.twostd()
+        gbbound = max(sum(tm) for tm in tms+tmcs)
 
         vkstart,vkbelowcnt,wkabove = self.get_poset_info_for_search(tms+tmcs)
         tmsvks = set((tm,wt,i) for tm in tms for wt,vs in self.get_vss(tm).items() 
@@ -1029,7 +1030,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     S = list(map(coerce,S))
                     ts = list(map(coerce,ts))
                     for I,S,curfull in dfscur(I,S,ts):
-                        yield ((J+[self.lift_param(J.ring(),t) for t in I.gens()]).twostd(),
+                        yield (self.bounded_gb(J+[self.lift_param(J.ring(),t) for t in I.gens()],gbbound),
                                [self.lift_param(J.ring(),s) for s in S], curfull)
 
                         
@@ -1097,7 +1098,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         #Jtt = (Jt+p).twostd()
                         #tscur = self.leading_term_coefficients(Jtt,vs[ii])
                         #assert len(tscur) == 0 or any(s in (Jtt+t).twostd() for t in tscur for s in St)
-                        for JSxi in rec((Jt+p).twostd(),St,needed_params,True):
+                        for JSxi in rec(self.bounded_gb(Jt+p,gbbound),St,needed_params,True):
                             yield JSxi
             finally:
                 height[0] -= 1
@@ -1141,12 +1142,12 @@ the input family $J$ so that in the result $\Lm(p)$ is trivially missing.
 <<complete=False>>=
 
     def enumerate_candidates(self,tm,tmcs,J0=None,S0=None,xi=0):
-        for J,S,yi in self.get_ideals_for_tm(tm,J0,S0,xi,enumerate_all=True):
+        for J,S,yi in self.get_ideals_for_tm((tm,),(),J0,S0,xi):
             ok = True
             tmnt = [tmcs[0]]
             for tmc in tmcs[1:]:
                 try:
-                    Je,S,_ = next(self.get_ideals_for_tm(tmc,J,S,yi,enumerate_all=False))
+                    Je,S,_ = next(self.get_ideals_for_tm((),(tmc,),J,S,yi))
                     if J != Je:
                         tmnt.append(tmc)
                 except StopIteration:
@@ -1155,8 +1156,8 @@ the input family $J$ so that in the result $\Lm(p)$ is trivially missing.
             if ok:
                 Js = [(J,S,yi)]
                 for tmc in tmnt:
-                    Js = list(chain.from_iterable(self.get_ideals_for_tm(
-                        tmc,J,S,yi,enumerate_all=False) for J,S,yi in Js))
+                    Js = list(chain.from_iterable(self.get_ideals_for_tm((),
+                        (tmc,),J,S,yi) for J,S,yi in Js))
                 for J,S,yi in Js:
                     yield (J,S,yi)
                     
