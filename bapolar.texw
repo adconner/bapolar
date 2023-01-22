@@ -932,14 +932,13 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         # J = J.twostd()
 
         vkstart,vkbelowcnt,wkabove = self.get_poset_info_for_search(tms+tmcs)
-        vs = [v for tm in tms+tmcs for vs in self.get_vss(tm).values() for v in vs]
         tmsvks = set((tm,wt,i) for tm in tms for wt,vs in self.get_vss(tm).items() 
                      for i in range(len(vs)))
         
         def guaranteed_lms(J,S):
             lms = []
             if J.ring().ngens() == self.nvarsx:
-                lms = [self.lm(p) for p in J.gens() if not p.is_zero()]
+                lms = [p.lm() for p in J.gens() if not p.is_zero()]
             else:
                 I,coerce = self.get_param_ideal(J)
                 SI = [coerce(s) for s in S]
@@ -957,15 +956,21 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         else:
             lp = self.get_linear_program(tms,tmcs)
         unset = set()
+        params_needed = {vks : vks[2] for vks in tmsvks}
         lms = guaranteed_lms(J,S)
-        for p in vs:    
-            if any(self.R0.monomial_divides(m,self.lm(p)) for m in lms):
-                lp.set_min(lp[p.lm()],1.0)
-                lp.set_max(lp[p.lm()],1.0)
-            else:
-                unset.add(p.lm())
-                lp.set_min(lp[p.lm()],0.0)
-                lp.set_max(lp[p.lm()],1.0)
+        for tm in tms+tmcs:
+            for wt,vs in self.get_vss(tm).items():
+                for i,p in enumerate(vs):
+                    if any(self.R0.monomial_divides(m,p.lm()) for m in lms):
+                        lp.set_min(lp[p.lm()],1.0)
+                        lp.set_max(lp[p.lm()],1.0)
+                        if tm in tms:
+                            for j in range(i+1,len(vs)):
+                                params_needed[(tm,wt,j)] -= 1
+                    else:
+                        unset.add((tm,wt,i))
+                        lp.set_min(lp[p.lm()],0.0)
+                        lp.set_max(lp[p.lm()],1.0)
 
         from sage.numerical.mip import MIPSolverException
         try:
@@ -979,8 +984,11 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             if len(vkstart) == 0:
                 yield (J,S,xi)
                 return
+           
+            vk = min(vkstart,key=lambda vk: (vk not in unset, sum(vk[0]), params_needed.get(vk,0)))
+            vkstart.remove(vk)
+            #vk = vkstart.pop()
             
-            vk = vkstart.pop() # can select heuristically here
             for wk in wkabove.get(vk,[]):
                 vkbelowcnt[wk] -= 1
                 if vkbelowcnt[wk] == 0:
@@ -1028,16 +1036,22 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 def rec(J,S,xi,curfull):
                     lms = guaranteed_lms(J,S)
                     sav = set()
-                    for p in unset:
+                    for wk in unset:
+                        ws = self.get_vss(wk[0])[wk[1]]
+                        p = ws[wk[2]].lm()
                         if any(self.R0.monomial_divides(m,p) for m in lms):
                             lp.set_min(lp[p],1.0)
-                            sav.add(p)
-                    for p in sav:
-                        unset.remove(p)
-                        assert lp.get_min(lp[v.lm()]) == (1.0 if curfull else 0.0)
+                            sav.add(wk)
+                            if wk[0] in tms:
+                                for j in range(wk[2]+1,len(ws)):
+                                    params_needed[(wk[0],wk[1],j)] -= 1
+                                    assert params_needed[(wk[0],wk[1],j)] >= 0
+                    for wk in sav:
+                        unset.remove(wk)
+                    assert lp.get_min(lp[v.lm()]) == (1.0 if curfull else 0.0)
                     if not curfull and vk in tmsvks:
                         lp.set_max(lp[v.lm()],0.0)
-                        unset.remove(v.lm())
+                        unset.remove(vk)
                     try:
                         lp.solve()
                         if vk in tmsvks:
@@ -1053,10 +1067,14 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     finally:
                         if not curfull and vk in tmsvks:
                             lp.set_max(lp[v.lm()],1.0)
-                            unset.add(v.lm())
-                        for p in sav:
-                            lp.set_min(lp[p],0.0)
-                            unset.add(p)
+                            unset.add(vk)
+                        for wk in sav:
+                            ws = self.get_vss(wk[0])[wk[1]]
+                            lp.set_min(lp[ws[wk[2]].lm()],0.0)
+                            unset.add(wk)
+                            if wk[0] in tms:
+                                for j in range(wk[2]+1,len(ws)):
+                                    params_needed[(wk[0],wk[1],j)] += 1
                   
                 ts = self.leading_term_coefficients(J,v)
                 ts.sort(key = lambda t: t.degree())
