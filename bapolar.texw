@@ -1632,7 +1632,8 @@ def write_JS(J,S,f):
 def read_JS(ba,f):
     f = open(f).read()
     import re
-    tmax = max(map(eval,re.findall('t([0-9]+)',f)))+1
+    ti = re.findall('t([0-9]+)',f)
+    tmax = 0 if len(ti) == 0 else max(map(eval,ti))+1
     R = ba.get_ring(tmax)
     locals = {str(x):x for x in R.gens()}
     f = f.split('\n')
@@ -1644,9 +1645,9 @@ def read_JS(ba,f):
             inS = False
             continue
         if inS:
-            S.append(sage_eval(l,locals=locals))
+            S.append(R(sage_eval(l,locals=locals)))
         else:
-            J.append(sage_eval(l,locals=locals))
+            J.append(R(sage_eval(l,locals=locals)))
     return R.ideal(J,side='twosided'),S,tmax
     
 @
