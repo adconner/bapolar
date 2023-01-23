@@ -588,7 +588,7 @@ def three_place_ideals_up_to3(ba,d=1,Jxi=None):
         J,S,xi = Jxi
         for Jxiup in ba.get_ideals_for_tm([tm],[tm[:s]+(tm[s]+1,)+tm[s+1:] for s in range(3)],J,S,xi,sum(tm) >= 3):
             if len(tms) == 1 and sum(tm) < d:
-                ltIlb, ltIub = ba.leading_term_ideal(Jxiup[0])
+                ltIlb, ltIub = ba.leading_term_ideal(*Jxiup[:2])
                 R = ltIlb.ring()
                 
                 degseries = ltIlb.hilbert_series() == ba.target_hilbert_series_td() and \
@@ -1603,7 +1603,7 @@ This is the fundamental computation of ideal enumeration.
         S = [I.ring().one()] + [s for s in S if not s.is_constant()]
         return (I,S,keepi+len(tis))
 
-    def leading_term_ideal(self,J):
+    def leading_term_ideal(self,J,S):
         R = PolynomialRing(self.F,self.R0.gens()[:self.nvars])
         ltIlb = []
         ltIub = []
