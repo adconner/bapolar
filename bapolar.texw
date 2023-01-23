@@ -578,7 +578,7 @@ def lproduct(*its):
         if not added:
             return
         
-def three_place_ideals_up_to3(ba,d=1):
+def three_place_ideals_up_to3(ba,d=1,Jxi=None):
     def dfs(Jxi,tms): 
         if len(tms) == 0:
             yield Jxi
@@ -616,6 +616,11 @@ def three_place_ideals_up_to3(ba,d=1):
                 
             for Jxifull in dfs(Jxiup,tmsnext):
                     yield Jxifull
+
+    if Jxi is not None:
+        for Jxifull in dfs(Jxi, [(1,0,0),(0,1,0),(0,0,1)]):
+            yield Jxifull
+        return
 
     cd2 = [ ba.get_ideals_for_tm([(1,1,0)],tmcs=[(2,1,0),(1,2,0)]) ]
     cd2.append(ba.get_ideals_for_tm([(1,0,1)],tmcs=[(2,0,1),(1,0,2)]))
