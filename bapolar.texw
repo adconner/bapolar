@@ -588,20 +588,38 @@ def three_place_ideals_up_to3(ba,d=1):
         J,S,xi = Jxi
         for Jxiup in ba.get_ideals_for_tm([tm],[tm[:s]+(tm[s]+1,)+tm[s+1:] for s in range(3)],J,S,xi,sum(tm) >= 3):
             if len(tms) == 1 and sum(tm) < d:
-                ltIcontains = []
+                R = PolynomialRing(ba.F,ba.R0.gens()[:ba.nvars])
+                ltIlb = []
+                ltIub = []
                 for p in J.gens():
-                    if not ba.lm(p).is_constant():
-                        t = p.coefficient(ba.lm(p))
+                    m = ba.lm(p)
+                    if not m.is_constant():
+                        t = p.coefficient(m)
+                        m = m(R.gens()+(R.zero(),)*(p.parent().ngens()-R.ngens()))
+                        ltIub.append(m)
                         Jt = (J+t).twostd()
                         if any(s in Jt for s in S):
-                            ltIcontains.append(ba.lm(p,True))
-                ltIcontains = ba.get_ring().ideal(ltIcontains)
-                tmsnext = []
-                for tm in IntegerVectors(sum(tm)+1,3):
-                    tm = tuple(tm)
-                    codim_upper_bound = len([m for m in ba.all_monomials(tm) if m not in ltIcontains])
-                    if codim_upper_bound > ba.r:
-                        tmsnext.append((tm,codim_upper_bound))
+                            ltIlb.append(m)
+                ltIlb = R.ideal(ltIlb)
+                ltIub = R.ideal(ltIub)
+                
+                degseries = ltIlb.hilbert_series() == ba.target_hilbert_series_td() and \
+                    ltIub.hilbert_series() == ba.target_hilbert_series_td()
+                
+                for dnext in range(sum(tm)+1,d+1):
+                    print dnext
+                    tmsnext = []
+                    if dnext > 3 and degseries:
+                    # if dnext > sum(tm)+1 and dnext > 3 and degseries:
+                        break
+                    for tmc in IntegerVectors(dnext,3):
+                        tmc = tuple(tmc)
+                        codim_upper_bound = len([m for m in ba.all_monomials(tmc,R) if m not in ltIlb])
+                        codim_noadd_lower_bound = len([m for m in ba.all_monomials(tmc,R) if m not in ltIub])
+                        if codim_upper_bound != ba.r or codim_noadd_lower_bound != ba.r:
+                            tmsnext.append((tmc,codim_upper_bound))
+                    if len(tmsnext) > 0:
+                        break
                 tmsnext.sort(key = lambda p: (p[1], max(p[0]), p[0]))
                 print(tmsnext)
                 tmsnext = [tm for tm,_ in tmsnext]
@@ -1591,6 +1609,30 @@ This is the fundamental computation of ideal enumeration.
         S = [I.reduce(s(*subs)) for s in S]
         S = [I.ring().one()] + [s for s in S if not s.is_constant()]
         return (I,S,keepi+len(tis))
+
+    @memoize
+    def target_hilbert_series(self):
+        ts = FractionField(PolynomialRing(QQ,'t',len(self.T.shape))).gens()
+        hs = self.r/prod(1-t for t in ts)
+        k = 0
+        while True:
+            done = True
+            for tm in IntegerVectors(k,len(self.T.shape)):
+                tm = tuple(tm)
+                if self.tm_dim(tm) < self.r:
+                    hs -= (self.r-self.tm_dim(tm))*prod(t**e for t,e in zip(ts,tm))
+                    done = False
+            if done:
+                break
+            k += 1
+        return hs
+
+    @memoize
+    def target_hilbert_series_td(self):
+        t = FractionField(PolynomialRing(QQ,'t')).gen()
+        hs = self.target_hilbert_series()
+        return hs((t,)*hs.parent().ngens())
+        
 
 def liftR(p,R):
     if p.parent() is R:
