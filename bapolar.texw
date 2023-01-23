@@ -823,16 +823,19 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         g = DiGraph()
         for tm in tms:
             for vs in self.get_vss(tm).values():
-                for v,w in combinations(vs,2):
-                    g.add_edge(vsix[v],vsix[w])
-                for v in vs:
-                    vk = vsix[v]
-                    for x in self.R0.gens()[self.nvars:self.nvars+len(self.xs)]:
+                for v,w in zip(vs,vs[1:]):
+                    g.add_edge(vsix[w],vsix[v])
+                for x in self.R0.gens()[self.nvars:self.nvars+len(self.xs)]:
+                    wilast = 0
+                    for v in vs:
+                        vk = vsix[v]
                         w = x*v-v*x
-                        while not w.is_zero():
-                            wk = vsix[lmtov[w.lm()]]
-                            g.add_edge(vk,wk)
-                            w -= w.lc()*lmtov[w.lm()]
+                        if w.is_zero():
+                            continue
+                        _,wt,wi = vsix[lmtov[w.lm()]]
+                        wi = max(wi,wilast)
+                        g.add_edge(vk,(tm,wt,wi))
+                        wilast = wi
                             
         tmposet = Poset((tms,lambda a,b: all(i<=j for i,j in zip(a,b))))
         for tm,tmr in tmposet.cover_relations():
@@ -841,10 +844,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     vk = vsix[v]
                     for m in self.all_monomials(tuple(map(sub,tmr,tm))):
                         w = v*m
-                        while not w.is_zero():
-                            wk = vsix[lmtov[w.lm()]]
-                            g.add_edge(vk,wk)
-                            w -= w.lc()*lmtov[w.lm()]
+                        wk = vsix[lmtov[w.lm()]]
+                        g.add_edge(vk,wk)
                     
         return Poset(g)
     
