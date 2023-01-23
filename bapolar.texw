@@ -1111,9 +1111,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         
         for J,S,xi in dfs(J,S,xi):
             # could postprocess here a bit
-            yield self.quick_simplify(J,S)
-            #yield (J,S,xi)
-
+            yield self.quick_simplify(J,S,xi)
 @
 
 \code{minimal_relations_killing_leading_term} implements the recursive procedure
