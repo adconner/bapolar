@@ -835,15 +835,16 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         for tm in tms:
             for vs in self.get_vss(tm).values():
                 for x in self.R0.gens()[self.nvars:self.nvars+len(self.xs)]:
-                    wilast = 0
+                    wi = 0
                     for v in vs:
                         vk = vsix[v]
                         w = x*v-v*x
                         if w.is_zero():
                             continue
-                        _,wt,wi = vsix[lmtov[w.lm()]]
-                        wi = max(wi,wilast)
-                        g.add_edge(vk,(tm,wt,wi))
+                        _,wt,wicur = vsix[lmtov[w.lm()]]
+                        wi = max(wi,wicur)
+                        for i in range(wi+1):
+                            g.add_edge(vk,(tm,wt,i))
                         wilast = wi
                             
         tmposet = Poset((tms,lambda a,b: all(i<=j for i,j in zip(a,b))))
@@ -1079,7 +1080,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                             curdim = len([None for p in self.get_vs(tm) if lp.get_min(lp[p.lm()]) == 1.0])
                             tmdim = self.tm_dim(tm)
                             rem = tmdim - self.r - curdim
-                            print ('%s xi=%d %s%d' % (str(tm),xi,' '*height[0],rem))
+                            print ('%s %s xi=%d %s%d' % (str(tm),str(v.lm()).rjust(10),xi,' '*height[0],rem))
                         for JSxi in dfs(J,S,xi):
                             yield JSxi
                     except MIPSolverException:
@@ -1131,8 +1132,9 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         R = Jt.ring()
                         p = liftR(v,R) + R.sum([liftR(w,R)*R.gen(self.nvarsx+xi+wi)
                                     for wi,w in enumerate(w for w in self.get_vss(tm)[wt][:vi] if lp.get_min(lp[w.lm()]) == 0.0)])
-                        for JSxi in rec(self.bounded_gb(Jt+p,gbbound) 
-                                        if Jt.ring() is self.R0 else (Jt+p).twostd(),St,needed_params,True):
+                        Jtp = self.bounded_gb(Jt+p,gbbound) if \
+                                R is self.R0 else (Jt+p).twostd()
+                        for JSxi in rec(Jtp,St,needed_params,True):
                             yield JSxi
             finally:
                 height[0] -= 1
