@@ -1159,7 +1159,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             num += 1
             #yield (J,S,xi)
         if num==0:
-            pass
+            print ("get_ideals_for_tm: no solution found")
 #            if len(tms) > 0:
 #                write_JS(J,S,'bapolarsols/mmult2nosol/nosol%d_%s.txt'% (cnt[0],str(tms[0])))
 #                cnt[0] += 1
