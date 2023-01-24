@@ -1001,6 +1001,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             return
        
         height = [0]
+        vstr_width = [0]
         def dfs(J,S,xi):
             if len(vkstart) == 0:
                 yield (J,S,xi)
@@ -1080,7 +1081,9 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                             curdim = len([None for p in self.get_vs(tm) if lp.get_min(lp[p.lm()]) == 1.0])
                             tmdim = self.tm_dim(tm)
                             rem = tmdim - self.r - curdim
-                            print ('%s %s xi=%d %s%d' % (str(tm),str(v.lm()).rjust(10),xi,' '*height[0],rem))
+                            vstr = str(v.lm())
+                            vstr_width[0] = max(vstr_width[0],len(vstr))
+                            print ('%s %s xi=%d %s%d' % (str(tm),vstr.rjust(vstr_width[0]),xi,' '*height[0],rem))
                         for JSxi in dfs(J,S,xi):
                             yield JSxi
                     except MIPSolverException:
