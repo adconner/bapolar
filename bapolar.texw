@@ -939,12 +939,13 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         if J is None:
             J = self.get_ring().ideal(side='twosided')
             S = [J.ring().one()]
-        Jorig = J
-        keepi = xi
-        tmm = reduce(lambda tma,tmb: tuple(map(max,tma,tmb)),tms+tmcs)
-        J += [p for i,e in enumerate(tmm) for p in
-                self.all_monomials((0,)*i+(e+1,)+(0,)*(len(tmm)-i-1),J.ring())]
-        J = J.twostd()
+        #Jorig = J
+        #keepi = xi
+        #tmm = reduce(lambda tma,tmb: tuple(map(max,tma,tmb)),tms+tmcs)
+        #J += [p for i,e in enumerate(tmm) for p in
+        #        self.all_monomials((0,)*i+(e+1,)+(0,)*(len(tmm)-i-1),J.ring())]
+        #J = J.twostd()
+        gbbound = max(sum(tm) for tm in tms+tmcs)
 
         vkstart,vkbelowcnt,wkabove = self.get_poset_info_for_search(tms+tmcs)
         tmsvks = set((tm,wt,i) for tm in tms for wt,vs in self.get_vss(tm).items() 
@@ -1130,7 +1131,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         R = Jt.ring()
                         p = liftR(v,R) + R.sum([liftR(w,R)*R.gen(self.nvarsx+xi+wi)
                                     for wi,w in enumerate(w for w in self.get_vss(tm)[wt][:vi] if lp.get_min(lp[w.lm()]) == 0.0)])
-                        for JSxi in rec((Jt+p).twostd(),St,needed_params,True):
+                        for JSxi in rec(self.bounded_gb(Jt+p,gbbound) 
+                                        if Jt.ring() is self.R0 else (Jt+p).twostd(),St,needed_params,True):
                             yield JSxi
             finally:
                 height[0] -= 1
@@ -1142,9 +1144,9 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         
         num = 0
         for J,S,xi in dfs(J,S,xi):
-            J = J.ring().ideal([p for p in J.gens() if not p.is_zero() and 
-                all([e<=f for e,f in zip(self.polynomial_tm(p),tmm)])],side='twosided')
-            J += [liftR(p,J.ring()) for p in Jorig.gens()]
+            #J = J.ring().ideal([p for p in J.gens() if not p.is_zero() and 
+            #    all([e<=f for e,f in zip(self.polynomial_tm(p),tmm)])],side='twosided')
+            #J += [liftR(p,J.ring()) for p in Jorig.gens()]
             J = J.twostd()
             yield self.quick_simplify(J,S,xi)
             num += 1
