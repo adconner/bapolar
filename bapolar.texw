@@ -586,7 +586,7 @@ def three_place_ideals_up_to3(ba,d=1,Jxi=None):
         tm = tms[0]
         print (tm)
         J,S,xi = Jxi
-        for Jxiup in ba.get_ideals_for_tm([tm],[tm[:s]+(tm[s]+1,)+tm[s+1:] for s in range(3)],J,S,xi,sum(tm) >= 3):
+        for Jxiup in ba.get_ideals_for_tm([tm],[tm[:s]+(tm[s]+1,)+tm[s+1:] for s in range(3)],J,S,xi,simple_lp=True):
             if len(tms) == 1 and sum(tm) < d:
                 ltIlb, ltIub = ba.leading_term_ideal(*Jxiup[:2])
                 R = ltIlb.ring()
@@ -988,9 +988,13 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         lp.set_max(lp[p.lm()],1.0)
 
         from sage.numerical.mip import MIPSolverException
+        #global cnt
         try:
             lp.solve()
         except MIPSolverException:
+            #if len(tms) > 0:
+            #    write_JS(J,S,'bapolarsols/mmult2nosol/nosol%d_%s_0.txt'% (cnt[0],str(tms[0])))
+            #    cnt[0] += 1
             print ("get_ideals_for_tm: no solution to start")
             return
        
@@ -1026,17 +1030,17 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         tsi = next(ti for ti,ts in enumerate(tss) if len(ts) > 0)
                         t = tss[tsi][0]
                         if t in I:
-                            for I,S,fnz in dfscur(I,S,tss[:tsi]+[tss[tsi][1:]]+tss[tsi+1:]):
-                                yield (I,S,fnz[:tsi]+(fnz[tsi]+1,)+fnz[tsi+1:])
+                            for It,St,fnz in dfscur(I,S,tss[:tsi]+[tss[tsi][1:]]+tss[tsi+1:]):
+                                yield (It,St,fnz[:tsi]+(fnz[tsi]+1,)+fnz[tsi+1:])
                             return
-                        for I,S,fnz in dfscur(I,S+[t],tss[:tsi]+[[]]+tss[tsi+1:]):
-                            yield (I,S,fnz[:tsi]+(0,)+fnz[tsi+1:])
+                        for It,St,fnz in dfscur(I,S+[t],tss[:tsi]+[[]]+tss[tsi+1:]):
+                            yield (It,St,fnz[:tsi]+(0,)+fnz[tsi+1:])
                         I += [t]
                         for It in I.minimal_associated_primes():
                             if any(s in It for s in S):
                                 continue
-                            for I,S,fnz in dfscur(I,S,tss[:tsi]+[tss[tsi][1:]]+tss[tsi+1:]):
-                                yield (I,S,fnz[:tsi]+(fnz[tsi]+1,)+fnz[tsi+1:])
+                            for Itt,Stt,fnz in dfscur(It,S,tss[:tsi]+[tss[tsi][1:]]+tss[tsi+1:]):
+                                yield (Itt,Stt,fnz[:tsi]+(fnz[tsi]+1,)+fnz[tsi+1:])
                     if J.ring().ngens() == self.nvarsx:
                         # no parameters
                         yield (J,S,(0,)*len(tss))
@@ -1136,12 +1140,21 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     vkbelowcnt[wk] += 1
                 vkstart.add(vk)
                         
+        num = 0
         for J,S,xi in dfs(J,S,xi):
             J = J.ring().ideal([p for p in J.gens() if not p.is_zero() and 
                 all([e<=f for e,f in zip(self.polynomial_tm(p),tmm)])],side='twosided')
             J += [liftR(p,J.ring()) for p in Jorig.gens()]
             J = J.twostd()
             yield self.quick_simplify(J,S,xi)
+            num += 1
+            #yield (J,S,xi)
+        if num==0:
+            pass
+#            if len(tms) > 0:
+#                write_JS(J,S,'bapolarsols/mmult2nosol/nosol%d_%s.txt'% (cnt[0],str(tms[0])))
+#                cnt[0] += 1
+
 @
 
 \code{minimal_relations_killing_leading_term} implements the recursive procedure
@@ -1598,6 +1611,9 @@ This is the fundamental computation of ideal enumeration.
             xcum += xi
         return (R.ideal(gens,side='twosided').twostd(),Sgens,xcum)
 
+    # TODO quick_simplify fails on exmaple to the right (doest remove t0)
+    # too many? families for det3, although could depend on vorder
+    # remove restriction on var order in poset
     def quick_simplify(self,I,S,xi,keepi=0):
         R = I.ring()
         subs = []
