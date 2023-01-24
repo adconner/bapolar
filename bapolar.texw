@@ -934,19 +934,20 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
     def lift_param(self,R,t):
         return R(t(R.gens()[self.nvarsx:]))
     
-    def get_ideals_for_tm(self,tms=[],tmcs=[],J=None,S=None,xi=0,simple_lp=False):
+    def get_ideals_for_tm(self,tms=[],tmcs=[],J=None,S=None,xi=0,simple_lp=False,bound_gb=True):
         tms = tuple(tms)
         tmcs = tuple(tmcs)
         if J is None:
             J = self.get_ring().ideal(side='twosided')
             S = [J.ring().one()]
-        #Jorig = J
-        #keepi = xi
-        #tmm = reduce(lambda tma,tmb: tuple(map(max,tma,tmb)),tms+tmcs)
-        #J += [p for i,e in enumerate(tmm) for p in
-        #        self.all_monomials((0,)*i+(e+1,)+(0,)*(len(tmm)-i-1),J.ring())]
-        #J = J.twostd()
+        Jorig = J
+        keepi = xi
+        tmm = reduce(lambda tma,tmb: tuple(map(max,tma,tmb)),tms+tmcs)
         gbbound = max(sum(tm) for tm in tms+tmcs)
+        if bound_gb:
+            J += [p for i,e in enumerate(tmm) for p in
+                    self.all_monomials((0,)*i+(e+1,)+(0,)*(len(tmm)-i-1),J.ring())]
+            J = J.twostd()
 
         vkstart,vkbelowcnt,wkabove = self.get_poset_info_for_search(tms+tmcs)
         tmsvks = set((tm,wt,i) for tm in tms for wt,vs in self.get_vss(tm).items() 
@@ -1149,9 +1150,10 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         
         num = 0
         for J,S,xi in dfs(J,S,xi):
-            #J = J.ring().ideal([p for p in J.gens() if not p.is_zero() and 
-            #    all([e<=f for e,f in zip(self.polynomial_tm(p),tmm)])],side='twosided')
-            #J += [liftR(p,J.ring()) for p in Jorig.gens()]
+            if bound_gb:
+                J = J.ring().ideal([p for p in J.gens() if not p.is_zero() and 
+                    all([e<=f for e,f in zip(self.polynomial_tm(p),tmm)])],side='twosided')
+                J += [liftR(p,J.ring()) for p in Jorig.gens()]
             J = J.twostd()
             yield self.quick_simplify(J,S,xi)
             num += 1
