@@ -1029,33 +1029,42 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                        
                 def getJs(J,S,tss):
                     def dfscur(I,S,tss):
-                        if all(len(ts) == 0 for ts in tss):
-                            yield (I,S,(0,)*len(tss))
+                        if len(tss) == 0:
+                            yield (I,S,False)
                             return
-                        tsi = next(ti for ti,ts in enumerate(tss) if len(ts) > 0)
-                        t = tss[tsi][0]
+                        ts = tss[0]
+                        t = ts[0]
                         if t in I:
-                            for It,St,fnz in dfscur(I,S,tss[:tsi]+[tss[tsi][1:]]+tss[tsi+1:]):
-                                yield (It,St,fnz[:tsi]+(fnz[tsi]+1,)+fnz[tsi+1:])
+                            for It,St,curfull in dfscur(I,S,[ts[1:]]+tss[1:] if len(ts) > 1 else tss[1:]):
+                                yield (It,St,curfull)
                             return
-                        for It,St,fnz in dfscur(I,S+[t],tss[:tsi]+[[]]+tss[tsi+1:]):
-                            yield (It,St,fnz[:tsi]+(0,)+fnz[tsi+1:])
+                        if len(ts) == 1: # last one dont search more when making it a unit
+                            yield (I,S+[t],True)
+                        else:
+                            for It,St,curfull in dfscur(I,S+[t],tss[1:]):
+                                yield (It,St,curfull)
                         I += [t]
                         for It in I.minimal_associated_primes():
                             if any(s in It for s in S):
                                 continue
-                            for Itt,Stt,fnz in dfscur(It,S,tss[:tsi]+[tss[tsi][1:]]+tss[tsi+1:]):
-                                yield (Itt,Stt,fnz[:tsi]+(fnz[tsi]+1,)+fnz[tsi+1:])
+                            for Itt,Stt,curfull in dfscur(It,S,[ts[1:]]+tss[1:] if len(ts) > 1 else tss[1:]):
+                                yield (Itt,Stt,curfull)
                     if J.ring().ngens() == self.nvarsx:
                         # no parameters
-                        yield (J,S,(0,)*len(tss))
+                        yield (J,S,len(tss) > 0)
                         return
                     I,coerce = self.get_param_ideal(J)
                     S = list(map(coerce,S))
                     tss = [list(map(coerce,ts)) for ts in tss]
-                    for I,S,fnz in dfscur(I,S,tss):
+                    def keep(ts):
+                        if len(ts) == 1:
+                            return True
+                        Icur = ideal(ts[:-1])
+                        return ts[-1] not in Icur and not any(s in Icur for s in S)
+                    tss = list(filter(keep,tss))
+                    for I,S,curfull in dfscur(I,S,tss):
                         yield ((J+[self.lift_param(J.ring(),t) for t in I.gens()]).twostd(),
-                               [self.lift_param(J.ring(),s) for s in S], fnz)
+                               [self.lift_param(J.ring(),s) for s in S], curfull)
 
                         
                 def rec(J,S,xi,curfull):
@@ -1122,8 +1131,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     if found:
                         tss.append(tscur)
                         
-                for Jt,St,fnz in getJs(J,S,tss):
-                    curfull = any(f == len(ts)-1 for f,ts in zip(fnz,tss))
+                for Jt,St,curfull in getJs(J,S,tss):
                     for JSxi in rec(Jt,St,xi,curfull):
                         yield JSxi
                     if not curfull and vk in tmsvks:
