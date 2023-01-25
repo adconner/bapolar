@@ -1018,12 +1018,53 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             try:
                 tm,wt,vi = vk
                 v = self.get_vss(tm)[wt][vi]
-                # case 1, vv already in the leading term ideal, move on
-                if lp.get_min(lp[v.lm()]) == 1.0:
-                    for JJ in dfs(J,S,xi):
-                        yield JJ
+                # case 1, v.lm() is already in the leading term ideal
+                if vk not in unset:
+                    assert lp.get_min(lp[v.lm()]) == 1.0
+                    for JSxi in dfs(J,S,xi):
+                        yield JSxi
                     return
-                       
+                
+                ts = []
+                for q in J.gens():
+                    qm = self.lm(q)
+                    if qm.is_constant():
+                        continue
+                    if self.R0.monomial_divides(liftR(qm,self.R0),v.lm()):
+                        ts.append(q.coefficient(qm))
+                if len(ts) > 0:
+                    print ts
+                    
+                lp.set_min(lp[v.lm()],1.0)
+                try:
+                    lp.solve()
+                    in_possible = True
+                except MIPSolverException:
+                    in_possible = False
+                lp.set_min(lp[v.lm()],0.0)
+
+                lp.set_max(lp[v.lm()],0.0)
+                try:
+                    lp.solve()
+                    out_possible = True
+                except MIPSolverException:
+                    out_possible = False
+                lp.set_max(lp[v.lm()],1.0)
+
+                if not in_possible and not out_possible:
+                    return
+                
+                # case 2, v.lm() cannot be added to the leading term ideal, 
+                # and no parameter restriction is needed
+                if not in_possible and len(ts) == 0:
+                    lp.set_max(lp[v.lm()],0.0)
+                    unset.remove(vk)
+                    for JSxi in dfs(J,S,xi):
+                        yield JSxi
+                    unset.add(vk)
+                    lp.set_max(lp[v.lm()],1.0)
+                    return
+                
                 def getJs(J,S,ts,in_possible):
                     def dfscur(I,S,ts):
                         if len(ts) == 0:
@@ -1100,30 +1141,6 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                             if wk[0] in tms:
                                 for j in range(wk[2]+1,len(ws)):
                                     params_needed[(wk[0],wk[1],j)] += 1
-                ts = []
-                for q in J.gens():
-                    qm = self.lm(q)
-                    if qm.is_constant():
-                        continue
-                    if self.R0.monomial_divides(liftR(qm,self.R0),v.lm()):
-                        ts.append(q.coefficient(qm))
-                if len(ts) > 0:
-                    print ts
-                    
-                lp.set_objective(lp[v.lm()])
-                in_possible = lp.solve() > 1-1e-10
-
-                if not in_possible and len(ts) == 0: # no modification needed
-                    lp.set_max(lp[v.lm()],0.0)
-                    unset.remove(vk)
-                    for JSxi in dfs(J,S,xi):
-                        yield JSxi
-                    unset.add(vk)
-                    lp.set_max(lp[v.lm()],1.0)
-                    return
-                
-                lp.set_objective(-lp[v.lm()])
-                out_possible = -lp.solve() < 1e-10
 
                 for Jt,St,curfull in getJs(J,S,ts,in_possible):
                     assert in_possible or not curfull
@@ -1494,7 +1511,7 @@ This is the fundamental computation of ideal enumeration.
 
     @memoize
     def get_linear_program(self, tms, tmcs=(), simple=False):
-        prog = MixedIntegerLinearProgram(maximization=True)
+        prog = MixedIntegerLinearProgram()
         # prog.set_binary(prog.default_variable())
         # # if set_real, be sure to change exact comparisons to within machine precision
         prog.set_real(prog.default_variable())
