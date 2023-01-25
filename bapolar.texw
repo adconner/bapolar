@@ -1024,7 +1024,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         yield JJ
                     return
                        
-                def getJs(J,S,ts):
+                def getJs(J,S,ts,in_possible):
                     def dfscur(I,S,ts):
                         if len(ts) == 0:
                             yield (I,S,False)
@@ -1048,7 +1048,9 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     S = list(map(coerce,S))
                     ts = list(map(coerce,ts))
                     ts.sort(key=lambda t: t.degree())
-                    for I,S,curfull in dfscur(I,S,ts):
+                    for I,S,curfull in dfscur(I,S,ts) if in_possible else \
+                            ((Ic,S,False) for Ic in (I+ts).minimal_associated_primes() 
+                             if not any(s in Ic for s in S)):
                         JI = J+[self.lift_param(J.ring(),t) for t in I.gens()]
                         JI = JI.twostd() if sound else self.bounded_gb(JI,gbbound)
                         yield (JI, [self.lift_param(J.ring(),s) for s in S], curfull)
@@ -1107,10 +1109,28 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         ts.append(q.coefficient(qm))
                 if len(ts) > 0:
                     print ts
-                for Jt,St,curfull in getJs(J,S,ts):
-                    for JSxi in rec(Jt,St,xi,curfull):
+                    
+                lp.set_objective(lp[v.lm()])
+                in_possible = lp.solve() > 1-1e-10
+
+                if not in_possible and len(ts) == 0: # no modification needed
+                    lp.set_max(lp[v.lm()],0.0)
+                    unset.remove(vk)
+                    for JSxi in dfs(J,S,xi):
                         yield JSxi
-                    if not curfull and vk in tmsvks:
+                    unset.add(vk)
+                    lp.set_max(lp[v.lm()],1.0)
+                    return
+                
+                lp.set_objective(-lp[v.lm()])
+                out_possible = -lp.solve() < 1e-10
+
+                for Jt,St,curfull in getJs(J,S,ts,in_possible):
+                    assert in_possible or not curfull
+                    if out_possible or curfull:
+                        for JSxi in rec(Jt,St,xi,curfull):
+                            yield JSxi
+                    if in_possible and not curfull and vk in tmsvks:
                         cur_params = Jt.ring().ngens() - self.nvarsx
                         needed_params = xi + len([w for w in self.get_vss(tm)[wt][:vi]
                                                   if lp.get_min(lp[w.lm()]) == 0.0])
@@ -1140,9 +1160,6 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             elif xi == 0:
                 yield (J,S,xi)
             else:
-                # if all(len(generic_codim(self,J,tmc)) >= self.r for tmc in tms+tmcs):
-                #     yield self.quick_simplify(J,S,xi)
-                # else:
                 for JSxi in self.get_ideals_for_tm(tms,tmcs,J,S,xi,search_above=search_above,simple_lp=simple_lp,sound=True):
                     yield JSxi
             num += 1
@@ -1477,7 +1494,7 @@ This is the fundamental computation of ideal enumeration.
 
     @memoize
     def get_linear_program(self, tms, tmcs=(), simple=False):
-        prog = MixedIntegerLinearProgram()
+        prog = MixedIntegerLinearProgram(maximization=True)
         # prog.set_binary(prog.default_variable())
         # # if set_real, be sure to change exact comparisons to within machine precision
         prog.set_real(prog.default_variable())
