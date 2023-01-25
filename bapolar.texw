@@ -586,7 +586,8 @@ def three_place_ideals_up_to3(ba,d=1,Jxi=None):
         tm = tms[0]
         print (tm)
         J,S,xi = Jxi
-        for Jxiup in ba.get_ideals_for_tm([tm],[tm[:s]+(tm[s]+1,)+tm[s+1:] for s in range(3)],J,S,xi,simple_lp=True):
+        for Jxiup in ba.get_ideals_for_tm([tm], [tm[:s]+(tm[s]+1,)+tm[s+1:] for s in range(3)],
+                  J,S,xi,search_above = False, simple_lp = sum(tm) >= 3, bound_gb = sum(tm) >= ba.r / 2):
             if len(tms) == 1 and sum(tm) < d:
                 ltIlb, ltIub = ba.leading_term_ideal(*Jxiup[:2])
                 R = ltIlb.ring()
@@ -934,7 +935,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
     def lift_param(self,R,t):
         return R(t(R.gens()[self.nvarsx:]))
     
-    def get_ideals_for_tm(self,tms=[],tmcs=[],J=None,S=None,xi=0,simple_lp=False,bound_gb=True):
+    def get_ideals_for_tm(self,tms=[],tmcs=[],J=None,S=None,xi=0,search_above=True,simple_lp=False,bound_gb=True):
         tms = tuple(tms)
         tmcs = tuple(tmcs)
         if J is None:
@@ -949,7 +950,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     self.all_monomials((0,)*i+(e+1,)+(0,)*(len(tmm)-i-1),J.ring())]
             J = J.twostd()
 
-        vkstart,vkbelowcnt,wkabove = self.get_poset_info_for_search(tms+tmcs)
+        vkstart,vkbelowcnt,wkabove = self.get_poset_info_for_search(tms+tmcs if search_above else tms)
         tmsvks = set((tm,wt,i) for tm in tms for wt,vs in self.get_vss(tm).items() 
                      for i in range(len(vs)))
         
