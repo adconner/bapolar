@@ -587,7 +587,7 @@ def three_place_ideals_up_to3(ba,d=1,Jxi=None):
         print (tm)
         J,S,xi = Jxi
         for Jxiup in ba.get_ideals_for_tm([tm], [tm[:s]+(tm[s]+1,)+tm[s+1:] for s in range(3)],
-                  J,S,xi,search_above = False, simple_lp = sum(tm) >= 3, bound_gb = sum(tm) >= ba.r / 2):
+                  J,S,xi,search_above = False, simple_lp = sum(tm) >= 3):
             if len(tms) == 1 and sum(tm) < d:
                 ltIlb, ltIub = ba.leading_term_ideal(*Jxiup[:2])
                 R = ltIlb.ring()
@@ -824,7 +824,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         return vss
 
     @memoize
-    def get_poset(self, tms):
+    def get_poset(self, tms, high_to_low = False):
         vsix = {}
         lmtov = {}
         for tm in tms:
@@ -835,6 +835,9 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         g = DiGraph()
         for tm in tms:
             for vs in self.get_vss(tm).values():
+                if high_to_low:
+                    for v,w in zip(vs,vs[1:]):
+                        g.add_edge(vsix[w],vsix[v])
                 for x in self.R0.gens()[self.nvars:self.nvars+len(self.xs)]:
                     wi = 0
                     for v in vs:
@@ -871,8 +874,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         return { v.lm() : v for vs in self.get_vss(tm).values() for v in vs }
 
     @memoize
-    def get_poset_info_for_search(self, tms):
-        P = self.get_poset(tms)
+    def get_poset_info_for_search(self, tms, high_to_low = False):
+        P = self.get_poset(tms,high_to_low)
         wkabove = {}
         vkbelowcnt = {}
         for vk,wk in P.cover_relations():
@@ -935,22 +938,19 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
     def lift_param(self,R,t):
         return R(t(R.gens()[self.nvarsx:]))
     
-    def get_ideals_for_tm(self,tms=[],tmcs=[],J=None,S=None,xi=0,search_above=True,simple_lp=False,bound_gb=True):
+    def get_ideals_for_tm(self,tms=[],tmcs=[],J=None,S=None,xi=0,search_above=True,simple_lp=False,sound=False):
         tms = tuple(tms)
         tmcs = tuple(tmcs)
+        gbbound = max(sum(tm) for tm in tms+tmcs)
         if J is None:
             J = self.get_ring().ideal(side='twosided')
             S = [J.ring().one()]
-        Jorig = J
-        keepi = xi
-        tmm = reduce(lambda tma,tmb: tuple(map(max,tma,tmb)),tms+tmcs)
-        gbbound = max(sum(tm) for tm in tms+tmcs)
-        if bound_gb:
-            J += [p for i,e in enumerate(tmm) for p in
-                    self.all_monomials((0,)*i+(e+1,)+(0,)*(len(tmm)-i-1),J.ring())]
-            J = J.twostd()
+        else:
+            J = J.twostd() if sound else self.bounded_gb(J,gbbound)
 
-        vkstart,vkbelowcnt,wkabove = self.get_poset_info_for_search(tms+tmcs if search_above else tms)
+        from copy import deepcopy
+        vkstart,vkbelowcnt,wkabove = deepcopy(self.get_poset_info_for_search(
+                tms+tmcs if search_above else tms, high_to_low = sound))
         tmsvks = set((tm,wt,i) for tm in tms for wt,vs in self.get_vss(tm).items() 
                      for i in range(len(vs)))
         
@@ -970,10 +970,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         lms.append(self.lm(p,True))
             return lms
         
-        if simple_lp:
-            lp = self.get_linear_program((),tms+tmcs)
-        else:
-            lp = self.get_linear_program(tms,tmcs)
+        lp = self.get_linear_program(tms,tmcs,simple=simple_lp)
         unset = set()
         params_needed = {vks : vks[2] for vks in tmsvks}
         lms = guaranteed_lms(J,S)
@@ -1027,45 +1024,34 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         yield JJ
                     return
                        
-                def getJs(J,S,tss):
-                    def dfscur(I,S,tss):
-                        if len(tss) == 0:
+                def getJs(J,S,ts):
+                    def dfscur(I,S,ts):
+                        if len(ts) == 0:
                             yield (I,S,False)
                             return
-                        ts = tss[0]
                         t = ts[0]
                         if t in I:
-                            for It,St,curfull in dfscur(I,S,[ts[1:]]+tss[1:] if len(ts) > 1 else tss[1:]):
-                                yield (It,St,curfull)
+                            for IS in dfscur(I,S,ts[1:]):
+                                yield IS
                             return
-                        if len(ts) == 1: # last one dont search more when making it a unit
-                            yield (I,S+[t],True)
-                        else:
-                            for It,St,curfull in dfscur(I,S+[t],tss[1:]):
-                                yield (It,St,curfull)
-                        I += [t]
-                        for It in I.minimal_associated_primes():
-                            if any(s in It for s in S):
+                        yield (I,S+[t],True)
+                        for I in (I+[t]).minimal_associated_primes():
+                            if any(s in I for s in S):
                                 continue
-                            for Itt,Stt,curfull in dfscur(It,S,[ts[1:]]+tss[1:] if len(ts) > 1 else tss[1:]):
-                                yield (Itt,Stt,curfull)
+                            for IS in dfscur(I,S,ts[1:]):
+                                yield IS
                     if J.ring().ngens() == self.nvarsx:
                         # no parameters
-                        yield (J,S,len(tss) > 0)
+                        yield (J,S,len(ts) > 0)
                         return
                     I,coerce = self.get_param_ideal(J)
                     S = list(map(coerce,S))
-                    tss = [list(map(coerce,ts)) for ts in tss]
-                    def keep(ts):
-                        if len(ts) == 1:
-                            return True
-                        Icur = ideal(ts[:-1])
-                        return ts[-1] not in Icur and not any(s in Icur for s in S)
-                    tss = list(filter(keep,tss))
-                    for I,S,curfull in dfscur(I,S,tss):
-                        yield ((J+[self.lift_param(J.ring(),t) for t in I.gens()]).twostd(),
-                               [self.lift_param(J.ring(),s) for s in S], curfull)
-
+                    ts = list(map(coerce,ts))
+                    ts.sort(key=lambda t: t.degree())
+                    for I,S,curfull in dfscur(I,S,ts):
+                        JI = J+[self.lift_param(J.ring(),t) for t in I.gens()]
+                        JI = JI.twostd() if sound else self.bounded_gb(JI,gbbound)
+                        yield (JI, [self.lift_param(J.ring(),s) for s in S], curfull)
                         
                 def rec(J,S,xi,curfull):
                     lms = guaranteed_lms(J,S)
@@ -1082,10 +1068,11 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                                     assert params_needed[(wk[0],wk[1],j)] >= 0
                     for wk in sav:
                         unset.remove(wk)
-                    assert lp.get_min(lp[v.lm()]) == (1.0 if curfull else 0.0)
-                    if not curfull and vk in tmsvks:
+                    if not curfull:
                         lp.set_max(lp[v.lm()],0.0)
                         unset.remove(vk)
+                    assert lp.get_min(lp[v.lm()]) == (1.0 if curfull else 0.0)
+                    assert lp.get_max(lp[v.lm()]) == (1.0 if curfull else 0.0)
                     try:
                         lp.solve()
                         if vk in tmsvks:
@@ -1094,13 +1081,14 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                             rem = tmdim - self.r - curdim
                             vstr = str(v.lm())
                             vstr_width[0] = max(vstr_width[0],len(vstr))
-                            print ('%s %s xi=%d %s%d' % (str(tm),vstr.rjust(vstr_width[0]),xi,' '*height[0],rem))
+                            print ('%s%s %s xi=%d %s%d' % ('s ' if sound else '',
+                                       str(tm),vstr.rjust(vstr_width[0]),xi,' '*height[0],rem))
                         for JSxi in dfs(J,S,xi):
                             yield JSxi
                     except MIPSolverException:
                         return
                     finally:
-                        if not curfull and vk in tmsvks:
+                        if not curfull:
                             lp.set_max(lp[v.lm()],1.0)
                             unset.add(vk)
                         for wk in sav:
@@ -1110,28 +1098,16 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                             if wk[0] in tms:
                                 for j in range(wk[2]+1,len(ws)):
                                     params_needed[(wk[0],wk[1],j)] += 1
-
-                tss = []
+                ts = []
                 for q in J.gens():
-                    if self.lm(q).is_constant():
+                    qm = self.lm(q)
+                    if qm.is_constant():
                         continue
-                    tscur = []
-                    found = False
-                    while q != 0:
-                        tmc = self.polynomial_tm(q)
-                        qm = self.lm(q,True)
-                        t = q.coefficient(liftR(qm,q.parent()))
-                        tscur.append(t)
-                        if self.R0.monomial_divides(qm,v.lm()):
-                            found = True
-                            break
-                        if t.is_constant():
-                            break
-                        q -= t*liftR(self.vs_from_lm(tmc)[qm],J.ring())
-                    if found:
-                        tss.append(tscur)
-                        
-                for Jt,St,curfull in getJs(J,S,tss):
+                    if self.R0.monomial_divides(liftR(qm,self.R0),v.lm()):
+                        ts.append(q.coefficient(qm))
+                if len(ts) > 0:
+                    print ts
+                for Jt,St,curfull in getJs(J,S,ts):
                     for JSxi in rec(Jt,St,xi,curfull):
                         yield JSxi
                     if not curfull and vk in tmsvks:
@@ -1146,7 +1122,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         p = liftR(v,R) + R.sum([liftR(w,R)*R.gen(self.nvarsx+xi+wi)
                                     for wi,w in enumerate(w for w in self.get_vss(tm)[wt][:vi] if lp.get_min(lp[w.lm()]) == 0.0)])
                         Jtp = self.bounded_gb(Jt+p,gbbound) if \
-                                R is self.R0 else (Jt+p).twostd()
+                                not sound or R is self.R0 else (Jt+p).twostd()
                         for JSxi in rec(Jtp,St,needed_params,True):
                             yield JSxi
             finally:
@@ -1159,14 +1135,17 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         
         num = 0
         for J,S,xi in dfs(J,S,xi):
-            if bound_gb:
-                J = J.ring().ideal([p for p in J.gens() if not p.is_zero() and 
-                    all([e<=f for e,f in zip(self.polynomial_tm(p),tmm)])],side='twosided')
-                J += [liftR(p,J.ring()) for p in Jorig.gens()]
-            J = J.twostd()
-            yield self.quick_simplify(J,S,xi)
+            if sound:
+                yield self.quick_simplify(J,S,xi)
+            elif xi == 0:
+                yield (J,S,xi)
+            else:
+                # if all(len(generic_codim(self,J,tmc)) >= self.r for tmc in tms+tmcs):
+                #     yield self.quick_simplify(J,S,xi)
+                # else:
+                for JSxi in self.get_ideals_for_tm(tms,tmcs,J,S,xi,search_above=search_above,simple_lp=simple_lp,sound=True):
+                    yield JSxi
             num += 1
-            #yield (J,S,xi)
         if num==0:
             print ("get_ideals_for_tm: no solution found")
 #            if len(tms) > 0:
@@ -1497,7 +1476,7 @@ This is the fundamental computation of ideal enumeration.
                     zip((k for e in y for k in e),R.gens()) if k>0)
 
     @memoize
-    def get_linear_program(self, tms, tms_triv=()):
+    def get_linear_program(self, tms, tmcs=(), simple=False):
         prog = MixedIntegerLinearProgram()
         # prog.set_binary(prog.default_variable())
         # # if set_real, be sure to change exact comparisons to within machine precision
@@ -1507,16 +1486,18 @@ This is the fundamental computation of ideal enumeration.
         def le_constraint(ps,qs):
             prog.add_constraint(prog.sum(1-prog[p.lm()] for p in ps) +\
                 prog.sum(prog[p.lm()] for p in qs) >= 1)
-        for tm in tms+tms_triv:
-            vs = self.get_vs(tm)
-            prog.add_constraint(prog.sum(prog[p.lm()] for p in vs) == 
+        for tm in tms:
+            prog.add_constraint(prog.sum(prog[p.lm()] for p in self.get_vs(tm)) == 
                     max(self.tm_dim(tm) - self.r,0))
-        P = Poset((tms+tms_triv,lambda a,b: all(i<=j for i,j in zip(a,b))))
+        for tm in tmcs:
+            prog.add_constraint(prog.sum(prog[p.lm()] for p in self.get_vs(tm)) <= 
+                    max(self.tm_dim(tm) - self.r,0))
+        P = Poset((tms+tmcs,lambda a,b: all(i<=j for i,j in zip(a,b))))
         for tm,tmr in P.cover_relations():
             for v in self.get_vs(tm):
                 for y in self.all_monomials(tuple(map(sub,tmr,tm))):
                     le_constraint([v],[v*y])
-        if len(tms) == 0:
+        if simple:
             return prog
         
         def raising_constraints(tmvks):
@@ -1528,9 +1509,9 @@ This is the fundamental computation of ideal enumeration.
                 p = liftR(vss[wt][i],R)+ R.sum(liftR(q,R)*t*self.F(ZZ.random_element(10**3))
                            for j,q in enumerate(vss[wt][:i]) if (tm,wt,j) not in tmvks)
                 ps.append(p)
-            J = self.bounded_gb(R.ideal(ps),max(sum(tm) for tm in tms+tms_triv))
+            J = self.bounded_gb(R.ideal(ps),max(sum(tm) for tm in tms+tmcs))
             for q in J.gens():
-                if self.polynomial_tm(q) in tms+tms_triv:
+                if self.polynomial_tm(q) in tms+tmcs:
                     if not any(self.lm(q) == self.lm(p) for p in ps):
                         oneof = []
                         have_constant = False
