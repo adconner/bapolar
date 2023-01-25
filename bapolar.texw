@@ -942,11 +942,12 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         tms = tuple(tms)
         tmcs = tuple(tmcs)
         gbbound = max(sum(tm) for tm in tms+tmcs)
+        sound_gb = sound
         if J is None:
             J = self.get_ring().ideal(side='twosided')
             S = [J.ring().one()]
         else:
-            J = J.twostd() if sound else self.bounded_gb(J,gbbound)
+            J = J.twostd() if sound_gb else self.bounded_gb(J,gbbound)
 
         from copy import deepcopy
         vkstart,vkbelowcnt,wkabove = deepcopy(self.get_poset_info_for_search(
@@ -1017,7 +1018,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             height[0] += 1
             try:
                 tm,wt,vi = vk
-                v = self.get_vss(tm)[wt][vi]
+                vs = self.get_vss(tm)[wt]
+                v = vs[vi]
                 # case 1, v.lm() is already in the leading term ideal
                 if vk not in unset:
                     assert lp.get_min(lp[v.lm()]) == 1.0
@@ -1065,7 +1067,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     lp.set_max(lp[v.lm()],1.0)
                     return
                 
-                def getJs(J,S,ts,in_possible):
+                def getJs(J,S,ts):
                     def dfscur(I,S,ts):
                         if len(ts) == 0:
                             yield (I,S,False)
@@ -1093,11 +1095,25 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                             ((Ic,S,False) for Ic in (I+ts).minimal_associated_primes() 
                              if not any(s in Ic for s in S)):
                         JI = J+[self.lift_param(J.ring(),t) for t in I.gens()]
-                        JI = JI.twostd() if sound else self.bounded_gb(JI,gbbound)
+                        JI = JI.twostd() if sound_gb else self.bounded_gb(JI,gbbound)
                         yield (JI, [self.lift_param(J.ring(),s) for s in S], curfull)
                         
                 def rec(J,S,xi,curfull):
                     lms = guaranteed_lms(J,S)
+                    if not sound: 
+                        if not curfull and any(self.R0.monomial_divides(m,v.lm()) for m in lms):
+                            # If killing ts causes a more leading term of
+                            # another generator to zero out leaving an
+                            # intermediate term to lead, which is us. This
+                            # doesn't catch the case where it remains
+                            # generically present, but still may only over
+                            # approximate the resulting ideals
+                            return
+                        if any(self.R0.monomial_divides(m,w.lm()) 
+                              for w in vs[:vi] if lp.get_max(lp[w.lm()]) == 0.0 for m in lms):
+                            # Check similarly as above for smaller monomials of
+                            # this same weight we have previously excluded
+                            return
                     sav = set()
                     for wk in unset:
                         ws = self.get_vss(wk[0])[wk[1]]
@@ -1124,7 +1140,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                             rem = tmdim - self.r - curdim
                             vstr = str(v.lm())
                             vstr_width[0] = max(vstr_width[0],len(vstr))
-                            print ('%s%s %s xi=%d %s%d' % ('s ' if sound else '',
+                            print ('%s%s %s xi=%d %s%d' % ('sound ' if sound else '',
                                        str(tm),vstr.rjust(vstr_width[0]),xi,' '*height[0],rem))
                         for JSxi in dfs(J,S,xi):
                             yield JSxi
@@ -1142,7 +1158,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                                 for j in range(wk[2]+1,len(ws)):
                                     params_needed[(wk[0],wk[1],j)] += 1
 
-                for Jt,St,curfull in getJs(J,S,ts,in_possible):
+                for Jt,St,curfull in getJs(J,S,ts):
                     assert in_possible or not curfull
                     if out_possible or curfull:
                         for JSxi in rec(Jt,St,xi,curfull):
@@ -1159,7 +1175,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         p = liftR(v,R) + R.sum([liftR(w,R)*R.gen(self.nvarsx+xi+wi)
                                     for wi,w in enumerate(w for w in self.get_vss(tm)[wt][:vi] if lp.get_min(lp[w.lm()]) == 0.0)])
                         Jtp = self.bounded_gb(Jt+p,gbbound) if \
-                                not sound or R is self.R0 else (Jt+p).twostd()
+                                not sound_gb or R is self.R0 else (Jt+p).twostd()
                         for JSxi in rec(Jtp,St,needed_params,True):
                             yield JSxi
             finally:
