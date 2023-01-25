@@ -610,7 +610,7 @@ def three_place_ideals_up_to3(ba,d=1,Jxi=None):
                         break
                 tmsnext.sort(key = lambda p: (p[1], max(p[0]), p[0]))
                 print(tmsnext)
-                tmsnext = [tm for tm,_ in tmsnext]
+                tmsnext = [tmc for tmc,_ in tmsnext]
             else:
                 tmsnext = tms[1:]
                 
