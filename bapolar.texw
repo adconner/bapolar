@@ -940,11 +940,18 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         tmcs = tuple(tmcs)
         gbbound = max([sum(tm)+1 for tm in tms]+[sum(tm) for tm in tmcs])
         sound_gb = sound
+
+        def gb(J):
+            if not sound_gb or J.ring() is self.R0:
+                return self.bounded_gb(J,gbbound)
+            else:
+                return J.twostd()
+        
         if J is None:
             J = self.get_ring().ideal(side='twosided')
             S = [J.ring().one()]
         else:
-            J = J.twostd() if sound_gb else self.bounded_gb(J,gbbound)
+            J = gb(J)
 
         from copy import deepcopy
         vkstart,vkbelowcnt,wkabove = deepcopy(self.get_poset_info_for_search(
@@ -1091,8 +1098,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     for I,S,curfull in dfscur(I,S,ts) if leave_in else \
                             ((Ic,S,False) for Ic in (I+ts).minimal_associated_primes() 
                              if not any(s in Ic for s in S)):
-                        JI = J+[self.lift_param(J.ring(),t) for t in I.gens()]
-                        JI = JI.twostd() if sound_gb else self.bounded_gb(JI,gbbound)
+                        JI = gb(J+[self.lift_param(J.ring(),t) for t in I.gens()])
                         yield (JI, [self.lift_param(J.ring(),s) for s in S], curfull)
                         
                 def rec(J,S,xi,curfull):
@@ -1165,9 +1171,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     R = J.ring()
                     p = liftR(v,R) + R.sum([liftR(w,R)*R.gen(self.nvarsx+xi+wi)
                                 for wi,w in enumerate(w for w in self.get_vss(tm)[wt][:vi] if lp.get_min(lp[w.lm()]) == 0.0)])
-                    Jp = self.bounded_gb(J+p,gbbound) if \
-                            not sound_gb or R is self.R0 else (J+p).twostd()
-                    for JSxi in rec(Jp,S,yi,True):
+                    for JSxi in rec(gb(J+p),S,yi,True):
                         yield JSxi
                         
                 if not zero_before_add:
