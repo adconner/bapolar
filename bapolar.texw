@@ -1165,10 +1165,9 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                             yield JSxi
                     if in_possible and not curfull and vk in tmsvks:
                         cur_params = Jt.ring().ngens() - self.nvarsx
-                        needed_params = xi + len([w for w in self.get_vss(tm)[wt][:vi]
-                                                  if lp.get_min(lp[w.lm()]) == 0.0])
-                        if needed_params > cur_params:
-                            R = self.get_ring(needed_params)
+                        yi = xi + params_needed[vk]
+                        if yi > cur_params:
+                            R = self.get_ring(yi)
                             Jt = R.ideal([liftR(p,R) for p in Jt.gens()])
                             St = [liftR(s,R) for s in St]
                         R = Jt.ring()
@@ -1176,7 +1175,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                                     for wi,w in enumerate(w for w in self.get_vss(tm)[wt][:vi] if lp.get_min(lp[w.lm()]) == 0.0)])
                         Jtp = self.bounded_gb(Jt+p,gbbound) if \
                                 not sound_gb or R is self.R0 else (Jt+p).twostd()
-                        for JSxi in rec(Jtp,St,needed_params,True):
+                        for JSxi in rec(Jtp,St,yi,True):
                             yield JSxi
             finally:
                 height[0] -= 1
