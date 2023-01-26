@@ -934,7 +934,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
     def lift_param(self,R,t):
         return R(t(R.gens()[self.nvarsx:]))
     
-    def get_ideals_for_tm(self,tms=[],tmcs=[],J=None,S=None,xi=0,search_above=True,simple_lp=False,sound=False):
+    def get_ideals_for_tm(self,tms=[],tmcs=[],J=None,S=None,xi=0,search_above=True,
+                          zero_before_add=False,simple_lp=False,sound=False):
         tms = tuple(tms)
         tmcs = tuple(tmcs)
         gbbound = max([sum(tm)+1 for tm in tms]+[sum(tm) for tm in tmcs])
@@ -1063,7 +1064,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     lp.set_max(lp[v.lm()],1.0)
                     return
                 
-                def getJs(J,S,ts):
+                def getJs(J,S,ts,leave_in):
                     def dfscur(I,S,ts):
                         if len(ts) == 0:
                             yield (I,S,False)
@@ -1087,7 +1088,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     S = list(map(coerce,S))
                     ts = list(map(coerce,ts))
                     ts.sort(key=lambda t: t.degree())
-                    for I,S,curfull in dfscur(I,S,ts) if in_possible else \
+                    for I,S,curfull in dfscur(I,S,ts) if leave_in else \
                             ((Ic,S,False) for Ic in (I+ts).minimal_associated_primes() 
                              if not any(s in Ic for s in S)):
                         JI = J+[self.lift_param(J.ring(),t) for t in I.gens()]
@@ -1153,26 +1154,44 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                             if wk[0] in tms:
                                 for j in range(wk[2]+1,len(ws)):
                                     params_needed[(wk[0],wk[1],j)] += 1
+                                    
+                def addcur(J,S,xi):
+                    cur_params = J.ring().ngens() - self.nvarsx
+                    yi = xi + params_needed[vk]
+                    if yi > cur_params:
+                        R = self.get_ring(yi)
+                        J = R.ideal([liftR(p,R) for p in J.gens()])
+                        S = [liftR(s,R) for s in S]
+                    R = J.ring()
+                    p = liftR(v,R) + R.sum([liftR(w,R)*R.gen(self.nvarsx+xi+wi)
+                                for wi,w in enumerate(w for w in self.get_vss(tm)[wt][:vi] if lp.get_min(lp[w.lm()]) == 0.0)])
+                    Jp = self.bounded_gb(J+p,gbbound) if \
+                            not sound_gb or R is self.R0 else (J+p).twostd()
+                    for JSxi in rec(Jp,S,yi,True):
+                        yield JSxi
+                        
+                if not zero_before_add:
+                    if in_possible and vk in tmsvks:
+                        for JSxi in addcur(J,S,xi):
+                            yield JSxi
+                            
+                    if out_possible:
+                        for Jt,St,curfull in getJs(J,S,ts,leave_in=False):
+                            assert curfull == false
+                            for JSxi in rec(Jt,St,xi,curfull):
+                                yield JSxi
+                else:
+                    for Jt,St,curfull in getJs(J,S,ts,leave_in=in_possible):
+                        assert in_possible or not curfull
+                        
+                        if in_possible and not curfull and vk in tmsvks:
+                            for JSxi in addcur(Jt,St,xi):
+                                yield JSxi
+                                
+                        if out_possible or curfull:
+                            for JSxi in rec(Jt,St,xi,curfull):
+                                yield JSxi
 
-                for Jt,St,curfull in getJs(J,S,ts):
-                    assert in_possible or not curfull
-                    if out_possible or curfull:
-                        for JSxi in rec(Jt,St,xi,curfull):
-                            yield JSxi
-                    if in_possible and not curfull and vk in tmsvks:
-                        cur_params = Jt.ring().ngens() - self.nvarsx
-                        yi = xi + params_needed[vk]
-                        if yi > cur_params:
-                            R = self.get_ring(yi)
-                            Jt = R.ideal([liftR(p,R) for p in Jt.gens()])
-                            St = [liftR(s,R) for s in St]
-                        R = Jt.ring()
-                        p = liftR(v,R) + R.sum([liftR(w,R)*R.gen(self.nvarsx+xi+wi)
-                                    for wi,w in enumerate(w for w in self.get_vss(tm)[wt][:vi] if lp.get_min(lp[w.lm()]) == 0.0)])
-                        Jtp = self.bounded_gb(Jt+p,gbbound) if \
-                                not sound_gb or R is self.R0 else (Jt+p).twostd()
-                        for JSxi in rec(Jtp,St,yi,True):
-                            yield JSxi
             finally:
                 height[0] -= 1
                 for wk in wkabove.get(vk,[]):
