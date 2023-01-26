@@ -1207,6 +1207,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             elif xi == 0:
                 yield (J,S,xi)
             else:
+                # yield (J,S,xi)
+                # continue
                 for JSxi in self.get_ideals_for_tm(tms,tmcs,J,S,xi,search_above=search_above,simple_lp=simple_lp,sound=True):
                     yield JSxi
             num += 1
