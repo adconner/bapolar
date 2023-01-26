@@ -870,10 +870,6 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         return [vss[wt][i] for _,wt,i in P.linear_extension()]
     
     @memoize
-    def vs_from_lm(self,tm):
-        return { v.lm() : v for vs in self.get_vss(tm).values() for v in vs }
-
-    @memoize
     def get_poset_info_for_search(self, tms, high_to_low = False):
         P = self.get_poset(tms,high_to_low)
         wkabove = {}
@@ -941,7 +937,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
     def get_ideals_for_tm(self,tms=[],tmcs=[],J=None,S=None,xi=0,search_above=True,simple_lp=False,sound=False):
         tms = tuple(tms)
         tmcs = tuple(tmcs)
-        gbbound = max(sum(tm) for tm in tms+tmcs)
+        gbbound = max([sum(tm)+1 for tm in tms]+[sum(tm) for tm in tmcs])
         sound_gb = sound
         if J is None:
             J = self.get_ring().ideal(side='twosided')
