@@ -1013,10 +1013,21 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             if len(vkstart) == 0:
                 yield (J,S,xi)
                 return
-           
-            vk = min(vkstart,key=lambda vk: (vk not in unset, sum(vk[0]), params_needed.get(vk,0)))
+
+            set_stack = []
+            set_to_process = [vk for vk in vkstart if vk not in unset]
+            while len(set_to_process) > 0:
+                vk = set_to_process.pop()
+                set_stack.append(vk)
+                for wk in wkabove.get(vk,[]):
+                    vkbelowcnt[wk] -= 1
+                    if vkbelowcnt[wk] == 0:
+                        vkstart.add(wk)
+                        if wk not in unset:
+                            set_to_process.append(wk)
+            
+            vk = min(vkstart,key=lambda vk: (sum(vk[0]), params_needed.get(vk,0)))
             vkstart.remove(vk)
-            #vk = vkstart.pop()
             
             for wk in wkabove.get(vk,[]):
                 vkbelowcnt[wk] -= 1
@@ -1215,6 +1226,13 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         vkstart.remove(wk)
                     vkbelowcnt[wk] += 1
                 vkstart.add(vk)
+                while len(set_stack) > 0:
+                    vk = set_stack.pop()
+                    for wk in wkabove.get(vk,[]):
+                        if vkbelowcnt[wk] == 0:
+                            vkstart.remove(wk)
+                        vkbelowcnt[wk] += 1
+                    vkstart.add(vk)
                         
         num = 0
         for J,S,xi in dfs(J,S,xi):
