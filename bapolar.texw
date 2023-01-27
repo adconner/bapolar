@@ -978,6 +978,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         lp = self.get_linear_program(tms,tmcs,simple=simple_lp)
         unset = set()
         params_needed = {vks : vks[2] for vks in tmsvks}
+        num_in = {tm:0 for tm in tms+tmcs}
+        num_out = {tm:0 for tm in tms+tmcs}
         lms = guaranteed_lms(J,S)
         for tm in tms+tmcs:
             for wt,vs in self.get_vss(tm).items():
@@ -985,13 +987,14 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     if any(self.R0.monomial_divides(m,p.lm()) for m in lms):
                         lp.set_min(lp[p.lm()],1.0)
                         lp.set_max(lp[p.lm()],1.0)
+                        num_in[tm] += 1
                         if tm in tms:
                             for j in range(i+1,len(vs)):
                                 params_needed[(tm,wt,j)] -= 1
                     else:
-                        unset.add((tm,wt,i))
                         lp.set_min(lp[p.lm()],0.0)
                         lp.set_max(lp[p.lm()],1.0)
+                        unset.add((tm,wt,i))
 
         from sage.numerical.mip import MIPSolverException
         #global cnt
@@ -1031,6 +1034,15 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         yield JSxi
                     return
                 
+                def printstep(extra=''):
+                    remhi = self.tm_dim(tm) - self.r - num_in[tm]
+                    remlo = self.r - num_out[tm]
+                    vstr = str(v.lm())
+                    vstr_width[0] = max(vstr_width[0],len(vstr))
+                    print ('%s%s %s xi=%d %s%d %d %s' % ('sound ' if sound else '',
+                               str(tm),vstr.rjust(vstr_width[0]),xi,' '*height[0],
+                                                         remhi,remlo,extra))
+                
                 ts = []
                 for q in J.gens():
                     qm = self.lm(q)
@@ -1065,8 +1077,12 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 if not in_possible and len(ts) == 0:
                     lp.set_max(lp[v.lm()],0.0)
                     unset.remove(vk)
+                    num_out[tm] += 1
+                    # if not sound and vk in tmsvks:
+                    #     printstep('f')
                     for JSxi in dfs(J,S,xi):
                         yield JSxi
+                    num_out[tm] -= 1
                     unset.add(vk)
                     lp.set_max(lp[v.lm()],1.0)
                     return
@@ -1081,12 +1097,12 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                             for IS in dfscur(I,S,ts[1:]):
                                 yield IS
                             return
-                        yield (I,S+[t],True)
                         for I in (I+[t]).minimal_associated_primes():
                             if any(s in I for s in S):
                                 continue
                             for IS in dfscur(I,S,ts[1:]):
                                 yield IS
+                        yield (I,S+[t],True)
                     if J.ring().ngens() == self.nvarsx:
                         # no parameters
                         yield (J,S,len(ts) > 0)
@@ -1115,7 +1131,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         if any(self.R0.monomial_divides(m,w.lm()) 
                               for w in vs[:vi] if lp.get_max(lp[w.lm()]) == 0.0 for m in lms):
                             # Check similarly as above for smaller monomials of
-                            # this same weight we have previously excluded
+                            # this same weight we have previously excluded (common case)
                             return
                     sav = set()
                     for wk in unset:
@@ -1124,6 +1140,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         if any(self.R0.monomial_divides(m,p) for m in lms):
                             lp.set_min(lp[p],1.0)
                             sav.add(wk)
+                            num_in[wk[0]] += 1
                             if wk[0] in tms:
                                 for j in range(wk[2]+1,len(ws)):
                                     params_needed[(wk[0],wk[1],j)] -= 1
@@ -1133,18 +1150,13 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     if not curfull:
                         lp.set_max(lp[v.lm()],0.0)
                         unset.remove(vk)
+                        num_out[vk[0]] += 1
                     assert lp.get_min(lp[v.lm()]) == (1.0 if curfull else 0.0)
                     assert lp.get_max(lp[v.lm()]) == (1.0 if curfull else 0.0)
                     try:
                         lp.solve()
                         if vk in tmsvks:
-                            curdim = len([None for p in self.get_vs(tm) if lp.get_min(lp[p.lm()]) == 1.0])
-                            tmdim = self.tm_dim(tm)
-                            rem = tmdim - self.r - curdim
-                            vstr = str(v.lm())
-                            vstr_width[0] = max(vstr_width[0],len(vstr))
-                            print ('%s%s %s xi=%d %s%d' % ('sound ' if sound else '',
-                                       str(tm),vstr.rjust(vstr_width[0]),xi,' '*height[0],rem))
+                            printstep()
                         for JSxi in dfs(J,S,xi):
                             yield JSxi
                     except MIPSolverException:
@@ -1153,10 +1165,12 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         if not curfull:
                             lp.set_max(lp[v.lm()],1.0)
                             unset.add(vk)
+                            num_out[vk[0]] -= 1
                         for wk in sav:
                             ws = self.get_vss(wk[0])[wk[1]]
                             lp.set_min(lp[ws[wk[2]].lm()],0.0)
                             unset.add(wk)
+                            num_in[wk[0]] -= 1
                             if wk[0] in tms:
                                 for j in range(wk[2]+1,len(ws)):
                                     params_needed[(wk[0],wk[1],j)] += 1
@@ -1175,27 +1189,25 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         yield JSxi
                         
                 if not zero_before_add:
+                    if out_possible:
+                        for Jt,St,curfull in getJs(J,S,ts,leave_in=vk not in tmsvks):
+                            for JSxi in rec(Jt,St,xi,curfull):
+                                yield JSxi
+                                
                     if in_possible and vk in tmsvks:
                         for JSxi in addcur(J,S,xi):
                             yield JSxi
-                            
-                    if out_possible:
-                        for Jt,St,curfull in getJs(J,S,ts,leave_in=False):
-                            assert curfull == false
-                            for JSxi in rec(Jt,St,xi,curfull):
-                                yield JSxi
                 else:
                     for Jt,St,curfull in getJs(J,S,ts,leave_in=in_possible):
                         assert in_possible or not curfull
+                        if out_possible or curfull:
+                            for JSxi in rec(Jt,St,xi,curfull):
+                                yield JSxi
                         
                         if in_possible and not curfull and vk in tmsvks:
                             for JSxi in addcur(Jt,St,xi):
                                 yield JSxi
                                 
-                        if out_possible or curfull:
-                            for JSxi in rec(Jt,St,xi,curfull):
-                                yield JSxi
-
             finally:
                 height[0] -= 1
                 for wk in wkabove.get(vk,[]):
