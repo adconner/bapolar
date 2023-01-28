@@ -1611,47 +1611,47 @@ This is the fundamental computation of ideal enumeration.
                     for y in self.all_monomials(tuple(map(sub,tmr,tm))):
                         le_constraint([v],[v*y])
 
-        vsix = {}
-        lmtov = {}
-        for tm in tms+tmcs:
-            for wt,vs in self.get_vss(tm).items():
-                for vi,v in enumerate(vs):
-                    lmtov[v.lm()] = v
-                    vsix[v] = (tm,wt,vi)
+        # vsix = {}
+        # lmtov = {}
+        # for tm in tms+tmcs:
+        #     for wt,vs in self.get_vss(tm).items():
+        #         for vi,v in enumerate(vs):
+        #             lmtov[v.lm()] = v
+        #             vsix[v] = (tm,wt,vi)
         
-        for tm in tms:
-            vss = self.get_vss(tm)
-            for wt,vs in vss.items():
-                for x in self.R0.gens()[self.nvars:self.nvars+len(self.xs)]:
-                    wtup = None
-                    vis = []
-                    wis = []
-                    for vi,v in enumerate(vs):
-                        w = x*v-v*x
-                        if not w.is_zero():
-                            _,wtup,wi = vsix[lmtov[w.lm()]]
-                            vis.append(vi)
-                            wis.append(wi)
-                    def stronger(rel1, rel2):
-                        lo1, hi1 = rel1
-                        lo2, hi2 = rel2
-                        return len(lo1) < len(lo2) and len(hi2) <= len(hi1) and \
-                                all(i in lo2 for i in lo1) and all(i in hi1 for i in hi2)
-                    rels = []
-                    for k in range(1,2): # I haven't seen example where k > 1 does anything
-                    # for k in range(1,len(vis)+1):
-                        for vtake in combinations(vis,k):
-                            for vi in vtake:
-                                wi = wis[vis.index(vi)]
-                                oneof = [wi]+sorted(set([wj for vj,wj in zip(vis,wis) if vj < vi and
-                                                         wj > wi and vj not in vtake]))
-                                cur = (vtake,oneof)
-                                if not any(stronger(rel,cur) for rel in rels):
-                                    rels.append(cur)
+        # for tm in tms:
+        #     vss = self.get_vss(tm)
+        #     for wt,vs in vss.items():
+        #         for x in self.R0.gens()[self.nvars:self.nvars+len(self.xs)]:
+        #             wtup = None
+        #             vis = []
+        #             wis = []
+        #             for vi,v in enumerate(vs):
+        #                 w = x*v-v*x
+        #                 if not w.is_zero():
+        #                     _,wtup,wi = vsix[lmtov[w.lm()]]
+        #                     vis.append(vi)
+        #                     wis.append(wi)
+        #             def stronger(rel1, rel2):
+        #                 lo1, hi1 = rel1
+        #                 lo2, hi2 = rel2
+        #                 return len(lo1) < len(lo2) and len(hi2) <= len(hi1) and \
+        #                         all(i in lo2 for i in lo1) and all(i in hi1 for i in hi2)
+        #             rels = []
+        #             for k in range(1,2): # I haven't seen example where k > 1 does anything
+        #             # for k in range(1,len(vis)+1):
+        #                 for vtake in combinations(vis,k):
+        #                     for vi in vtake:
+        #                         wi = wis[vis.index(vi)]
+        #                         oneof = [wi]+sorted(set([wj for vj,wj in zip(vis,wis) if vj < vi and
+        #                                                  wj > wi and vj not in vtake]))
+        #                         cur = (vtake,oneof)
+        #                         if not any(stronger(rel,cur) for rel in rels):
+        #                             rels.append(cur)
                                     
-                    for lo,hi in rels:
-                        le_constraint([self.get_vss(tm)[wt][vi] for vi in lo],
-                                      [self.get_vss(tm)[wtup][wi] for wi in hi])
+        #             for lo,hi in rels:
+        #                 le_constraint([self.get_vss(tm)[wt][vi] for vi in lo],
+        #                               [self.get_vss(tm)[wtup][wi] for wi in hi])
                     
                     
         if simple:
