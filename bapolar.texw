@@ -872,18 +872,15 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
     @memoize
     def get_poset_info_for_search(self, tms, high_to_low = False):
         P = self.get_poset(tms,high_to_low)
-        wkabove = {}
-        vkbelowcnt = {}
+        wkabove = {wk : [] for wk in P}
+        vkbelowcnt = {wk : 0 for wk in P}
         for vk,wk in P.cover_relations():
-            wkabove.setdefault(vk,[]).append(wk)
-            vkbelowcnt[wk] = vkbelowcnt.get(wk,0) + 1
+            wkabove[vk].append(wk)
+            vkbelowcnt[wk] += 1
         vkstart = set()
-        for tm in tms:
-            for wt,vs in self.get_vss(tm).items():
-                for i in range(len(vs)):
-                    vk = (tm,wt,i)
-                    if vk not in vkbelowcnt:
-                        vkstart.add(vk)
+        for vk in P:
+            if vkbelowcnt[vk] == 0:
+                vkstart.add(vk)
         return vkstart,vkbelowcnt,wkabove
     
     def x_weight(self, x):
@@ -954,8 +951,10 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             J = gb(J)
 
         from copy import deepcopy
-        vkstart,vkbelowcnt,wkabove = deepcopy(self.get_poset_info_for_search(
-                tms+tmcs if search_above else tms, high_to_low = sound))
+        vkstart,vkbelowcnt,wkabove = self.get_poset_info_for_search(
+                tms+tmcs if search_above else tms, high_to_low = sound)
+        vkstart = deepcopy(vkstart)
+        vkbelowcnt = deepcopy(vkbelowcnt)
         tmsvks = set((tm,wt,i) for tm in tms for wt,vs in self.get_vss(tm).items() 
                      for i in range(len(vs)))
         
@@ -1006,33 +1005,58 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             #    cnt[0] += 1
             print ("get_ideals_for_tm: no solution to start")
             return
-       
+        
+        processed = [0]
         height = [0]
         vstr_width = [0]
         def dfs(J,S,xi):
-            if len(vkstart) == 0:
+            if all(num_in[tm] == max(self.tm_dim(tm) - self.r,0) and \
+                           num_out[tm] == min(self.r - self.tm_codim_tperp(tm),self.tm_dim(tm)) for tm in tms) and \
+                       all(num_out[tm] <= min(self.r - self.tm_codim_tperp(tm),self.tm_dim(tm)) for tm in tmcs):
                 yield (J,S,xi)
                 return
 
+            def vkremove(vk,added=None):
+                # print '%sremove1'%(' '*processed[0]),vk
+                vkstart.remove(vk)
+                for wk in wkabove[vk]:
+                    vkbelowcnt[wk] -= 1
+                    if vkbelowcnt[wk] == 0:
+                        # print '%sadd2'%(' '*processed[0]),wk
+                        vkstart.add(wk)
+                        if added is not None:
+                            added.append(wk)
+                processed[0] += 1
+                return added
+            def vkadd(vk,removed=None):
+                # print '%sadd3'%(' '*processed[0]),vk
+                for wk in wkabove[vk]:
+                    if vkbelowcnt[wk] == 0:
+                        # print '%sremove2'%(' '*processed[0]),wk
+                        vkstart.remove(wk)
+                        if removed is not None:
+                            removed.append(wk)
+                    vkbelowcnt[wk] += 1
+                # print '%sadd1'%(' '*processed[0]),vk
+                vkstart.add(vk)
+                processed[0] -= 1
+                return removed
+                    
             set_stack = []
             set_to_process = [vk for vk in vkstart if vk not in unset]
             while len(set_to_process) > 0:
                 vk = set_to_process.pop()
                 set_stack.append(vk)
-                for wk in wkabove.get(vk,[]):
-                    vkbelowcnt[wk] -= 1
-                    if vkbelowcnt[wk] == 0:
-                        vkstart.add(wk)
-                        if wk not in unset:
-                            set_to_process.append(wk)
-            
+                added = vkremove(vk,[])
+                for wk in added:
+                    if wk not in unset:
+                        set_to_process.append(wk)
+                        
+            assert len(vkstart) > 0
             vk = min(vkstart,key=lambda vk: (sum(vk[0]), params_needed.get(vk,0)))
-            vkstart.remove(vk)
             
-            for wk in wkabove.get(vk,[]):
-                vkbelowcnt[wk] -= 1
-                if vkbelowcnt[wk] == 0:
-                    vkstart.add(wk)
+            set_stack.append(vk)
+            vkremove(vk)
             height[0] += 1
             try:
                 tm,wt,vi = vk
@@ -1047,12 +1071,13 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 
                 def printstep(extra=''):
                     remhi = self.tm_dim(tm) - self.r - num_in[tm]
-                    remlo = self.r - num_out[tm]
+                    remlo = self.r - self.tm_codim_tperp(tm) - num_out[tm]
                     vstr = str(v.lm())
                     vstr_width[0] = max(vstr_width[0],len(vstr))
                     print ('%s%s %s xi=%d %s%d %d %s' % ('sound ' if sound else '',
                                str(tm),vstr.rjust(vstr_width[0]),xi,' '*height[0],
                                                          remhi,remlo,extra))
+                # printstep('all')
                 
                 ts = []
                 for q in J.gens():
@@ -1089,8 +1114,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     lp.set_max(lp[v.lm()],0.0)
                     unset.remove(vk)
                     num_out[tm] += 1
-                    # if not sound and vk in tmsvks:
-                    #     printstep('f')
+                    if not sound and vk in tmsvks:
+                        printstep('f')
                     for JSxi in dfs(J,S,xi):
                         yield JSxi
                     num_out[tm] -= 1
@@ -1161,7 +1186,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     if not curfull:
                         lp.set_max(lp[v.lm()],0.0)
                         unset.remove(vk)
-                        num_out[vk[0]] += 1
+                        num_out[tm] += 1
                     assert lp.get_min(lp[v.lm()]) == (1.0 if curfull else 0.0)
                     assert lp.get_max(lp[v.lm()]) == (1.0 if curfull else 0.0)
                     try:
@@ -1176,7 +1201,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         if not curfull:
                             lp.set_max(lp[v.lm()],1.0)
                             unset.add(vk)
-                            num_out[vk[0]] -= 1
+                            num_out[tm] -= 1
                         for wk in sav:
                             ws = self.get_vss(wk[0])[wk[1]]
                             lp.set_min(lp[ws[wk[2]].lm()],0.0)
@@ -1221,18 +1246,9 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                                 
             finally:
                 height[0] -= 1
-                for wk in wkabove.get(vk,[]):
-                    if vkbelowcnt[wk] == 0:
-                        vkstart.remove(wk)
-                    vkbelowcnt[wk] += 1
-                vkstart.add(vk)
                 while len(set_stack) > 0:
                     vk = set_stack.pop()
-                    for wk in wkabove.get(vk,[]):
-                        if vkbelowcnt[wk] == 0:
-                            vkstart.remove(wk)
-                        vkbelowcnt[wk] += 1
-                    vkstart.add(vk)
+                    vkadd(vk)
                         
         num = 0
         for J,S,xi in dfs(J,S,xi):
@@ -1246,7 +1262,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 for JSxi in self.get_ideals_for_tm(tms,tmcs,J,S,xi,search_above=search_above,simple_lp=simple_lp,sound=True):
                     yield JSxi
             num += 1
-        if num==0:
+        if num == 0:
             print ("get_ideals_for_tm: no solution found")
 #            if len(tms) > 0:
 #                write_JS(J,S,'bapolarsols/mmult2nosol/nosol%d_%s.txt'% (cnt[0],str(tms[0])))
