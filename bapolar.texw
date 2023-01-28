@@ -974,7 +974,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         lms.append(self.lm(p,True))
             return lms
         
-        lp = self.get_linear_program(tms,tmcs,simple=simple_lp)
+        lp = deepcopy(self.get_linear_program(tms,tmcs,simple=simple_lp))
         unset = set()
         params_needed = {vks : vks[2] for vks in tmsvks}
         num_in = {tm:0 for tm in tms+tmcs}
@@ -1052,7 +1052,6 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     if wk not in unset:
                         set_to_process.append(wk)
                         
-            assert len(vkstart) > 0
             vk = min(vkstart,key=lambda vk: (sum(vk[0]), params_needed.get(vk,0)))
             
             set_stack.append(vk)
@@ -1062,12 +1061,10 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 tm,wt,vi = vk
                 vs = self.get_vss(tm)[wt]
                 v = vs[vi]
-                # case 1, v.lm() is already in the leading term ideal
-                if vk not in unset:
-                    assert lp.get_min(lp[v.lm()]) == 1.0
-                    for JSxi in dfs(J,S,xi):
-                        yield JSxi
-                    return
+                
+                assert vk in unset
+                assert lp.get_min(lp[v.lm()]) == 0.0
+                assert lp.get_max(lp[v.lm()]) == 1.0
                 
                 def printstep(extra=''):
                     remhi = self.tm_dim(tm) - self.r - num_in[tm]
@@ -1196,20 +1193,19 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         for JSxi in dfs(J,S,xi):
                             yield JSxi
                     except MIPSolverException:
-                        return
-                    finally:
-                        if not curfull:
-                            lp.set_max(lp[v.lm()],1.0)
-                            unset.add(vk)
-                            num_out[tm] -= 1
-                        for wk in sav:
-                            ws = self.get_vss(wk[0])[wk[1]]
-                            lp.set_min(lp[ws[wk[2]].lm()],0.0)
-                            unset.add(wk)
-                            num_in[wk[0]] -= 1
-                            if wk[0] in tms:
-                                for j in range(wk[2]+1,len(ws)):
-                                    params_needed[(wk[0],wk[1],j)] += 1
+                        pass
+                    if not curfull:
+                        lp.set_max(lp[v.lm()],1.0)
+                        unset.add(vk)
+                        num_out[tm] -= 1
+                    for wk in sav:
+                        ws = self.get_vss(wk[0])[wk[1]]
+                        lp.set_min(lp[ws[wk[2]].lm()],0.0)
+                        unset.add(wk)
+                        num_in[wk[0]] -= 1
+                        if wk[0] in tms:
+                            for j in range(wk[2]+1,len(ws)):
+                                params_needed[(wk[0],wk[1],j)] += 1
                                     
                 def addcur(J,S,xi):
                     cur_params = J.ring().ngens() - self.nvarsx
