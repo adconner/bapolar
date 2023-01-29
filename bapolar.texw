@@ -586,7 +586,8 @@ def three_place_ideals_up_to3(ba,d=1,Jxi=None):
         tm = tms[0]
         print (tm)
         J,S,xi = Jxi
-        for Jxiup in ba.get_ideals_for_tm([tm], [tm[:s]+(tm[s]+1,)+tm[s+1:] for s in range(3)],
+        for Jxiup in ba.get_ideals_for_tm([tm], [tm[:s]+(tm[s]+1,)+tm[s+1:] for s in range(3)]
+                      +([(2,2,2)] if sum(tm) == 4 and all(e <= 2 for e in tm) else []),
                   J,S,xi,search_above = False, simple_lp = sum(tm) >= 3):
             if len(tms) == 1 and sum(tm) < d:
                 ltIlb, ltIub = ba.leading_term_ideal(*Jxiup[:2])
