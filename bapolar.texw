@@ -1771,29 +1771,36 @@ This is the fundamental computation of ideal enumeration.
     # TODO quick_simplify fails on exmaple to the right (doest remove t0)
     # too many? families for det3, although could depend on vorder
     # remove restriction on var order in poset
-    def quick_simplify(self,I,S,xi,keepi=0):
-        R = I.ring()
-        subs = []
-        tis = []
-        for ti in range(self.nvarsx+keepi,self.nvarsx+xi):
-            t = R.gen(ti)
-            tr = I.reduce(t)
-            if t != tr:
-                subs.append(tr)
-            else:
-                subs.append(t)
-                tis.append(ti)
+    def quick_simplify(self,J,S,xi,keepi=0):
+        R = J.ring()
+        subs = list(R.gens()[self.nvarsx+keepi:self.nvarsx+xi])
+        tis = set(range(self.nvarsx+keepi,self.nvarsx+xi))
+        for p in J.gens():
+            if ba.lm(p).is_constant() and p.lm().degree() == 1:
+                ti = next(p.lm().exponents()[0].sparse_iter())[0]
+                subs[ti - self.nvarsx - keepi] = (p - p.lt()) / (-p.lc())
+                tis.remove(ti)
+        tis = sorted(tis)
+        # subs = []
+        # tis = []
+        # for ti in range(self.nvarsx+keepi,self.nvarsx+xi):
+        #     t = R.gen(ti)
+        #     tr = J.reduce(t)
+        #     if t != tr:
+        #         subs.append(tr)
+        #     else:
+        #         subs.append(t)
+        #         tis.append(ti)
         ssubs = [R.zero()]*R.ngens()
         for j,ti in enumerate(tis):
             ssubs[ti] = R.gen(self.nvarsx+keepi+j)
         subs = [t(*ssubs) for t in subs]
         subs = list(R.gens()[:self.nvarsx+keepi]) + subs + [R.zero()]*(R.ngens()-self.nvarsx-xi)
-        I = [p(*subs) for p in I.gens()]
-        I = [p for p in I if not p.is_zero()]
-        I = R.ideal(I,side='twosided')
-        S = [I.reduce(s(*subs)) for s in S]
-        S = [I.ring().one()] + [s for s in S if not s.is_constant()]
-        return (I,S,keepi+len(tis))
+        J = [p(*subs) for p in J.gens()]
+        J = [p for p in J if not p.is_zero()]
+        J = R.ideal(J,side='twosided')
+        S = [J.ring().one()] + [s for s in S if not s.is_constant()]
+        return (J,S,keepi+len(tis))
 
     def leading_term_ideal(self,J,S):
         R = PolynomialRing(self.F,self.R0.gens()[:self.nvars])
