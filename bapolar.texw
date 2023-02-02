@@ -827,9 +827,10 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         return vss
 
     @memoize
-    def get_poset(self, tms, high_to_low = False):
+    def get_poset(self, tms, tms_high_to_low):
         vsix = {}
         lmtov = {}
+        tms = tms + tms_high_to_low
         for tm in tms:
             for wt,vs in self.get_vss(tm).items():
                 for vi,v in enumerate(vs):
@@ -838,9 +839,6 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         g = DiGraph()
         for tm in tms:
             for vs in self.get_vss(tm).values():
-                if high_to_low:
-                    for v,w in zip(vs,vs[1:]):
-                        g.add_edge(vsix[w],vsix[v])
                 for x in self.R0.gens()[self.nvars:self.nvars+len(self.xs)]:
                     wi = 0
                     for v in vs:
@@ -853,6 +851,10 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         for i in range(wi+1):
                             g.add_edge(vk,(tm,wt,i))
                         wilast = wi
+        for tm in tms_high_to_low:
+            for vs in self.get_vss(tm).values():
+                for v,w in zip(vs,vs[1:]):
+                    g.add_edge(vsix[w],vsix[v])
                             
         tmposet = Poset((tms,lambda a,b: all(i<=j for i,j in zip(a,b))))
         for tm,tmr in tmposet.cover_relations():
@@ -869,12 +871,12 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
     @memoize
     def get_vs(self, tm):
         vss = self.get_vss(tm)
-        P = self.get_poset((tm,))
+        P = self.get_poset((),(tm,))
         return [vss[wt][i] for _,wt,i in P.linear_extension()]
     
     @memoize
-    def get_poset_info_for_search(self, tms, high_to_low = False):
-        P = self.get_poset(tms,high_to_low)
+    def get_poset_info_for_search(self, tms, tms_high_to_low):
+        P = self.get_poset(tms,tms_high_to_low)
         wkabove = {wk : [] for wk in P}
         vkbelowcnt = {wk : 0 for wk in P}
         for vk,wk in P.cover_relations():
@@ -967,8 +969,12 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         J = gb(J)
 
         from copy import deepcopy
-        vkstart,vkbelowcnt,wkabove = self.get_poset_info_for_search(
-                tms+tmcs if search_above else tms, high_to_low = sound)
+        if sound:
+            vkstart,vkbelowcnt,wkabove = self.get_poset_info_for_search(
+                    (), tms+tmcs if search_above else tms)
+        else:
+            vkstart,vkbelowcnt,wkabove = self.get_poset_info_for_search(
+                    tms, tmcs if search_above else ())
         vkstart = deepcopy(vkstart)
         vkbelowcnt = deepcopy(vkbelowcnt)
         tmsvks = set((tm,wt,i) for tm in tms for wt,vs in self.get_vss(tm).items() 
@@ -1244,8 +1250,9 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         yield JSxi
                         
                 if not zero_before_add:
-                    if out_possible:
-                        for Jt,St,curfull in getJs(J,S,ts,leave_in=vk not in tmsvks):
+                    if vk not in tmsvks or out_possible:
+                        for Jt,St,curfull in getJs(J,S,ts,leave_in=
+                                               in_possible and vk not in tmsvks):
                             for JSxi in rec(Jt,St,xi,curfull):
                                 yield JSxi
                                 
