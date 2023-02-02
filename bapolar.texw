@@ -122,7 +122,7 @@ expressed in the distinguished bases is the input to the routines in this file.
 We wish to describe a computationally efficient
 representation of Borel fixed multigraded ideals which may depend on parameters.
 At core, ideals will be
-# represented by Gr\"obner bases with homogeneous generators taken from
+represented by Gr\"obner bases with homogeneous generators taken from
 $T^\perp$. Thus, condition (\ref{inTperp}) will be satisfied by construction. 
 The issues which must be addressed then are how to efficiently require ideals
 are Borel fixed and how to represent parameter
@@ -1271,13 +1271,10 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                                 yield JSxi
                                 
             finally:
-                try:
-                    height[0] -= 1
-                    while len(set_stack) > 0:
-                        vk = set_stack.pop()
-                        vkadd(vk)
-                except:
-                    pass
+                height[0] -= 1
+                while len(set_stack) > 0:
+                    vk = set_stack.pop()
+                    vkadd(vk)
                         
         num = 0
         for J,S,xi in dfs(J,S,xi):
@@ -1288,11 +1285,11 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             if xi == 0:
                 yield J,S,xi
             elif sound:
-                yield J,S,xi
-                # yield self.quick_simplify(J,S,xi)
+                # yield J,S,xi
+                yield self.quick_simplify(J,S,xi)
             else:
-                yield (J,S,xi)
-                continue
+                # yield (J,S,xi)
+                # continue
                 for JSxi in self.get_ideals_for_tm(tms,tmcs,J,S,xi,search_above=search_above,simple_lp=simple_lp,sound=True):
                     yield JSxi
             num += 1
