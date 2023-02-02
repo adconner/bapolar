@@ -936,7 +936,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
     def lift_param(self,R,t):
         tg = t.parent().ngens()
         Rg = R.ngens()-self.nvarsx
-        assert Rg >= tg or all(tt.exponent()[0] < Rg for tt in t.variables())
+        assert Rg >= tg or all(next(tt.exponents()[0].sparse_iter())[0] < Rg for tt in t.variables())
         return R(t(R.gens()[self.nvarsx:self.nvarsx+tg]+(R.zero(),)*(tg-Rg)))
     
     def get_ideals_for_tm(self,tms=[],tmcs=[],J=None,S=None,xi=0,search_above=True,
