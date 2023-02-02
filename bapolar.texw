@@ -122,7 +122,7 @@ expressed in the distinguished bases is the input to the routines in this file.
 We wish to describe a computationally efficient
 representation of Borel fixed multigraded ideals which may depend on parameters.
 At core, ideals will be
-represented by Gr\"obner bases with homogeneous generators taken from
+# represented by Gr\"obner bases with homogeneous generators taken from
 $T^\perp$. Thus, condition (\ref{inTperp}) will be satisfied by construction. 
 The issues which must be addressed then are how to efficiently require ideals
 are Borel fixed and how to represent parameter
@@ -486,6 +486,8 @@ algebra system.
 from itertools import *
 from operator import sub
 from IPython import embed
+from collections import Counter
+
 
 def check_T_is_stabilized(T,reps):
     a = len(T)
@@ -930,14 +932,21 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         return I,coerce
 
     def lift_param(self,R,t):
-        return R(t(R.gens()[self.nvarsx:]))
+        tg = t.parent().ngens()
+        Rg = R.ngens()-self.nvarsx
+        assert Rg >= tg or all(tt.exponent()[0] < Rg for tt in t.variables())
+        return R(t(R.gens()[self.nvarsx:self.nvarsx+tg]+(R.zero(),)*(tg-Rg)))
     
     def get_ideals_for_tm(self,tms=[],tmcs=[],J=None,S=None,xi=0,search_above=True,
                           zero_before_add=False,simple_lp=False,sound=False):
         tms = tuple(tms)
         tmcs = tuple(tmcs)
+        
+        tmmax = reduce(lambda a,b: tuple(map(max,a,b)),tms+tmcs)
+        
         gbbound = max([sum(tm)+1 for tm in tms]+[sum(tm) for tm in tmcs])
         sound_gb = sound
+        precise_gb_bound = False
 
         def gb(J):
             if not sound_gb or J.ring() is self.R0:
@@ -948,8 +957,14 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         if J is None:
             J = self.get_ring().ideal(side='twosided')
             S = [J.ring().one()]
-        else:
-            J = gb(J)
+            
+        Jorig = J
+        xiorig = xi
+        if precise_gb_bound:
+            J += [p for i,e in enumerate(tmmax) for p in
+                    self.all_monomials((0,)*i+(e+1,)+(0,)*(len(tmmax)-i-1),J.ring())]
+            
+        J = gb(J)
 
         from copy import deepcopy
         vkstart,vkbelowcnt,wkabove = self.get_poset_info_for_search(
@@ -998,12 +1013,14 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
 
         from sage.numerical.mip import MIPSolverException
         #global cnt
+        # global ttt
         try:
             lp.solve()
         except MIPSolverException:
             #if len(tms) > 0:
             #    write_JS(J,S,'bapolarsols/mmult2nosol/nosol%d_%s_0.txt'% (cnt[0],str(tms[0])))
             #    cnt[0] += 1
+            # ttt.append((J,S,xi,tms))
             print ("get_ideals_for_tm: no solution to start")
             return
         
@@ -1011,6 +1028,11 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         height = [0]
         vstr_width = [0]
         def dfs(J,S,xi):
+            # global s1
+            # found = all((lp.get_min(lp[w.lm()]) == 1.0) ==
+            #             (s1.reduce(w.lm()) != w.lm()) for w in
+            #             self.get_vs((1,1,0)) if lp.get_min(lp[w.lm()]) ==
+            #             lp.get_max(lp[w.lm()]))
             if all(num_in[tm] == max(self.tm_dim(tm) - self.r,0) and \
                            num_out[tm] == min(self.r - self.tm_codim_tperp(tm),self.tm_dim(tm)) for tm in tms) and \
                        (not search_above or all(num_out[tm] >= min(self.r - self.tm_codim_tperp(tm),self.tm_dim(tm)) for tm in tmcs)):
@@ -1242,25 +1264,34 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                                 yield JSxi
                                 
             finally:
-                height[0] -= 1
-                while len(set_stack) > 0:
-                    vk = set_stack.pop()
-                    vkadd(vk)
+                try:
+                    height[0] -= 1
+                    while len(set_stack) > 0:
+                        vk = set_stack.pop()
+                        vkadd(vk)
+                except:
+                    pass
                         
         num = 0
         for J,S,xi in dfs(J,S,xi):
-            if sound:
-                yield self.quick_simplify(J,S,xi)
-            elif xi == 0:
-                yield (J,S,xi)
+            if precise_gb_bound:
+                J = J.ring().ideal([p for p in J.gens() if not p.is_zero() and 
+                    all([e<=f for e,f in zip(self.polynomial_tm(p),tmmax)])])
+                J += [liftR(p,J.ring()) for p in Jorig.gens()]
+            if xi == 0:
+                yield J,S,xi
+            elif sound:
+                yield J,S,xi
+                # yield self.quick_simplify(J,S,xi)
             else:
-                # yield (J,S,xi)
-                # continue
+                yield (J,S,xi)
+                continue
                 for JSxi in self.get_ideals_for_tm(tms,tmcs,J,S,xi,search_above=search_above,simple_lp=simple_lp,sound=True):
                     yield JSxi
             num += 1
         if num == 0:
             print ("get_ideals_for_tm: no solution found")
+            # ttt.append((J,S,xi,tms,1))
 #            if len(tms) > 0:
 #                write_JS(J,S,'bapolarsols/mmult2nosol/nosol%d_%s.txt'% (cnt[0],str(tms[0])))
 #                cnt[0] += 1
@@ -1796,16 +1827,18 @@ This is the fundamental computation of ideal enumeration.
         for j,ti in enumerate(tis):
             ssubs[ti] = I.ring().gen(j)
         subs = [t(*ssubs) for t in subs]
+
+        R = self.get_ring(len(tis))
         if S is None:
-            S = [J.ring().one()]
+            S = [R.one()]
         else:
-            S = [self.lift_param(J.ring(),I.reduce(coerce(s)(subs))) for s in S]
-            S = [J.ring().one()] + [s for s in S if not s.is_constant()]
+            S = [self.lift_param(R,I.reduce(coerce(s)(subs))) for s in S]
+            S = [R.one()] + [s for s in S if not s.is_constant()]
         
-        subs = list(J.ring().gens()[:self.nvarsx]) + [self.lift_param(J.ring(),t) for t in subs]
+        subs = list(R.gens()[:self.nvarsx]) + [self.lift_param(R,t) for t in subs]
         Jg = [p(*subs) for p in J.gens()]
         Jg = [p for p in Jg if not p.is_zero()]
-        J = J.ring().ideal(Jg,side='twosided')
+        J = R.ideal(Jg,side='twosided')
         return (J,S,len(tis))
 
     def leading_term_ideal(self,J,S):
