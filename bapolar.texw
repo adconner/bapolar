@@ -924,14 +924,23 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 ts.append(q.coefficient(self.lm(q)))
         return ts
 
-    def get_param_ideal(self,J):
+    def get_param_ideal(self,J,xi=None):
+        if xi is None:
+            xi = J.ring().ngens() - self.nvarsx
         if J.ring().ngens() == self.nvarsx:
+            assert xi == 0
             return None,None
-        R = PolynomialRing(ba.F,J.ring().gens()[self.nvarsx:],implementation='singular')
+        R = PolynomialRing(ba.F,J.ring().gens()[self.nvarsx:self.nvarsx+xi],implementation='singular')
         I = R.ideal([R(p) for p in J.gens() if self.lm(p).is_constant()])
         def coerce(t):
             return R(t)
         return I,coerce
+    
+    def family_dimension(self,J,xi):
+        I,_ = self.get_param_ideal(J,xi)
+        if I is None:
+            return 0
+        return I.dimension()
 
     def lift_param(self,R,t):
         tg = t.parent().ngens()
