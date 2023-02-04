@@ -939,8 +939,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         assert Rg >= tg or all(next(tt.exponents()[0].sparse_iter())[0] < Rg for tt in t.variables())
         return R(t(R.gens()[self.nvarsx:self.nvarsx+tg]+(R.zero(),)*(tg-Rg)))
     
-    def get_ideals_for_tm(self,tms=[],tmcs=[],J=None,S=None,xi=0,search_above=True,
-                          zero_before_add=False,simple_lp=False,sound=False):
+    def get_ideals_for_tm(self,tms=[],tmcs=[],J=None,S=None,xi=0,
+                          search_above=True,simple_lp=False,sound=False):
         tms = tuple(tms)
         tmcs = tuple(tmcs)
         
@@ -1249,26 +1249,15 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     for JSxi in rec(gb(J+p),S,yi,True):
                         yield JSxi
                         
-                if not zero_before_add:
-                    if vk not in tmsvks or out_possible:
-                        for Jt,St,curfull in getJs(J,S,ts,leave_in=
-                                               in_possible and vk not in tmsvks):
-                            for JSxi in rec(Jt,St,xi,curfull):
-                                yield JSxi
-                                
-                    if in_possible and vk in tmsvks:
-                        for JSxi in addcur(J,S,xi):
+                if vk not in tmsvks or out_possible:
+                    for Jt,St,curfull in getJs(J,S,ts,leave_in=
+                                           in_possible and vk not in tmsvks):
+                        for JSxi in rec(Jt,St,xi,curfull):
                             yield JSxi
-                else:
-                    for Jt,St,curfull in getJs(J,S,ts,leave_in=in_possible):
-                        assert in_possible or not curfull
-                        if out_possible or curfull:
-                            for JSxi in rec(Jt,St,xi,curfull):
-                                yield JSxi
-                        
-                        if in_possible and not curfull and vk in tmsvks:
-                            for JSxi in addcur(Jt,St,xi):
-                                yield JSxi
+                            
+                if in_possible and vk in tmsvks:
+                    for JSxi in addcur(J,S,xi):
+                        yield JSxi
                                 
             finally:
                 height[0] -= 1
