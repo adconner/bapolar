@@ -1280,10 +1280,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 J = J.ring().ideal([p for p in J.gens() if not p.is_zero() and 
                     all([e<=f for e,f in zip(self.polynomial_tm(p),tmmax)])])
                 J += [liftR(p,J.ring()) for p in Jorig.gens()]
-            if xi == 0:
-                yield J,S,xi
-            elif sound:
-                # yield J,S,xi
+            if xi == 0 or sound:
                 yield self.quick_simplify(J,S,xi)
             else:
                 # yield (J,S,xi)
@@ -1801,7 +1798,9 @@ This is the fundamental computation of ideal enumeration.
             xcum += xi
         return (R.ideal(gens,side='twosided').twostd(),Sgens,xcum)
 
-    def quick_simplify(self,J,S=None,xi=0,simple=False):
+    def quick_simplify(self,J,S=None,xi=None,simple=False):
+        if xi is None:
+            xi = J.ring().ngens() - self.ngensx
         if xi == 0:
             return (J,[J.ring().one()],0)
         I,coerce = self.get_param_ideal(J)
