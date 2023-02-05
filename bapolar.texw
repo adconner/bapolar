@@ -1800,9 +1800,20 @@ This is the fundamental computation of ideal enumeration.
 
     def quick_simplify(self,J,S=None,xi=None,simple=False):
         if xi is None:
-            xi = J.ring().ngens() - self.ngensx
+            xi = J.ring().ngens() - self.nvarsx
         if xi == 0:
             return (J,[J.ring().one()],0)
+        
+        # if variables never occur, add a relation for them so they will be
+        # eliminated in the next step. Missing variables should only be
+        # produced with sound=True searches
+        tis = set()
+        for p in J.gens():
+            for e in p.exponents(): 
+                for ti,_ in e[self.nvarsx:].sparse_iter():
+                    tis.add(ti)
+        J += [J.ring().gen(self.nvarsx+ti) for ti in set(range(xi)).difference(tis)]
+        
         I,coerce = self.get_param_ideal(J)
         subs = list(I.ring().gens()[:xi]) + [I.ring().zero()]*(I.ring().ngens()-xi)
         for ti,t in enumerate(I.ring().gens()[:xi]):
