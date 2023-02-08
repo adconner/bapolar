@@ -955,9 +955,13 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         
         tmmax = reduce(lambda a,b: tuple(map(max,a,b)),tms+tmcs)
         
-        gbbound = max([sum(tm)+1 for tm in tms]+[sum(tm) for tm in tmcs])
-        sound_gb = sound
+        gbbound = max([sum(tm) for tm in tms+tmcs])
         precise_gb_bound = False
+        sound_gb = sound or precise_gb_bound
+        cur_search_above = search_above and sound_gb
+        # searching above only sound if sound_gb, otherwise, might fail to
+        # search possibility of including a leading monomial which is possibly
+        # present but not seen in our generating set
 
         def gb(J):
             if not sound_gb or J.ring() is self.R0:
@@ -980,10 +984,10 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         from copy import deepcopy
         if sound:
             vkstart,vkbelowcnt,wkabove = self.get_poset_info_for_search(
-                    (), tms+tmcs if search_above else tms)
+                    (), tms+tmcs if cur_search_above else tms)
         else:
             vkstart,vkbelowcnt,wkabove = self.get_poset_info_for_search(
-                    tms, tmcs if search_above else ())
+                    tms, tmcs if cur_search_above else ())
         vkstart = deepcopy(vkstart)
         vkbelowcnt = deepcopy(vkbelowcnt)
         tmsvks = set((tm,wt,i) for tm in tms for wt,vs in self.get_vss(tm).items() 
@@ -1050,7 +1054,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             #             lp.get_max(lp[w.lm()]))
             if all(num_in[tm] == max(self.tm_dim(tm) - self.r,0) and \
                            num_out[tm] == min(self.r - self.tm_codim_tperp(tm),self.tm_dim(tm)) for tm in tms) and \
-                       (not search_above or all(num_out[tm] >= min(self.r - self.tm_codim_tperp(tm),self.tm_dim(tm)) for tm in tmcs)):
+                       (not cur_search_above or all(num_out[tm] >= min(self.r - self.tm_codim_tperp(tm),self.tm_dim(tm)) for tm in tmcs)):
                 yield (J,S,xi)
                 return
 
