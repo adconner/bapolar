@@ -1094,7 +1094,17 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     if wk not in unset:
                         set_to_process.append(wk)
                         
-            vk = min(vkstart,key=lambda vk: (sum(vk[0]), params_needed.get(vk,0)))
+            tss = {}
+            for q in J.gens():
+                qm = self.lm(q)
+                if qm.is_constant():
+                    continue
+                for vk in vkstart:
+                    v = self.get_vss(vk[0])[vk[1]][vk[2]]
+                    if self.R0.monomial_divides(liftR(qm,self.R0),v.lm()):
+                        tss.setdefault(vk,[]).append(q.coefficient(qm))
+                        
+            vk = min(vkstart,key=lambda vk: (sum(vk[0]), params_needed.get(vk,0), len(tss.get(vk,[]))))
             
             set_stack.append(vk)
             vkremove(vk)
@@ -1118,13 +1128,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                                                          remhi,remlo,extra))
                 # printstep('all')
                 
-                ts = []
-                for q in J.gens():
-                    qm = self.lm(q)
-                    if qm.is_constant():
-                        continue
-                    if self.R0.monomial_divides(liftR(qm,self.R0),v.lm()):
-                        ts.append(q.coefficient(qm))
+                ts = tss.get(vk,[])
                 if len(ts) > 0:
                     print ts
                     
