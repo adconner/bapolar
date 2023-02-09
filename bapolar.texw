@@ -1172,10 +1172,10 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                             for IS in dfscur(I,S,ts[1:]):
                                 yield IS
                             return
-                        for I in (I+[t]).minimal_associated_primes():
-                            if any(s in I for s in S):
+                        for Icur in (I+[t]).minimal_associated_primes():
+                            if any(s in Icur for s in S):
                                 continue
-                            for IS in dfscur(I,S,ts[1:]):
+                            for IS in dfscur(Icur,S,ts[1:]):
                                 yield IS
                         yield (I,S+[t],True)
                     if J.ring().ngens() == self.nvarsx:
