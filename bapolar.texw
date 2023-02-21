@@ -831,12 +831,14 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         vsix = {}
         lmtov = {}
         tms = tms + tms_high_to_low
+        g = DiGraph()
         for tm in tms:
             for wt,vs in self.get_vss(tm).items():
                 for vi,v in enumerate(vs):
                     lmtov[v.lm()] = v
-                    vsix[v] = (tm,wt,vi)
-        g = DiGraph()
+                    vk = (tm,wt,vi)
+                    vsix[v] = vk
+                    g.add_vertex(vk)
         for tm in tms:
             for vs in self.get_vss(tm).values():
                 for x in self.R0.gens()[self.nvars:self.nvars+len(self.xs)]:
