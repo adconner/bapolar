@@ -6,10 +6,9 @@
 def best_hyperplanes(M):
     from sage.numerical.mip import MIPSolverException
 
-    def get_lp(include, exclude, integer=False):
+    def get_lp(include, exclude):
         lp = MixedIntegerLinearProgram(maximization=True)
-        if integer:
-            lp.set_integer(lp.default_variable())
+        lp.set_integer(lp.default_variable())
         for vi in include:
             lp.add_constraint(lp.sum(M[i,vi]*lp[i] for i in range(M.nrows())) >= 1)
         for vi in exclude:
@@ -21,37 +20,33 @@ def best_hyperplanes(M):
     rest = set(range(M.ncols()))
     best_so_far = 0
     sols = []
-    def dfs(i):
-        nonlocal best_so_far, sols
+    def dfs():
+        nonlocal best_so_far
         print(' '*(len(include)+len(exclude)), len(include), best_so_far)
         if len(include) + len(rest) < best_so_far:
             return
-        if len(include) > best_so_far:
-            best_so_far = len(include)
-            sols = [sorted(include)]
-        elif len(rest) == 0:
-            sols.append(sorted(include))
-        include.append(i)
-        rest.remove(i)
         lp = get_lp(include,exclude)
         try:
             lp.solve()
-            tcur = lp.get_values(lp.default_variable())
-            tcur = vector([tcur[k] for k in range(M.nrows())])
-            j = max(rest,key=lambda j: tcur.dot_product(M.column(j)))
-            dfs(j)
         except MIPSolverException:
-            pass
+            return
+        if len(include) > best_so_far:
+            best_so_far = len(include)
+            sols.clear()
+            sols.append(sorted(include))
+        elif len(rest) == 0:
+            sols.append(sorted(include))
+        if len(rest) == 0:
+            return
+        tcur = lp.get_values(lp.default_variable())
+        tcur = vector([tcur[k] for k in range(M.nrows())])
+        i = max(rest,key=lambda j: tcur.dot_product(M.column(j)))
+        rest.remove(i)
+        include.append(i)
+        dfs()
         include.pop()
         exclude.append(i)
-        try:
-            lp.solve()
-            tcur = lp.get_values(lp.default_variable())
-            tcur = vector([tcur[k] for k in range(M.nrows())])
-            j = max(rest,key=lambda j: tcur.dot_product(M.column(j)))
-            dfs(j)
-        except MIPSolverException:
-            pass
+        dfs()
         exclude.pop()
         rest.add(i)
 
@@ -63,16 +58,23 @@ def best_hyperplanes(M):
     istart = max(rest,key=lambda j: t0.dot_product(M.column(j)))
         
     try:
-        dfs(istart) # could choose smarter start
+        rest.remove(istart)
+        include.append(istart)
+        dfs()
+        include.pop()
+        exclude.append(istart)
+        dfs()
+        exclude.pop()
     except KeyboardInterrupt:
         pass
     t0s = []
     for sol in sols:
-        lp = get_lp(sol,[],integer=True)
+        lp = get_lp(sol,[])
         lp.solve()
         sol = lp.get_values(lp.default_variable())
-        sol = [int(sol[i]) for i in range(M.nrows())]
+        sol = [int(round(sol[i])) for i in range(M.nrows())]
         t0s.append(sol)
+    print ('bsf',best_so_far)
     return t0s
     
 # This solves the problem approximately but fast
