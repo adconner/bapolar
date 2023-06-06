@@ -3,9 +3,8 @@
 
 # For all routines here, the vectors v are given as the columns of a matrix M
     
-def best_hyperplanes(M):
+def best_hyperplane(M,stop_better_than=None):
     from sage.numerical.mip import MIPSolverException
-
     def get_lp(include, exclude):
         lp = MixedIntegerLinearProgram(maximization=True)
         lp.set_integer(lp.default_variable())
@@ -22,7 +21,6 @@ def best_hyperplanes(M):
     sols = []
     def dfs():
         nonlocal best_so_far
-        print(' '*(len(include)+len(exclude)), len(include), best_so_far)
         if len(include) + len(rest) < best_so_far:
             return
         lp = get_lp(include,exclude)
@@ -30,10 +28,13 @@ def best_hyperplanes(M):
             lp.solve()
         except MIPSolverException:
             return
+        print(' '*(len(include)+len(exclude)), len(include), best_so_far)
         if len(include) > best_so_far:
             best_so_far = len(include)
             sols.clear()
             sols.append(sorted(include))
+            if stop_better_than is not None and best_so_far >= stop_better_than:
+                raise StopIteration
         elif len(rest) == 0:
             sols.append(sorted(include))
         if len(rest) == 0:
@@ -54,28 +55,27 @@ def best_hyperplanes(M):
     sol = [i for i in range(M.ncols()) if M.column(i).dot_product(t0) > 0]
     sols.append(sol)
     best_so_far = len(sol)
-    
-    istart = max(rest,key=lambda j: t0.dot_product(M.column(j)))
+    if not (stop_better_than is not None and best_so_far >= stop_better_than):
         
-    try:
-        rest.remove(istart)
-        include.append(istart)
-        dfs()
-        include.pop()
-        exclude.append(istart)
-        dfs()
-        exclude.pop()
-    except KeyboardInterrupt:
-        pass
+        istart = max(rest,key=lambda j: t0.dot_product(M.column(j)))
+        try:
+            rest.remove(istart)
+            include.append(istart)
+            dfs()
+            include.pop()
+            exclude.append(istart)
+            dfs()
+            exclude.pop()
+        except (KeyboardInterrupt, StopIteration):
+            pass
     t0s = []
     for sol in sols:
         lp = get_lp(sol,[])
         lp.solve()
         sol = lp.get_values(lp.default_variable())
         sol = [int(round(sol[i])) for i in range(M.nrows())]
-        t0s.append(sol)
-    print ('bsf',best_so_far)
-    return t0s
+        t0s.append(tuple(sol))
+    return list(set(t0s))
     
 # This solves the problem approximately but fast
 def best_hyperplane_approx(M,iters = 30,lambda_final=0.4):
