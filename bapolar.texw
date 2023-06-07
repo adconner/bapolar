@@ -485,102 +485,18 @@ algebra system.
 <<complete=False>>=
 from itertools import *
 from operator import sub
-from IPython import embed
+from functools import cache
+
 from collections import Counter
+from IPython import embed
 
-
-def check_T_is_stabilized(T,reps):
-    a = len(T)
-    b,c = T[0].dimensions()
-
-    # Check there is one weight for each basis vector
-    assert all(len(wts) == d for d,(wts,_) in zip((a,b,c),reps))
-    # Check the given representations of $\mathfrak{n}$ operate on the correct dimensional space
-    assert all(x.nrows() == d and x.ncols() == d 
-            for d,(_,xs) in zip((a,b,c),reps) for x in xs)
-
-    # Compute roots of the simple roots vectors xs
-    simple_roots = []
-    for xi in range(len(reps[0][1])):
-        for wts,xs in reps:
-            if not xs[xi].is_zero():
-                i,j = xs[xi].nonzero_positions()[0]
-                simple_roots.append(wts[i] - wts[j])
-                break
-
-    # Check xs are actally root vectors for the corresponding roots and that 
-    # the simple roots agree for each rep in reps
-    for wts,xs in reps:
-        assert len(simple_roots) == len(xs)
-        for root,x in zip(simple_roots,xs):
-            for i,j in x.nonzero_positions():
-                assert wts[i]-wts[j] == root
-
-    # Check T is weight zero in $A\ot B\ot C$
-    for i,m in enumerate(T):
-        for j,k in m.nonzero_positions():
-            assert (reps[0][0][i] + reps[1][0][j] + reps[2][0][k]).is_zero()
-    
-    # Check T is closed under $\mathfrak{n}$
-    (_,xsA), (_,xsB), (_,xsC) = reps
-    for xa,xb,xc in zip(xsA, xsB, xsC):
-        xaT = [sum(xa[i,j] * T[j] for j in range(a)) for i in range(a)]
-        xbT = [xb*m for m in T]
-        xcT = [m*xc.T for m in T]
-        # we should have xaT + xbT + xcT = 0
-        assert all((m1+m2+m3).is_zero() for m1,m2,m3 in zip(xaT, xbT, xcT))
-    
-    return simple_roots
-
-def Tinfo(T,reps=None):
-    if reps is None:
-        Lg,reps = stabilizer_reps_ss(T)
-
-    xs = [ block_diagonal_matrix([x[i] for x,y,h in reps],subdivide=False)
-            for i in range(len(reps[0][0])) ]
-    hs = [ block_diagonal_matrix([h[i] for x,y,h in reps],subdivide=False)
-            for i in range(len(reps[0][2])) ]
-    T = np.array(list(map(list,T)))
-    vwts = matrix([h.diagonal() for h in hs])
-    return T,vwts,xs
+load('misc.py')
 
 @
 
-\code{memoize} is a function decorator used for performance reasons only. A function
-decorated \code{@memoize} will compute its result for a particular argument only
-once, and future runs with the same argument will return the previously computed
-result.
-
 <<complete=False>>=
-def memoize(obj):
-    cache = obj.cache = {}
 
-    import functools
-    @functools.wraps(obj)
-    def memoizer(*args, **kwargs):
-        if args not in cache:
-            cache[args] = obj(*args, **kwargs)
-        return cache[args]
-    return memoizer
-
-def lproduct(*its):
-    its = [iter(it) for it in its]
-    pools = [[] for e in its]
-    for k in count():
-        added = False
-        for i,(pool,it) in enumerate(zip(pools,its)):
-            try:
-                pool.append(next(it))
-                added = True
-                for res in product(*pools[:i]+[pool[-1:]]+pools[i+1:]):
-                    yield res
-            except StopIteration:
-                if len(pool) == 0:
-                    return
-        if not added:
-            return
-        
-def three_place_ideals_up_to3(ba,d=1,Jxi=None):
+def three_place_ideals_up_to(ba,d=1,Jxi=None):
     def dfs(Jxi,tms): 
         if len(tms) == 0:
             yield Jxi
@@ -599,7 +515,7 @@ def three_place_ideals_up_to3(ba,d=1,Jxi=None):
                     ltIub.hilbert_series() == ba.target_hilbert_series_td()
                 
                 for dnext in range(sum(tm)+1,d+1):
-                    print dnext
+                    print (dnext)
                     tmsnext = []
                     if dnext > 3 and degseries:
                     # if dnext > sum(tm)+1 and dnext > 3 and degseries:
@@ -631,7 +547,7 @@ def three_place_ideals_up_to3(ba,d=1,Jxi=None):
     cd2.append(ba.get_ideals_for_tm([(0,1,1)],tmcs=[(0,2,1),(0,1,2)]))
 
     for Jxis in lproduct(*map(enumerate,cd2)):
-        print 'triple',[i for i,Iyi in Jxis]
+        print ('triple',[i for i,Iyi in Jxis])
         Jxi = ba.sum_ideals_S([Iyi for i,Iyi in Jxis])
         try:
             next(ba.get_ideals_for_tm([],[(1,1,1)],*Jxi))
@@ -640,98 +556,33 @@ def three_place_ideals_up_to3(ba,d=1,Jxi=None):
         except StopIteration:
             pass
         
-def three_place_ideals_up_to(ba,d=1):
-    def dfs(Jxi,tms): 
-        if len(tms) == 0:
-            yield Jxi
-            return
-        tm = tms[0]
-        print (tm)
-        for Jxiup in ba.enumerate_candidates(tm,[tm[:s]+(tm[s]+1,)+tm[s+1:] for s in range(3)],*Jxi):
-            if len(tms) == 1 and sum(tm) < d:
-                tmsnext = [tuple(tm) for tm in IntegerVectors(sum(tm)+1,3)]
-                tmsnext.sort(key = lambda tm: (len(ba.generic_codim(Jxi[0],tm)), max(tm), tm))
-                for tm in tmsnext:
-                    print (tm,len(ba.generic_codim(Jxi[0],tm)))
-            else:
-                tmsnext = tms[1:]
-                
-            for Jxifull in dfs(Jxiup,tmsnext):
-                    yield Jxifull
-
-    cd2 = [ ba.enumerate_candidates((1,1,0),tmcs=[(2,1,0),(1,2,0)]) ]
-    cd2.append(ba.enumerate_candidates((1,0,1),tmcs=[(2,0,1),(1,0,2)]))
-    cd2.append(ba.enumerate_candidates((0,1,1),tmcs=[(0,2,1),(0,1,2)]))
-
-    for Jxis in lproduct(*map(enumerate,cd2)):
-        print 'triple',[i for i,Iyi in Jxis]
-        Jxi = ba.sum_ideals([Iyi for i,Iyi in Jxis])
-        try:
-            next(ba.enumerate_tm_bounded((1,1,1),*Jxi))
-            for Jxifull in dfs(Jxi,[(2,0,0),(0,2,0),(0,0,2)] if d >= 2 else []):
-                yield Jxifull
-        except StopIteration:
-            pass
-            
-def three_place_ideals_up_to2(ba,d=1):
-    def dfs(Jxi,tms): 
-        if len(tms) == 0:
-            yield Jxi
-            return
-        tm = min(tms,key=lambda tm: (len(ba.generic_codim(Jxi[0],tm)), max(tm), tm))
-        print (tm, len(ba.generic_codim(Jxi[0],tm)))
-        for Jxiup in ba.enumerate_candidates(tm,[tm[:s]+(tm[s]+1,)+tm[s+1:] for s in range(3)],*Jxi):
-            tmsnext = copy(tms)
-            tmsnext.remove(tm)
-            if sum(tm) < d:
-                for s in range(3):
-                    tmsnext.add(tm[:s]+(tm[s]+1,)+tm[s+1:])
-            for Jxifull in dfs(Jxiup,tmsnext):
-                    yield Jxifull
-
-    cd2 = [ ba.enumerate_candidates((1,1,0),tmcs=[(2,1,0),(1,2,0)]) ]
-    cd2.append(ba.enumerate_candidates((1,0,1),tmcs=[(2,0,1),(1,0,2)]))
-    cd2.append(ba.enumerate_candidates((0,1,1),tmcs=[(0,2,1),(0,1,2)]))
-
-    tms = [(2,0,0),(0,2,0),(0,0,2)]
-    for tm in [(1,1,0),(1,0,1),(0,1,1)]:
-        for s in range(3):
-            tms.append(tm[:s]+(tm[s]+1,)+tm[s+1:])
-    tms = set([tm for tm in tms if sum(tm) <= d])
-        
-    for Jxis in lproduct(*map(enumerate,cd2)):
-        print 'triple',[i for i,Iyi in Jxis]
-        Jxi = ba.sum_ideals([Iyi for i,Iyi in Jxis])
-        try:
-            next(ba.enumerate_tm_bounded((1,1,1),*Jxi))
-            for Jxifull in dfs(Jxi,tms):
-                yield Jxifull
-        except StopIteration:
-            pass
 @
 
 The Python class \code{BorderApolarity} provides a convenient interface to the
 routines of this file which depend on the input data (see \S\ref{sec:input}).
-Other than this data, the only additional state tracked by objects of this class
-are the previously computed cached results from functions marked
-\code{@memoize}.
 
 <<complete=False>>=
 
 class BorderApolarity:
-    def __init__(self, Tinfo, r, F = QQ):
-        self.T, self.vwts, self.xs = Tinfo
+    def __init__(self, Tinfo, r):
+        self.T, self.dims, self.vwts, self.xs = Tinfo
         self.xs = [-x.T for x in self.xs]
         self.vwts = -self.vwts
         self.Bxs = basis_of_lie_algebra(self.xs)
         self.r = r
-        self.F = F
-        self.nvars = sum(self.T.shape)
+        self.F = self.T.base_ring()
+        self.nvars = sum(self.dims)
         self.nvarsx = self.nvars + len(self.Bxs)
         self.R0 = self.get_ring()
         self.vixs = [0]
-        for s in self.T.shape:
+        for s in self.dims:
             self.vixs.append(self.vixs[-1] + s)
+        self.Tdeg = [0 for i in range(len(self.dims))]
+        e = self.T.exponents()[0]
+        for i,k in e.sparse_iter():
+            self.Tdeg[ next(j for j in range(len(self.dims)) 
+                            if i < sum(self.dims[:j+1])) ] += k
+        self.Tdeg = tuple(self.Tdeg)
 @
 
 The function \code{get_ring} implements the logic described in
@@ -755,7 +606,7 @@ caches the results for the future.
             params = next(1<<k for k in range(32) if 1<<k >= params )
         return self.get_ring_exact(params)
 
-    @memoize
+    @cache
     def get_ring_exact(self, params=0):
         print("get_ring_exact",params)
         if params > 0:
@@ -763,11 +614,11 @@ caches the results for the future.
         # should give cached rings of power of two size
         lets = 'abcdefghijklmnopqrsuvwyz'
         B = matrix([x.list() for x in self.Bxs]).T
-        A = FreeAlgebra(self.F,['%s%d' % (lets[i],j) for i in range(self.T.ndim)
-            for j in range(self.T.shape[i])] + 
+        A = FreeAlgebra(self.F,['%s%d' % (lets[i],j) for i in range(len(self.dims))
+            for j in range(self.dims[i])] + 
                 ['x%d'%i for i in range(len(self.Bxs))] + ['t%d' % j for j in range(params)])
-        yvs = A.gens()[:sum(self.T.shape)]
-        xvs = A.gens()[sum(self.T.shape):sum(self.T.shape)+len(self.Bxs)]
+        yvs = A.gens()[:sum(self.dims)]
+        xvs = A.gens()[sum(self.dims):sum(self.dims)+len(self.Bxs)]
         rels = {}
         for (xv1,x1),(xv2,x2) in combinations(zip(xvs,self.Bxs),2):
             x3 = x2*x1 - x1*x2
@@ -779,7 +630,7 @@ caches the results for the future.
             if not xy.is_zero():
                 xyv = sum(e*yv for e,yv in zip(xy.list(),yvs))
                 rels[xv*yv] = yv*xv + xyv
-        order = TermOrder('degrevlex',sum(self.T.shape)+len(self.Bxs))
+        order = TermOrder('degrevlex',sum(self.dims)+len(self.Bxs))
         if params > 0:
             order = order + TermOrder('degrevlex',params)
         return A.g_algebra(rels,order=order)
@@ -790,16 +641,9 @@ computes a basis of
 $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
 
 <<complete=False>>=
-    @memoize
+    @cache
     def get_vss(self,tm):
-        if max(tm) == 1:
-            tone = [i for i in range(len(tm)) if tm[i] == 1]
-            tzero = [i for i in range(len(tm)) if tm[i] == 0]
-            Tr = self.T.transpose(tzero+tone)
-            Tr = Tr.reshape(prod(Tr.shape[:len(tzero)]),-1)
-            Tr = matrix(self.F,Tr)
-
-        ivs = [IntegerVectors(t,self.T.shape[ti]) for ti,t in enumerate(tm)]
+        ivs = [IntegerVectors(t,self.dims[ti]) for ti,t in enumerate(tm)]
         from operator import concat
         vss = {}
         for v in cartesian_product(ivs):
@@ -810,23 +654,29 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         for wt in vss:
             vs = vss[wt]
             vs.sort(key=mon,reverse=True)
-            if max(tm) == 1: # restrict to Tperp
-                inc = []
-                for v in vs:
-                    vix = 0
-                    for i in tone:
-                        vix *= self.T.shape[i]
-                        vix += next(j for j in range(self.T.shape[i]) if
-                                v[sum(self.T.shape[:i])+j] == 1)
-                    inc.append([1 if i==vix else 0 for i in range(Tr.ncols())])
-                K = (Tr*matrix(inc).T).right_kernel_matrix()
+            if all(a <= b for a,b in zip(tm,self.Tdeg)): # restrict to Tperp
+                ms = []
+                msix = {}
+                eqs = {}
+                for vi,v in enumerate(vs):
+                    Td = self.T
+                    for i,k in enumerate(v):
+                        for _ in range(k):
+                            Td = Td.derivative(Td.parent().gen(i))
+                    for m,c in Td.dict().items():
+                        if m not in msix:
+                            msix[m] = len(ms)
+                            ms.append(m)
+                        eqs[(msix[m], vi)] = c
+                eqs = matrix(self.F, len(ms), len(vs), eqs)
+                K = eqs.right_kernel_matrix()
                 vs = [sum(e*mon(vs[i]) for i,e in enumerate(r)) for r in K]
             else:
                 vs = [mon(v) for v in vs]
             vss[wt] = list(reversed(vs))
         return vss
 
-    @memoize
+    @cache
     def get_poset(self, tms, tms_high_to_low):
         vsix = {}
         lmtov = {}
@@ -870,13 +720,13 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     
         return Poset(g)
     
-    @memoize
+    @cache
     def get_vs(self, tm):
         vss = self.get_vss(tm)
         P = self.get_poset((),(tm,))
         return [vss[wt][i] for _,wt,i in P.linear_extension()]
     
-    @memoize
+    @cache
     def get_poset_info_for_search(self, tms, tms_high_to_low):
         P = self.get_poset(tms,tms_high_to_low)
         wkabove = {wk : [] for wk in P}
@@ -1132,7 +982,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 
                 ts = tss.get(vk,[])
                 if len(ts) > 0:
-                    print ts
+                    print (ts)
                     
                 lp.set_min(lp[v.lm()],1.0)
                 try:
@@ -1408,18 +1258,18 @@ This is the fundamental computation of ideal enumeration.
             if checkintermediate and ii > 0 and ii == vsl[ii-1] and xi > 0 and \
                     any(lp.get_max(lp[vs[i].lm()]) == 0.0 for i in range(vsb[ii-1],vsl[ii-1])) and \
                     any(lp.get_min(lp[vs[i].lm()]) == 1.0 for i in range(vsb[ii-1],vsl[ii-1])):
-                print 'intermediate checking'
+                print ('intermediate checking')
                 J = J.twostd()
                 for p in vs[:ii]:
                     if lp.get_max(lp[p.lm()]) == 0.0:
                         J, _ = self.minimal_relations_killing_leading_term(J,p)
                         if 1 in J:
-                            print 'FAILED'
+                            print ('FAILED')
                             return
                 oxi = xi
                 J,xi = self.quick_simplify(J,keepi=keepi)
                 if xi != oxi:
-                    print "ELIMINATED %d PARAMS" % (oxi-xi)
+                    print ("ELIMINATED %d PARAMS" % (oxi-xi))
 
             if ii == len(vs):
                 assert r == 0
@@ -1481,7 +1331,7 @@ This is the fundamental computation of ideal enumeration.
         for I,yi in dfs(0,J,xi,min(self.r - self.tm_codim_tperp(tm),self.tm_dim(tm))):
             if yi == 0:
                 I = I.twostd()
-                print 'end checking yi=0'
+                print ('end checking yi=0')
                 bad = False
                 for p in vs:
                     if lp.get_max(lp[p.lm()]) == 0.0:
@@ -1489,7 +1339,7 @@ This is the fundamental computation of ideal enumeration.
                             bad = True
                             break
                 if bad:
-                    print 'end yi=0 FAILED'
+                    print ('end yi=0 FAILED')
                     continue
                 I = I.ring().ideal([p for p in I.gens() if not p.is_zero() and 
                     all([e<=f for e,f in zip(self.polynomial_tm(p),tm)])])
@@ -1498,14 +1348,14 @@ This is the fundamental computation of ideal enumeration.
                 yield (I,0)
             else:
                 I = I.twostd()
-                print 'end checking'
+                print ('end checking')
                 for p in vs:
                     if lp.get_max(lp[p.lm()]) == 0.0:
                         I, _ = self.minimal_relations_killing_leading_term(I,p)
                         if 1 in I:
                             break
                 if 1 in I:
-                    print 'end FAILED'
+                    print ('end FAILED')
                     continue
 
                 I = I.ring().ideal([p for p in I.gens() if not p.is_zero() and 
@@ -1514,7 +1364,7 @@ This is the fundamental computation of ideal enumeration.
                 oyi = yi
                 I,yi = self.quick_simplify(I)
                 if yi < oyi:
-                    print "end ELIMINATED %d PARAMS" % (oyi-yi)
+                    print ("end ELIMINATED %d PARAMS" % (oyi-yi))
                 I = I.twostd()
                 yield (I,yi)
 
@@ -1596,18 +1446,18 @@ This is the fundamental computation of ideal enumeration.
             #     all([e<=f for e,f in zip(self.polynomial_tm(p),tm)])],side='twosided')
             yield (I,xi)
 
-    @memoize
+    @cache
     def tm_dim(self, tm):
-        return prod(binomial(d+t-1,t) for t,d in zip(tm,self.T.shape))
+        return prod(binomial(d+t-1,t) for t,d in zip(tm,self.dims))
 
-    @memoize
+    @cache
     def tm_dim_tperp(self, tm):
         if max(tm) > 1:
             return self.tm_dim(tm)
         else:
             return len(self.get_vs(tm))
 
-    @memoize
+    @cache
     def tm_codim_tperp(self, tm):
         return self.tm_dim(tm) - self.tm_dim_tperp(tm)
 
@@ -1624,11 +1474,11 @@ This is the fundamental computation of ideal enumeration.
         if R is None:
             R = self.get_ring()
         for y in cartesian_product([IntegerVectors(a,d) 
-                for a,d in zip(tm,self.T.shape) ]):
+                for a,d in zip(tm,self.dims) ]):
             yield R.prod(x**k for k,x in 
                     zip((k for e in y for k in e),R.gens()) if k>0)
 
-    @memoize
+    @cache
     def get_linear_program(self, tms, tmcs=(), simple=False):
         prog = MixedIntegerLinearProgram()
         # prog.set_binary(prog.default_variable())
@@ -1725,7 +1575,7 @@ This is the fundamental computation of ideal enumeration.
         for tm in tms:
             vss = self.get_vss(tm)
             for wt,vs in vss.items():
-                print wt
+                print (wt)
                 tmvks = [(tm,wt,i) for i in range(len(vs))]
                 for k in range(1,len(vs)+1):
                     for tmvkscur in combinations(tmvks,k):
@@ -1878,14 +1728,14 @@ This is the fundamental computation of ideal enumeration.
                     ltIlb.append(m)
         return R.ideal(ltIlb), R.ideal(ltIub)
 
-    @memoize
+    @cache
     def target_hilbert_series(self):
-        ts = FractionField(PolynomialRing(QQ,'t',len(self.T.shape))).gens()
+        ts = FractionField(PolynomialRing(QQ,'t',len(self.dims))).gens()
         hs = self.r/prod(1-t for t in ts)
         k = 0
         while True:
             done = True
-            for tm in IntegerVectors(k,len(self.T.shape)):
+            for tm in IntegerVectors(k,len(self.dims)):
                 tm = tuple(tm)
                 if self.tm_dim(tm) < self.r:
                     hs -= (self.r-self.tm_dim(tm))*prod(t**e for t,e in zip(ts,tm))
@@ -1895,7 +1745,7 @@ This is the fundamental computation of ideal enumeration.
             k += 1
         return hs
 
-    @memoize
+    @cache
     def target_hilbert_series_td(self):
         t = FractionField(PolynomialRing(QQ,'t')).gen()
         hs = self.target_hilbert_series()
@@ -1928,7 +1778,7 @@ def irrelevant_tm_generators(tms):
     return [tuple(m.exponents()[0]) for m in I.gens()]
 
 def write_JS(J,S,f):
-    print 'writing %s' %f
+    print ('writing %s' %f)
     f = open(f,'w')
     for s in S:
         f.write(str(s)+'\n')
