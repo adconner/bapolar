@@ -488,11 +488,6 @@ from itertools import *
 from operator import sub
 from functools import cache
 
-from collections import Counter
-from IPython import embed
-
-load('misc.py')
-
 @
 
 <<complete=False>>=
