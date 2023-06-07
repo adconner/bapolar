@@ -1157,10 +1157,10 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
 
     @cache
     def tm_dim_tperp(self, tm):
-        if max(tm) > 1:
-            return self.tm_dim(tm)
-        else:
+        if all(a <= b for a,b in zip(tm,self.Tdeg)):
             return len(self.get_vs(tm))
+        else:
+            return self.tm_dim(tm)
 
     @cache
     def tm_codim_tperp(self, tm):
