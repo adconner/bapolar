@@ -1480,7 +1480,7 @@ This is the fundamental computation of ideal enumeration.
 
     @cache
     def get_linear_program(self, tms, tmcs=(), simple=False):
-        prog = MixedIntegerLinearProgram()
+        prog = MixedIntegerLinearProgram(solver='GLPK')
         # prog.set_binary(prog.default_variable())
         # # if set_real, be sure to change exact comparisons to within machine precision
         prog.set_real(prog.default_variable())
