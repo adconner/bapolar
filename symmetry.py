@@ -93,5 +93,5 @@ def solvable_lie_algebra(T,dims,stop_better_than=None):
                     j += 1
                 x[sum(dims[:j])+i//dims[j],sum(dims[:j])+i%dims[j]] = e
             xs.append(x)
-    return T,vwts,xs
+    return T,dims,vwts,xs
 
