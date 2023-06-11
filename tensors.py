@@ -11,13 +11,16 @@ def matrixmult(m,n,l):
     w = R.gens()[m*n+n*l:]
     T = sum(u[i*n+j]*v[j*l+k]*w[k*m+i] for i,j,k in product(range(m),range(n),range(l)))
     return (T,dims)
-    
-def skewcw2():
-    dims=(3,3,3)
-    R = PolynomialRing(QQ,['%s%d'%(x,i) for x in 'abc' for i in range(3)])
-    T = sum([sigma.sign()*prod(R.gen(i*3+sigma(i+1)-1) for i in range(3))  for sigma in SymmetricGroup(3)])
-    return T,dims
 
+def skewcw(q=2):
+    assert q % 2 == 0
+    dims=(q+1,q+1,q+1)
+    R = PolynomialRing(QQ,['%s%d'%(x,i) for x in 'abc' for i in range(q+1)])
+    T = sum([sigma.sign()*prod(R.gen(i*(q+1)+
+        (0 if sigma(i+1) == 1 else 1+(q//2)*(sigma(i+1)-2)+rho )) for i in range(3))
+             for sigma in SymmetricGroup(3) for rho in range(q//2)])
+    return T,dims
+    
 def tensor_kronecker_product(Sdat,Tdat):
     S,Sdim = Sdat
     T,Tdim = Tdat
