@@ -52,7 +52,7 @@ def liealgebraeqs(T,dims = None):
 # finds a large solvable lie algebra of T which can be used in bapolar. The
 # found subalgebra respects given coordinates of T and uses the diagonal torus
 # in this basis (so better may choices may exist after a change of basis).
-def solvable_lie_algebra(T,dims,stop_better_than=None,uppertri=False):
+def solvable_lie_algebra(T,dims,stop_better_than=None,uppertri=False,search_bound=100):
     F = T.base_ring()
     vwts = diagonal_torus(T)
     eqs = liealgebraeqs(T,dims)
@@ -79,7 +79,7 @@ def solvable_lie_algebra(T,dims,stop_better_than=None,uppertri=False):
     if len(Mcols) == 0:
         return T,vwts,[]
     M = matrix(Mcols).T
-    sol = vector(best_hyperplane(M,stop_better_than)[0])
+    sol = vector(best_hyperplane(M,stop_better_than,search_bound)[0])
     raising_wts = sorted(set([v for v in M.columns() if v.dot_product(sol) > 0]))
     xs = []
     for wt in raising_wts:

@@ -3,7 +3,7 @@
 
 # For all routines here, the vectors v are given as the columns of a matrix M
     
-def best_hyperplane(M,stop_better_than=None):
+def best_hyperplane(M,stop_better_than=None,search_bound=None):
     from sage.numerical.mip import MIPSolverException
     def get_lp(include, exclude):
         lp = MixedIntegerLinearProgram(maximization=True)
@@ -14,13 +14,14 @@ def best_hyperplane(M,stop_better_than=None):
             lp.add_constraint(lp.sum(M[i,vi]*lp[i] for i in range(M.nrows())) <= 0)
         return lp
     
+    cnt = 0
     include = []
     exclude = []
     rest = set(range(M.ncols()))
     best_so_far = 0
     sols = []
     def dfs():
-        nonlocal best_so_far
+        nonlocal cnt,best_so_far
         if len(include) + len(rest) < best_so_far:
             return
         lp = get_lp(include,exclude)
@@ -28,7 +29,7 @@ def best_hyperplane(M,stop_better_than=None):
             lp.solve()
         except MIPSolverException:
             return
-        print(' '*(len(include)+len(exclude)), len(include), best_so_far)
+        print(cnt,' '*(len(include)+len(exclude)), len(include), best_so_far)
         if len(include) > best_so_far:
             best_so_far = len(include)
             sols.clear()
@@ -39,6 +40,9 @@ def best_hyperplane(M,stop_better_than=None):
             sols.append(sorted(include))
         if len(rest) == 0:
             return
+        if search_bound is not None and cnt >= search_bound:
+            return
+        cnt += 1
         tcur = lp.get_values(lp.default_variable())
         tcur = vector([tcur[k] for k in range(M.nrows())])
         i = max(rest,key=lambda j: tcur.dot_product(M.column(j)))
