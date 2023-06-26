@@ -502,7 +502,7 @@ def three_place_ideals_up_to(ba,d=1,Jxi=None):
         J,S,xi = Jxi
         for Jxiup in ba.get_ideals_for_tm([tm], [tm[:s]+(tm[s]+1,)+tm[s+1:] for s in range(3)]
                       +([(2,2,2)] if sum(tm) == 4 and all(e <= 2 for e in tm) else []),
-                  J,S,xi,search_above = False, simple_lp = sum(tm) >= 3):
+                  J,S,xi,search_above = sum(tm) == 2, simple_lp = sum(tm) >= 3):
             if len(tms) == 1 and sum(tm) < d:
                 ltIlb, ltIub = ba.leading_term_ideal(*Jxiup[:2])
                 R = ltIlb.ring()
@@ -560,11 +560,14 @@ routines of this file which depend on the input data (see \S\ref{sec:input}).
 <<complete=False>>=
 
 class BorderApolarity:
-    def __init__(self, Tinfo, r):
+    def __init__(self, Tinfo, r, basis=True):
         self.T, self.dims, self.vwts, self.xs = Tinfo
         self.xs = [-x.T for x in self.xs]
         self.vwts = -self.vwts
-        self.Bxs = basis_of_lie_algebra(self.xs)
+        if basis:
+            self.Bxs = self.xs
+        else:
+            self.Bxs = basis_of_lie_algebra(self.xs)
         self.r = r
         self.F = self.T.base_ring()
         self.nvars = sum(self.dims)
@@ -1465,13 +1468,21 @@ def liftR(p,R):
     return p(R.gens()[:p.parent().ngens()]+(R.zero(),)*(p.parent().ngens()-R.ngens()))
 
 def basis_of_lie_algebra(xs):
+    n = xs[0].dimensions()[0]
+    F = xs[0].base_ring()
     B = copy(xs)
     Q = copy(xs)
+    have = matrix(F,len(B),n*n,[x.list() for x in xs],sparse=True)
+    have.echelonize()
+    assert have.rank() == have.nrows()
     while len(Q) > 0:
         y = Q.pop()
         for x in xs:
             z = x*y-y*x
-            if matrix(t.list() for t in B+[z]).rank() > len(B):
+            havez = block_matrix([[have],[matrix(z.list(),sparse=True)]])
+            havez.echelonize()
+            if havez.rank() > have.nrows():
+                have = havez
                 B.append(z)
                 Q.append(z)
     return B
