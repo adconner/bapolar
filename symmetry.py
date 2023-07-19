@@ -78,7 +78,7 @@ def solvable_lie_algebra(T,stop_better_than=None,uppertri=False,search_bound=100
             for _ in range(len(jxs) - eqs[:,jxs].rank()):
                 Mcols.append(wt)
     if len(Mcols) == 0:
-        return T,vwts,[]
+        return T,dims,vwts,[]
     M = matrix(Mcols).T
     sol = vector(best_hyperplane(M,stop_better_than,search_bound)[0])
     raising_wts = sorted(set([v for v in M.columns() if v.dot_product(sol) > 0]))
