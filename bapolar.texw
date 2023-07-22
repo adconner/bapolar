@@ -1288,13 +1288,28 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         if have_constant:
                             le_constraint([self.lm(p,True) for p in ps],oneof)
 
+        groups_multiplying_up = {}
         for tm in tms:
             vss = self.get_vss(tm)
             for wt,vs in vss.items():
                 print (wt)
                 tmvks = [(tm,wt,i) for i in range(len(vs))]
+                assert len(tmvks) > 0
+                for ywt in self.vwts.columns():
+                    groups_multiplying_up.setdefault(tuple(vector(wt) + ywt),[]).extend(tmvks)
                 for k in range(1,len(vs)+1):
                     for tmvkscur in combinations(tmvks,k):
+                        raising_constraints(tmvkscur)
+        for tmvks in groups_multiplying_up.values():
+            for k in range(2,len(tmvks)+1):
+                for tmvkscur in combinations(tmvks,k):
+                    wts = set()
+                    for tm,wt,i in tmvkscur:
+                        wts.add((tm,wt))
+                        if len(wts) >= 2:
+                            break
+                    if len(wts) >= 2:
+                        print(tmvkscur)
                         raising_constraints(tmvkscur)
 
         return prog
