@@ -1208,9 +1208,17 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     max(self.tm_dim(tm) - self.r,0))
         
         # constraint that all of ps implies at least one of the qs
+        constraints = []
         def le_constraint(ps,qs):
-            prog.add_constraint(prog.sum(1-prog[p.lm()] for p in ps) +\
-                prog.sum(prog[p.lm()] for p in qs) >= 1)
+            ps = [p.lm() for p in ps]
+            qs = [p.lm() for p in qs]
+            if any(all(p in ps for p in ps1) and
+                    all(p in qs for p in qs1)
+                   for ps1,qs1 in constraints):
+                return
+            constraints.append((ps,qs))
+            prog.add_constraint(prog.sum(1-prog[p] for p in ps) +\
+                prog.sum(prog[p] for p in qs) >= 1)
         P = Poset((tms+tmcs,lambda a,b: all(i<=j for i,j in zip(a,b))))
         for tm,tmr in P.cover_relations():
             for vs in self.get_vss(tm).values():
@@ -1292,7 +1300,6 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         for tm in tms:
             vss = self.get_vss(tm)
             for wt,vs in vss.items():
-                print (wt)
                 tmvks = [(tm,wt,i) for i in range(len(vs))]
                 assert len(tmvks) > 0
                 for ywt in self.vwts.columns():
@@ -1309,7 +1316,6 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         if len(wts) >= 2:
                             break
                     if len(wts) >= 2:
-                        print(tmvkscur)
                         raising_constraints(tmvkscur)
 
         return prog
