@@ -650,6 +650,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             wt = tuple(self.vwts*vector(v))
             vss.setdefault(wt,[]).append(v)
         mon = lambda m: self.R0.prod(x**k for k,x in zip(m,self.R0.gens()) if k>0)
+        todel = []
         for wt in vss:
             vs = vss[wt]
             vs.sort(key=mon,reverse=True)
@@ -673,6 +674,10 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             else:
                 vs = [mon(v) for v in vs]
             vss[wt] = list(reversed(vs))
+            if len(vss[wt]) == 0:
+                todel.append(wt)
+        for wt in todel:
+            del vss[wt]
         return vss
 
     @cache
