@@ -1325,9 +1325,6 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 return False
             except MIPSolverException:
                 pass
-            # prows = [self.get_vss(tm)[vk][i] for tm,vk,i in rowvks]
-            # pcols = [self.get_vss(tm)[vk][i] for tm,vk,i in colvks]
-            # print(prows,pcols,kerdim)
             nonlocal nconstraints
             add_set(S, (nconstraints,kerdim))
             nconstraints += 1
@@ -1377,7 +1374,10 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     kerdim = len(subcols) - Msub[quotdim:].rank()
                     rowvks = [t+(i-first,) for t,(a,b),first in zip(tos,rowIs,ix) 
                               for i in range(a,b)]
-                    add_constraint(rowvks,colvks,kerdim)
+                    if add_constraint(rowvks,colvks,kerdim):
+                        prows = [self.get_vss(tm)[vk][i] for tm,vk,i in rowvks]
+                        pcols = [self.get_vss(tm)[vk][i] for tm,vk,i in colvks]
+                        print(prows,pcols,kerdim)
         for (tm,wt),(tmr,wtr),M in Q.edges():
             if tm == tmr:
                 add_relations([(tmr,wtr)],[(tm,wt)])
