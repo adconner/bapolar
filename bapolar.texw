@@ -1362,34 +1362,34 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 quotcols = [j for (a,_),first in zip(Is,jx) for j in range(first,a)]
                 colvks = [colvksall[j] for j in subcols]
 
+                row_intervals = []
+                for a,b in zip(ix,ix[1:]):
+                    try:
+                        ilast = next(i+1 for i in range(b-1,a-1,-1) 
+                                     if not M[i,subcols+quotcols].is_zero())
+                    except StopIteration:
+                        ilast = 0
+                    # should potentially just have one to and break
+                    row_intervals.append([(i,ilast) for i in range(ilast,-1,-1)])
+                # and each quotient in tos
+                # print('Is',Is,row_intervals)
+                for rowIs in lproduct(*row_intervals):
+                    rows = [i for a,b in rowIs for i in range(a,b)]
+                    # print('rows',rows,'columns',subcols)
+                    if len(rows) == 0:
+                        continue
+                    rowvks = [rowvksall[i] for i in rows]
+                    Msub = M[rows,quotcols+subcols].T
+                    quotdim = Msub[:len(quotcols)].rank()
+                    Msub.echelonize()
+                    kerdim = len(subcols) - Msub[quotdim:].rank()
+                    add_constraint(rowvks,colvks,kerdim)
                 if len(quotcols) == 0: # most precise knowledge here
                     for i in M[::-1,subcols].pivot_rows():
                         i = M.nrows() - 1 - i
-                        add_constraint([rowvksall[i]],[colvksall[j] for j in subcols], 
-                                          len(subcols)-1)
-                else:
-                    row_intervals = []
-                    for a,b in zip(ix,ix[1:]):
-                        try:
-                            ilast = next(i+1 for i in range(b-1,a-1,-1) 
-                                         if not M[i,subcols+quotcols].is_zero())
-                        except StopIteration:
-                            ilast = 0
-                        # should potentially just have one to and break
-                        row_intervals.append([(i,ilast) for i in range(ilast,-1,-1)])
-                    # and each quotient in tos
-                    # print('Is',Is,row_intervals)
-                    for rowIs in lproduct(*row_intervals):
-                        rows = [i for a,b in rowIs for i in range(a,b)]
-                        # print('rows',rows,'columns',subcols)
-                        if len(rows) == 0:
-                            continue
-                        rowvks = [rowvksall[i] for i in rows]
-                        Msub = M[rows,quotcols+subcols].T
-                        quotdim = Msub[:len(quotcols)].rank()
-                        Msub.echelonize()
-                        kerdim = len(subcols) - Msub[quotdim:].rank()
-                        add_constraint(rowvks,colvks,kerdim)
+                        if add_constraint([rowvksall[i]],[colvksall[j] for j in subcols], 
+                                          len(subcols)-1):
+                            print ('EXACT')
         for (tm,wt),(tmr,wtr),M in Q.edges():
             if tm == tmr:
                 add_relations([(tmr,wtr)],[(tm,wt)])
