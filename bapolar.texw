@@ -1287,13 +1287,6 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             if len(colvks) == kerdim:
                 return False
             S = [('r',vk) for vk in rowvks]+[('c',vk) for vk in colvks]
-            rowvksix = {vk: i for i,vk in enumerate(rowvks)}
-            colvksix = {vk: i for i,vk in enumerate(colvks)}
-            have_lp = MixedIntegerLinearProgram()
-            have_lp.set_min(have_lp.default_variable(),0.0)
-            rowvarcontr = [[] for _ in rowvks]
-            colvarcontr = [[] for _ in colvks]
-            kercontri = []
             for S2,(ci,kerdim1) in iter_subsets(S):
                 rowvks1 = []
                 colvks1 = []
@@ -1306,25 +1299,14 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     # this condition is one we have added plus conditions 
                     # x <= 1 or 0 <= x
                     return False
-                for r in rowvks1:
-                    rowvarcontr[rowvksix[r]].append(have_lp[ci])
-                for r in colvks1:
-                    colvarcontr[colvksix[r]].append(have_lp[ci])
-                kercontri.append(kerdim1*have_lp[ci])
-            for vi,vk in enumerate(colvks):
-                colvarcontr[vi].append(have_lp[('v',vi)])
-                kercontri.append(have_lp[('v',vi)])
-            for c in rowvarcontr:
-                have_lp.add_constraint(have_lp.sum(c) <= 1)
-            for c in colvarcontr:
-                have_lp.add_constraint(have_lp.sum(c) == 1)
-            have_lp.add_constraint(have_lp.sum(kercontri) <= kerdim)
+            cc = prog.sum(prog[self.get_vss(tm)[vk][i].lm()] for tm,vk,i in rowvks) + kerdim - \
+                 prog.sum(prog[self.get_vss(tm)[vk][i].lm()] for tm,vk,i in colvks)
             from sage.numerical.mip import MIPSolverException
-            try:
-                have_lp.solve()
-                return False
-            except MIPSolverException:
-                pass
+            prog.set_objective(cc)
+            s = prog.solve()
+            prog.set_objective(0.0)
+            if s >= -1e-9:
+                return
             prows = [self.get_vss(tm)[vk][i] for tm,vk,i in rowvks]
             pcols = [self.get_vss(tm)[vk][i] for tm,vk,i in colvks]
             print(prows,pcols,kerdim)
