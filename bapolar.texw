@@ -1253,11 +1253,40 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     for vs in self.get_vss(tm).values() for v in vs) <= 
                     max(self.tm_dim(tm) - self.r,0))
 
-        constraints = []
+        sets = {}
+        set_universe = []
+        set_universe_ix = {}
+        def add_set(S,label):
+            for s in S:
+                if s not in set_universe_ix:
+                    set_universe_ix[s] = len(set_universe)
+                    set_universe.append(s)
+            S = sorted(S, key = lambda s: set_universe_ix[s])
+            cur_sets = sets
+            for s in S:
+                cur_sets = cur_sets.setdefault(s,{})
+            cur_sets[None] = label
+        def iter_subsets(S):
+            S = set(S)
+            cur = []
+            def dfs(cur_sets):
+                for i,sets1 in cur_sets.items():
+                    if i is None:
+                        yield (cur,sets1)
+                        continue
+                    if i in S:
+                        cur.append(i)
+                        for r in dfs(sets1):
+                            yield r
+                        cur.pop()
+            return dfs(sets)
+            
+        nconstraints = 0
         def add_constraint(rowvks,colvks,kerdim):
             assert kerdim <= len(colvks)
             if len(colvks) == kerdim:
                 return False
+            S = [('r',vk) for vk in rowvks]+[('c',vk) for vk in colvks]
             rowvksix = {vk: i for i,vk in enumerate(rowvks)}
             colvksix = {vk: i for i,vk in enumerate(colvks)}
             have_lp = MixedIntegerLinearProgram()
@@ -1265,18 +1294,23 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             rowvarcontr = [[] for _ in rowvks]
             colvarcontr = [[] for _ in colvks]
             kercontri = []
-            for ci,(rowvks1,colvks1,kerdim1) in enumerate(constraints):
-                if all(r in rowvksix for r in rowvks1) and \
-                        all(c in colvksix for c in colvks1):
-                    if kerdim-len(colvks) >= kerdim1-len(colvks1):
-                        # this condition is one we have added plus conditions 
-                        # x <= 1 or 0 <= x
-                        return False
-                    for r in rowvks1:
-                        rowvarcontr[rowvksix[r]].append(have_lp[ci])
-                    for r in colvks1:
-                        colvarcontr[colvksix[r]].append(have_lp[ci])
-                    kercontri.append(kerdim1*have_lp[ci])
+            for S2,(ci,kerdim1) in iter_subsets(S):
+                rowvks1 = []
+                colvks1 = []
+                for tag,vk in S2:
+                    if tag == 'r':
+                        rowvks1.append(vk)
+                    else:
+                        colvks1.append(vk)
+                if kerdim-len(colvks) >= kerdim1-len(colvks1):
+                    # this condition is one we have added plus conditions 
+                    # x <= 1 or 0 <= x
+                    return False
+                for r in rowvks1:
+                    rowvarcontr[rowvksix[r]].append(have_lp[ci])
+                for r in colvks1:
+                    colvarcontr[colvksix[r]].append(have_lp[ci])
+                kercontri.append(kerdim1*have_lp[ci])
             for vi,vk in enumerate(colvks):
                 colvarcontr[vi].append(have_lp[('v',vi)])
                 kercontri.append(have_lp[('v',vi)])
@@ -1291,10 +1325,12 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 return False
             except MIPSolverException:
                 pass
-            prows = [self.get_vss(tm)[vk][i] for tm,vk,i in rowvks]
-            pcols = [self.get_vss(tm)[vk][i] for tm,vk,i in colvks]
-            print(prows,pcols,kerdim)
-            constraints.append((rowvks,colvks,kerdim))
+            # prows = [self.get_vss(tm)[vk][i] for tm,vk,i in rowvks]
+            # pcols = [self.get_vss(tm)[vk][i] for tm,vk,i in colvks]
+            # print(prows,pcols,kerdim)
+            nonlocal nconstraints
+            add_set(S, (nconstraints,kerdim))
+            nconstraints += 1
             prog.add_constraint(prog.sum(prog[self.get_vss(tm)[vk][i].lm()]
                                          for tm,vk,i in colvks)
                              <= prog.sum(prog[self.get_vss(tm)[vk][i].lm()] 
