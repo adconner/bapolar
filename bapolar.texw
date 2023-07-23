@@ -1257,6 +1257,9 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                        for wt,vs in self.get_vss(tm).items() for i in range(len(vs))
                        for c in [([],[(tm,wt,i)],1), ([(tm,wt,i)],[],0)]]
         def add_constraint(rowvks,colvks,kerdim):
+            assert kerdim <= len(colvks)
+            if len(colvks) == kerdim:
+                return False
             for rowvks1,colvks1,kerdim1 in constraints:
                 if all(r in rowvks1 for r in rowvks) and \
                     all(c in colvks for c in colvks1) and \
@@ -1289,7 +1292,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                           for j in range(a,b)]
                 if len(colvks) == 0:
                     continue
-                subcols = [j for (a,_),last in zip(Is,jx[1:]) for j in range(a,last)]
+                subcols = [j for a,b in Is for j in range(a,b)]
                 quotcols = [j for (_,b),last in zip(Is,jx[1:]) for j in range(b,last)]
                 
                 row_intervals = []
@@ -1311,8 +1314,6 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     kerdim = Msubquot.ncols() - Msubquot.rank()
                     rowvks = [t+(i-first,) for t,(a,b),first in zip(tos,rowIs,ix) 
                               for i in range(a,b)]
-                    if len(rowvks) == 0:
-                        continue
                     add_constraint(rowvks,colvks,kerdim)
         for (tm,wt),(tmr,wtr),M in Q.edges():
             if tm == tmr:
