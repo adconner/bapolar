@@ -1348,7 +1348,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             # filtration subquotient in froms...
             intervals = [[(a,a)]+[(s,s+l) for l in range(1,b-a+1) for s in range(a,b-l+1)] 
                          for a,b in zip(jx,jx[1:])]
-            for Is in product(*intervals):
+            for Is in lproduct(*intervals):
                 colvks = [f+(j-first,) for f,(a,b),first in zip(froms,Is,jx) 
                           for j in range(a,b)]
                 if len(colvks) == 0:
@@ -1367,7 +1367,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     row_intervals.append([(a+i,ilast) for i in range(ilast-a+1) if i not in ixs])
                     # row_intervals.append([(i,ilast) for i in range(a,ilast+1)])
                 # and each quotient in tos
-                for rowIs in product(*row_intervals):
+                for rowIs in lproduct(*row_intervals):
                     rows = [i for a,b in rowIs for i in range(a,b)]
                     if len(rows) == 0:
                         continue
