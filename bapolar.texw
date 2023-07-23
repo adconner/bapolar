@@ -1237,7 +1237,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
 
     @cache
     def get_linear_program(self, tms, tmcs=(), simple=False):
-        prog = MixedIntegerLinearProgram(solver='GLPK')
+        prog = MixedIntegerLinearProgram(solver='GLPK',maximization=False)
         # prog.set_binary(prog.default_variable())
         # # if set_real, be sure to change exact comparisons to within machine precision
         prog.set_real(prog.default_variable())
@@ -1320,17 +1320,15 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             return True
             
         Q = self.get_quiver_representation(tms,tmcs)
-        def add_relations(tos,froms,simple=False):
-            if len(froms) == 0 or len(tos) == 0:
+        def add_relations(to,froms,simple=False):
+            if len(froms) == 0:
                 return
-            rowvksall = [(tm,wt,i) for tm,wt in tos 
-                         for i in range(len(self.get_vss(tm)[wt]))]
+            rowvksall = [to + (i,) for i in range(len(self.get_vss(to[0])[to[1]]))]
             colvksall = [(tm,wt,i) for tm,wt in froms 
                          for i in range(len(self.get_vss(tm)[wt]))]
-            M = block_matrix([[Q.edge_label(f,t) for f in froms] for t in tos])
+            M = block_matrix([[Q.edge_label(f,to) for f in froms]])
             assert M.ncols() == len(colvksall) and M.nrows() == len(rowvksall)
-            ix,jx = M.subdivisions()
-            ix = [0]+ix+[M.nrows()]
+            _,jx = M.subdivisions()
             jx = [0]+jx+[M.ncols()]
 
             # potentially add a relation for each choice of 
@@ -1343,29 +1341,21 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     continue
                 quotcols = [j for (a,_),first in zip(Is,jx) for j in range(first,a)]
                 colvks = [colvksall[j] for j in subcols]
-
-                row_intervals = []
-                for a,b in zip(ix,ix[1:]):
-                    try:
-                        ilast = next(i+1 for i in range(b-1,a-1,-1) 
-                                     if not M[i,subcols+quotcols].is_zero())
-                    except StopIteration:
-                        ilast = 0
-                    # should potentially just have one to and break
-                    row_intervals.append([(i,ilast) for i in range(ilast,-1,-1)])
+                try:
+                    ilast = next(i+1 for i in range(M.nrows()-1,-1,-1)
+                                 if not M[i,subcols+quotcols].is_zero())
+                except StopIteration:
+                    ilast = 0
                 # and each quotient in tos
-                # print('Is',Is,row_intervals)
-                for rowIs in lproduct(*row_intervals):
-                    rows = [i for a,b in rowIs for i in range(a,b)]
-                    # print('rows',rows,'columns',subcols)
-                    if len(rows) == 0:
-                        continue
-                    rowvks = [rowvksall[i] for i in rows]
-                    Msub = M[rows,quotcols+subcols].T
+                for quoti in range(ilast-1,-1,-1):
+                    rowvks = [rowvksall[i] for i in range(quoti,ilast)]
+                    Msub = M[quoti:ilast,quotcols+subcols].T
                     quotdim = Msub[:len(quotcols)].rank()
                     Msub.echelonize()
                     kerdim = len(subcols) - Msub[quotdim:].rank()
                     add_constraint(rowvks,colvks,kerdim)
+                    if kerdim == 0:
+                        break
                 if len(quotcols) == 0: # most precise knowledge here
                     for i in M[::-1,subcols].pivot_rows():
                         i = M.nrows() - 1 - i
@@ -1374,10 +1364,10 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                             print ('EXACT')
         for (tm,wt),(tmr,wtr),M in Q.edges():
             if tm == tmr:
-                add_relations([(tmr,wtr)],[(tm,wt)])
+                add_relations((tmr,wtr),[(tm,wt)])
         for (tmr,wtr) in Q:
             froms = [(tm,wt) for (tm,wt),_,_ in Q.incoming_edges((tmr,wtr)) if tmr != tm]
-            add_relations([(tmr,wtr)], froms)
+            add_relations((tmr,wtr), froms)
         return prog
         
         # constraint that all of ps implies at least one of the qs
