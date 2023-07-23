@@ -1354,7 +1354,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 if len(colvks) == 0:
                     continue
                 subcols = [j for a,b in Is for j in range(a,b)]
-                quotcols = [j for (_,b),last in zip(Is,jx[1:]) for j in range(b,last)]
+                quotcols = [j for (a,_),first in zip(Is,jx) for j in range(first,a)]
                 
                 row_intervals = []
                 for a,b in zip(ix,ix[1:]):
