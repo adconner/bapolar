@@ -1363,10 +1363,14 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                                      if not M[i,subcols+quotcols].is_zero())
                     except StopIteration:
                         ilast = 0
-                    row_intervals.append([(i,ilast) for i in range(a,ilast+1)])
+                    ixs = M[a:ilast,quotcols].pivot_rows()
+                    row_intervals.append([(a+i,ilast) for i in range(ilast-a+1) if i not in ixs])
+                    # row_intervals.append([(i,ilast) for i in range(a,ilast+1)])
                 # and each quotient in tos
                 for rowIs in product(*row_intervals):
                     rows = [i for a,b in rowIs for i in range(a,b)]
+                    if len(rows) == 0:
+                        continue
                     Msub = M[rows,subcols]
                     Mquot = M[rows,quotcols]
                     remain = [i for i in range(Msub.nrows()) 
