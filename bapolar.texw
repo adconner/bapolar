@@ -1253,22 +1253,47 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     for vs in self.get_vss(tm).values() for v in vs) <= 
                     max(self.tm_dim(tm) - self.r,0))
 
-        constraints = [c for tm in tms+tmcs 
-                       for wt,vs in self.get_vss(tm).items() for i in range(len(vs))
-                       for c in [([],[(tm,wt,i)],1), ([(tm,wt,i)],[],0)]]
+        constraints = []
         def add_constraint(rowvks,colvks,kerdim):
             assert kerdim <= len(colvks)
             if len(colvks) == kerdim:
                 return False
-            for rowvks1,colvks1,kerdim1 in constraints:
-                if all(r in rowvks1 for r in rowvks) and \
-                    all(c in colvks for c in colvks1) and \
-                    kerdim+len(rowvks)-len(colvks) >= kerdim1+len(rowvks1)-len(colvks1):
-                        # this condition is weaker than one we have added
+            rowvksix = {vk: i for i,vk in enumerate(rowvks)}
+            colvksix = {vk: i for i,vk in enumerate(colvks)}
+            have_lp = MixedIntegerLinearProgram()
+            have_lp.set_min(have_lp.default_variable(),0.0)
+            rowvarcontr = [[] for _ in rowvks]
+            colvarcontr = [[] for _ in colvks]
+            kercontri = []
+            for ci,(rowvks1,colvks1,kerdim1) in enumerate(constraints):
+                if all(r in rowvksix for r in rowvks1) and \
+                        all(c in colvksix for c in colvks1):
+                    if kerdim-len(colvks) >= kerdim1-len(colvks1):
+                        # this condition is one we have added plus conditions 
+                        # x <= 1 or 0 <= x
                         return False
-            # prows = [self.get_vss(tm)[vk][i].lm() for tm,vk,i in rowvks]
-            # pcols = [self.get_vss(tm)[vk][i].lm() for tm,vk,i in colvks]
-            # print(prows,pcols,kerdim)
+                    for r in rowvks1:
+                        rowvarcontr[rowvksix[r]].append(have_lp[ci])
+                    for r in colvks1:
+                        colvarcontr[colvksix[r]].append(have_lp[ci])
+                    kercontri.append(kerdim1*have_lp[ci])
+            for vi,vk in enumerate(colvks):
+                colvarcontr[vi].append(have_lp[('v',vi)])
+                kercontri.append(have_lp[('v',vi)])
+            for c in rowvarcontr:
+                have_lp.add_constraint(have_lp.sum(c) <= 1)
+            for c in colvarcontr:
+                have_lp.add_constraint(have_lp.sum(c) == 1)
+            have_lp.add_constraint(have_lp.sum(kercontri) <= kerdim)
+            from sage.numerical.mip import MIPSolverException
+            try:
+                have_lp.solve()
+                return False
+            except MIPSolverException:
+                pass
+            prows = [self.get_vss(tm)[vk][i] for tm,vk,i in rowvks]
+            pcols = [self.get_vss(tm)[vk][i] for tm,vk,i in colvks]
+            print(prows,pcols,kerdim)
             constraints.append((rowvks,colvks,kerdim))
             prog.add_constraint(prog.sum(prog[self.get_vss(tm)[vk][i].lm()]
                                          for tm,vk,i in colvks)
