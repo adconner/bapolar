@@ -1371,12 +1371,10 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     rows = [i for a,b in rowIs for i in range(a,b)]
                     if len(rows) == 0:
                         continue
-                    Msub = M[rows,subcols]
-                    Mquot = M[rows,quotcols]
-                    remain = [i for i in range(Msub.nrows()) 
-                              if i not in Mquot.pivot_rows()]
-                    Msubquot = Msub[remain]
-                    kerdim = Msubquot.ncols() - Msubquot.rank()
+                    Msub = M[rows,quotcols+subcols].T
+                    quotdim = Msub[:len(quotcols)].rank()
+                    Msub.echelonize()
+                    kerdim = len(subcols) - Msub[quotdim:].rank()
                     rowvks = [t+(i-first,) for t,(a,b),first in zip(tos,rowIs,ix) 
                               for i in range(a,b)]
                     add_constraint(rowvks,colvks,kerdim)
