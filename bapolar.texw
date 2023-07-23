@@ -1346,7 +1346,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
 
             # potentially add a relation for each choice of 
             # filtration subquotient in froms...
-            intervals = [[(s,s+l) for l in range(b-a+1) for s in range(a,b-l+1)] 
+            intervals = [[(a,a)]+[(s,s+l) for l in range(1,b-a+1) for s in range(a,b-l+1)] 
                          for a,b in zip(jx,jx[1:])]
             for Is in product(*intervals):
                 colvks = [f+(j-first,) for f,(a,b),first in zip(froms,Is,jx) 
