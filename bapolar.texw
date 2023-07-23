@@ -1192,6 +1192,50 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     zip((k for e in y for k in e),R.gens()) if k>0)
 
     @cache
+    def get_quiver_representation(self,tms,tmcs=()):
+        # ps in span of qs, find matrix expressing each 
+        # p as a linear combination of the qs
+        def get_matrix(qs,ps):
+            ms = []
+            mdict = {}
+            A = {}
+            for pi,p in enumerate(ps):
+                for m in p.monomials():
+                    if m not in mdict:
+                        mdict[m] = len(ms)
+                        ms.append(m)
+                    A[(mdict[m],pi)] = p.monomial_coefficient(m)
+            B = {}
+            for pi,p in enumerate(qs):
+                for m in p.monomials():
+                    if m not in mdict:
+                        mdict[m] = len(ms)
+                        ms.append(m)
+                    B[(mdict[m],pi)] = p.monomial_coefficient(m)
+            A = matrix(ba.F,len(ms),len(ps),A)
+            B = matrix(ba.F,len(ms),len(qs),B)
+            return B.solve_right(A)
+            
+        P = Poset((tms+tmcs,lambda a,b: all(i<=j for i,j in zip(a,b))))
+        Q = DiGraph()
+        for tm,tmr in P.cover_relations():
+            for wt,vs in self.get_vss(tm).items():
+                for m in self.all_monomials(tuple(map(sub,tmr,tm))):
+                    vsm = [m*v for v in vs]
+                    wtup = self.polynomial_weight(vsm[0])
+                    ws = self.get_vss(tmr)[wtup]
+                    Q.add_edge((tm,wt),(tmr,wtup),get_matrix(ws,vsm))
+        for tm in tms:
+            for wt,vs in self.get_vss(tm).items():
+                for x in self.R0.gens()[self.nvars:]:
+                    vsx = [x*v-v*x for v in vs]
+                    if all(v.is_zero() for v in vsx):
+                        continue
+                    wtup = next(self.polynomial_weight(v) for v in vsx if not v.is_zero())
+                    Q.add_edge((tm,wt),(tm,wtup),get_matrix(self.get_vss(tm)[wtup],vsx))
+        return Q
+
+    @cache
     def get_linear_program(self, tms, tmcs=(), simple=False):
         prog = MixedIntegerLinearProgram(solver='GLPK')
         # prog.set_binary(prog.default_variable())
