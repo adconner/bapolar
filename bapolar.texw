@@ -1245,11 +1245,82 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         prog.set_max(prog.default_variable(),1.0)
 
         for tm in tms:
-            prog.add_constraint(prog.sum(prog[v.lm()] for vs in self.get_vss(tm).values() for v in vs) == 
+            prog.add_constraint(prog.sum(prog[v.lm()] 
+                    for vs in self.get_vss(tm).values() for v in vs) == 
                     max(self.tm_dim(tm) - self.r,0))
         for tm in tmcs:
-            prog.add_constraint(prog.sum(prog[v.lm()] for vs in self.get_vss(tm).values() for v in vs) <= 
+            prog.add_constraint(prog.sum(prog[v.lm()] 
+                    for vs in self.get_vss(tm).values() for v in vs) <= 
                     max(self.tm_dim(tm) - self.r,0))
+
+        constraints = [c for tm in tms+tmcs 
+                       for wt,vs in self.get_vss(tm).items() for i in range(len(vs))
+                       for c in [([],[(tm,wt,i)],1), ([(tm,wt,i)],[],0)]]
+        def add_constraint(rowvks,colvks,kerdim):
+            for rowvks1,colvks1,kerdim1 in constraints:
+                if all(r in rowvks1 for r in rowvks) and \
+                    all(c in colvks for c in colvks1) and \
+                    kerdim+len(rowvks)-len(colvks) >= kerdim1+len(rowvks1)-len(colvks1):
+                        # this condition is weaker than one we have added
+                        return False
+            # prows = [self.get_vss(tm)[vk][i].lm() for tm,vk,i in rowvks]
+            # pcols = [self.get_vss(tm)[vk][i].lm() for tm,vk,i in colvks]
+            # print(prows,pcols,kerdim)
+            constraints.append((rowvks,colvks,kerdim))
+            prog.add_constraint(prog.sum(prog[self.get_vss(tm)[vk][i].lm()]
+                                         for tm,vk,i in colvks)
+                             <= prog.sum(prog[self.get_vss(tm)[vk][i].lm()] 
+                                         for tm,vk,i in rowvks) + kerdim)
+            return True
+            
+        Q = self.get_quiver_representation(tms,tmcs)
+        def add_relations(tos,froms,simple=False):
+            M = block_matrix([[Q.edge_label(f,t) for f in froms] for t in tos])
+            ix,jx = M.subdivisions()
+            ix = [0]+ix+[M.nrows()]
+            jx = [0]+jx+[M.ncols()]
+
+            # potentially add a relation for each choice of 
+            # filtration subquotient in froms...
+            intervals = [[(s,s+l) for l in range(b-a+1) for s in range(a,b-l+1)] 
+                         for a,b in zip(jx,jx[1:])]
+            for Is in product(*intervals):
+                colvks = [f+(j-first,) for f,(a,b),first in zip(froms,Is,jx) 
+                          for j in range(a,b)]
+                if len(colvks) == 0:
+                    continue
+                subcols = [j for (a,_),last in zip(Is,jx[1:]) for j in range(a,last)]
+                quotcols = [j for (_,b),last in zip(Is,jx[1:]) for j in range(b,last)]
+                
+                row_intervals = []
+                for a,b in zip(ix,ix[1:]):
+                    try:
+                        ilast = next(i+1 for i in range(b-1,a-1,-1) 
+                                     if not M[i,subcols+quotcols].is_zero())
+                    except StopIteration:
+                        ilast = 0
+                    row_intervals.append([(i,ilast) for i in range(a,ilast+1)])
+                # and each quotient in tos
+                for rowIs in product(*row_intervals):
+                    rows = [i for a,b in rowIs for i in range(a,b)]
+                    Msub = M[rows,subcols]
+                    Mquot = M[rows,quotcols]
+                    remain = [i for i in range(Msub.nrows()) 
+                              if i not in Mquot.pivot_rows()]
+                    Msubquot = Msub[remain]
+                    kerdim = Msubquot.ncols() - Msubquot.rank()
+                    rowvks = [t+(i-first,) for t,(a,b),first in zip(tos,rowIs,ix) 
+                              for i in range(a,b)]
+                    if len(rowvks) == 0:
+                        continue
+                    add_constraint(rowvks,colvks,kerdim)
+        for (tm,wt),(tmr,wtr),M in Q.edges():
+            if tm == tmr:
+                add_relations([(tmr,wtr)],[(tm,wt)])
+        for (tmr,wtr) in Q:
+            froms = [(tm,wt) for (tm,wt),_,_ in Q.incoming_edges((tmr,wtr)) if tmr != tm]
+            add_relations([(tmr,wtr)], froms)
+        return prog
         
         # constraint that all of ps implies at least one of the qs
         constraints = []
