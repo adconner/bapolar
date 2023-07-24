@@ -835,8 +835,6 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             J += [p for i,e in enumerate(tmmax) for p in
                     self.all_monomials((0,)*i+(e+1,)+(0,)*(len(tmmax)-i-1),J.ring())]
             
-        J = gb(J)
-
         from copy import deepcopy
         if sound:
             vkstart,vkbelowcnt,wkabove = self.get_poset_info_for_search(
@@ -866,6 +864,26 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             return lms
         
         lp = deepcopy(self.get_linear_program(tms,tmcs,simple=simple_lp))
+        lms = guaranteed_lms(J,S)
+        for tm in tms+tmcs:
+            for wt,vs in self.get_vss(tm).items():
+                for i,p in enumerate(vs):
+                    if any(self.R0.monomial_divides(m,p.lm()) for m in lms):
+                        lp.set_min(lp[p.lm()],1.0)
+                        lp.set_max(lp[p.lm()],1.0)
+                    else:
+                        lp.set_min(lp[p.lm()],0.0)
+                        lp.set_max(lp[p.lm()],1.0)
+                        
+        from sage.numerical.mip import MIPSolverException
+        try:
+            lp.solve()
+        except MIPSolverException:
+            print ("get_ideals_for_tm: no solution to start")
+            return
+        
+        J = gb(J)
+                        
         unset = set()
         params_needed = {vks : vks[2] for vks in tmsvks}
         num_in = {tm:0 for tm in tms+tmcs}
@@ -896,7 +914,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             #    write_JS(J,S,'bapolarsols/mmult2nosol/nosol%d_%s_0.txt'% (cnt[0],str(tms[0])))
             #    cnt[0] += 1
             # ttt.append((J,S,xi,tms))
-            print ("get_ideals_for_tm: no solution to start")
+            print ("get_ideals_for_tm: no solution to start needed gb")
             return
         
         processed = [0]
