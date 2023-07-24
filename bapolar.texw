@@ -960,7 +960,10 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     if self.R0.monomial_divides(liftR(qm,self.R0),v.lm()):
                         tss.setdefault(vk,[]).append(q.coefficient(qm))
                         
-            vk = min(vkstart,key=lambda vk: (sum(vk[0]), params_needed.get(vk,0), len(tss.get(vk,[]))))
+            vk = min(vkstart,key=lambda vk: (sum(vk[0]), params_needed.get(vk,0), 
+                                             abs(0.5 - lp.get_values(lp.default_variable())[
+                                                 self.get_vss(vk[0])[vk[1]][vk[2]].lm()]),
+                                             len(tss.get(vk,[]))))
             
             set_stack.append(vk)
             vkremove(vk)
