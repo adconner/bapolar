@@ -1094,11 +1094,15 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     for JSxi in rec(gb(J+p),S,yi,True):
                         yield JSxi
                 
+                if var_lp_val > 0.5 and vk in tmsvks:
+                    for JSxi in addcur(J,S,xi):
+                        yield JSxi
+                        
                 for Jt,St,curfull in getJs(J,S,ts,leave_in=vk not in tmsvks):
                     for JSxi in rec(Jt,St,xi,curfull):
                         yield JSxi
-                                
-                if vk in tmsvks:
+                        
+                if var_lp_val <= 0.5 and vk in tmsvks:
                     for JSxi in addcur(J,S,xi):
                         yield JSxi
                         
