@@ -1532,7 +1532,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 (R.zero(),) * (J.ring().ngens()-self.nvarsx-xi))
                 for p in S ])
             xcum += xi
-        return (R.ideal(gens,side='twosided').twostd(),Sgens,xcum)
+        return (R.ideal(gens,side='twosided'),Sgens,xcum)
 
     def quick_simplify(self,J,S=None,xi=None,simple=False):
         if xi is None:
