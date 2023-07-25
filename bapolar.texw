@@ -1266,14 +1266,14 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     # this condition is one we have added plus conditions 
                     # x <= 1 or 0 <= x
                     return False
-            cc = prog.sum(prog[self.get_vss(tm)[vk][i].lm()] for tm,vk,i in rowvks) + kerdim - \
-                 prog.sum(prog[self.get_vss(tm)[vk][i].lm()] for tm,vk,i in colvks)
-            from sage.numerical.mip import MIPSolverException
-            prog.set_objective(cc)
-            s = prog.solve()
-            prog.set_objective(0.0)
-            if s >= -1e-9:
-                return
+            # cc = prog.sum(prog[self.get_vss(tm)[vk][i].lm()] for tm,vk,i in rowvks) + kerdim - \
+            #      prog.sum(prog[self.get_vss(tm)[vk][i].lm()] for tm,vk,i in colvks)
+            # from sage.numerical.mip import MIPSolverException
+            # prog.set_objective(cc)
+            # s = prog.solve()
+            # prog.set_objective(0.0)
+            # if s >= -1e-9:
+            #     return
             prows = [self.get_vss(tm)[vk][i] for tm,vk,i in rowvks]
             pcols = [self.get_vss(tm)[vk][i] for tm,vk,i in colvks]
             print(prows,pcols,kerdim)

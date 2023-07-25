@@ -65,12 +65,12 @@ def lp_integer_points(lp,xs=None):
             yield sol
             return
         x = max(remxs, key=lambda x: abs(sol[x]-round(sol[x])))
+        print('%s%s %d %.2f %d' % (' '*(len(xs)-len(remxs)),str(x),lp.get_min(lp[x]),
+                                 sol[x],lp.get_max(lp[x])))
         v = floor(sol[x]+1e-10)
         omax = lp.get_max(lp[x])
         if v == omax:
             v -= 1
-        print('%s%s %d %.2f %d' % (' '*(len(xs)-len(remxs)),str(x),lp.get_min(lp[x]),
-                                 sol[x],lp.get_max(lp[x])))
         hi_first = sol[x] - v >= 0.5
         if hi_first:
             omin = lp.get_min(lp[x])
