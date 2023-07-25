@@ -57,8 +57,11 @@ def lp_integer_points(lp,xs=None):
     lp = deepcopy(lp)
     if xs is None:
         xs = list(lp.default_variable().keys())
-    lp.solve()
     def dfs():
+        try:
+            lp.solve()
+        except MIPSolverException:
+            return
         remxs = [x for x in xs if lp.get_min(lp[x]) < lp.get_max(lp[x])]
         sol = lp.get_values(lp.default_variable())
         if len(remxs) == 0:
@@ -75,30 +78,18 @@ def lp_integer_points(lp,xs=None):
         if hi_first:
             omin = lp.get_min(lp[x])
             lp.set_min(lp[x],v+1)
-            try:
-                lp.solve()
-                for sol in dfs():
-                    yield sol
-            except MIPSolverException:
-                pass
-            lp.set_min(lp[x],omin)
-        lp.set_max(lp[x],v)
-        try:
-            lp.solve()
             for sol in dfs():
                 yield sol
-        except MIPSolverException:
-            pass
+            lp.set_min(lp[x],omin)
+        lp.set_max(lp[x],v)
+        for sol in dfs():
+            yield sol
         lp.set_max(lp[x],omax)
         if not hi_first:
             omin = lp.get_min(lp[x])
             lp.set_min(lp[x],v+1)
-            try:
-                lp.solve()
-                for sol in dfs():
-                    yield sol
-            except MIPSolverException:
-                pass
+            for sol in dfs():
+                yield sol
             lp.set_min(lp[x],omin)
     return dfs()
         
