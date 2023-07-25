@@ -1,4 +1,4 @@
-
+    
 def lproduct(*its):
     its = [iter(it) for it in its]
     pools = [[] for e in its]
@@ -17,39 +17,50 @@ def lproduct(*its):
             return
         
 def get_set_system():
+    from functools import cache
     sets = {}
-    set_universe = []
-    set_universe_ix = {}
+    ei = -1
+    @cache
+    def key(s):
+        nonlocal ei
+        ei += 1
+        return ei
     def add_set(S,label):
-        for s in S:
-            if s not in set_universe_ix:
-                set_universe_ix[s] = len(set_universe)
-                set_universe.append(s)
-        S = sorted(S, key = lambda s: set_universe_ix[s])
+        S = sorted(S, key=key)
         cur_sets = sets
         for s in S:
             cur_sets = cur_sets.setdefault(s,{})
         cur_sets[None] = label
     from collections import Counter
     from copy import copy
-    def iter_subsets(S):
-        S = Counter(S)
+    from heapq import heapify,heappush,heappop
+    def iter_sets(Slo,Shi):
+        Slo = [(key(s),s) for s in Slo]
+        heapify(Slo)
+        Shi = Counter(Shi)
         cur = []
         def dfs(cur_sets):
-            if None in cur_sets:
+            if None in cur_sets and len(Slo) == 0:
                 yield (copy(cur),cur_sets[None])
             for e,sets1 in cur_sets.items():
                 if e is None:
                     continue
-                if S.get(e,0) > 0:
+                if Shi.get(e,0) > 0 and (
+                        len(Slo) == 0 or key(e) <= Slo[0][0]):
                     cur.append(e)
-                    S[e] -= 1
+                    Shi[e] -= 1
+                    if len(Slo) > 0 and key(e) == Slo[0][0]:
+                        topush = heappop(Slo)
+                    else:
+                        topush = None
                     for r in dfs(sets1):
                         yield r
-                    S[e] += 1
+                    if topush is not None:
+                        heappush(Slo,topush)
+                    Shi[e] += 1
                     cur.pop()
         return dfs(sets)
-    return add_set,iter_subsets
+    return add_set,iter_sets
 
 def lp_integer_points(lp,xs=None,fullsol=True,prunef=lambda psol: True):
     from copy import deepcopy

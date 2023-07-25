@@ -915,7 +915,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                      for i in range(len(vs)))
         
         def guaranteed_lms(J,S):
-            add_set, iter_subsets = get_set_system()
+            add_set, iter_sets = get_set_system()
             if J.ring().ngens() == self.nvarsx:
                 for p in J.gens():
                     if not p.is_zero():
@@ -934,7 +934,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         add_set([xi for xi,e in self.lm(p,True).
                                  exponents()[0].sparse_iter() for _ in range(e)],None)
             def in_lti(m):
-                return any(True for _ in iter_subsets([xi 
+                return any(True for _ in iter_sets([],[xi 
                        for xi,e in m.exponents()[0].sparse_iter() for _ in range(e)]))
             return in_lti
                         
@@ -1315,7 +1315,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     for vs in self.get_vss(tm).values() for v in vs) <= 
                     max(self.tm_dim(tm) - self.r,0))
 
-        add_set, iter_subsets = get_set_system()
+        add_set, iter_sets = get_set_system()
             
         nconstraints = 0
         def add_constraint(rowvks,colvks,kerdim):
@@ -1323,7 +1323,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             if len(colvks) == kerdim:
                 return False
             S = [('r',vk) for vk in rowvks]+[('c',vk) for vk in colvks]
-            for S2,(ci,kerdim1) in iter_subsets(S):
+            for S2,(ci,kerdim1) in iter_sets([],S):
                 rowvks1 = []
                 colvks1 = []
                 for tag,vk in S2:
