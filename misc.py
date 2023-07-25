@@ -51,45 +51,70 @@ def get_set_system():
         return dfs(sets)
     return add_set,iter_subsets
 
-def lp_integer_points(lp,xs=None):
+def lp_integer_points(lp,xs=None,fullsol=True,prunef=lambda psol: True):
     from copy import deepcopy
     from sage.numerical.mip import MIPSolverException
     lp = deepcopy(lp)
     if xs is None:
         xs = list(lp.default_variable().keys())
+    sol = {}
     def dfs():
         try:
             lp.solve()
         except MIPSolverException:
             return
+        csol = lp.get_values(lp.default_variable())
         remxs = [x for x in xs if lp.get_min(lp[x]) < lp.get_max(lp[x])]
-        sol = lp.get_values(lp.default_variable())
         if len(remxs) == 0:
-            yield sol
+            if fullsol:
+                yield csol
+            else:
+                yield sol
             return
-        x = max(remxs, key=lambda x: abs(sol[x]-round(sol[x])))
-        print('%s%s %d %.2f %d' % (' '*(len(xs)-len(remxs)),str(x),lp.get_min(lp[x]),
-                                 sol[x],lp.get_max(lp[x])))
-        v = floor(sol[x]+1e-10)
+        x = max(remxs, key=lambda x: abs(csol[x]-round(csol[x])))
+        print('%s%s %d %.2f %d' % (' '*len(sol),str(x),lp.get_min(lp[x]),
+                                 csol[x],lp.get_max(lp[x])))
+        v = floor(csol[x]+1e-10)
         omax = lp.get_max(lp[x])
         if v == omax:
             v -= 1
-        hi_first = sol[x] - v >= 0.5
+        hi_first = csol[x] - v >= 0.5
         if hi_first:
             omin = lp.get_min(lp[x])
             lp.set_min(lp[x],v+1)
-            for sol in dfs():
-                yield sol
+            if v+1 == lp.get_max(lp[x]):
+                sol[x] = v+1
+                if prunef(sol):
+                    for res in dfs():
+                        yield res
+                del sol[x]
+            else:
+                for res in dfs():
+                    yield res
             lp.set_min(lp[x],omin)
         lp.set_max(lp[x],v)
-        for sol in dfs():
-            yield sol
+        if v == lp.get_min(lp[x]):
+            sol[x] = v
+            if prunef(sol):
+                for res in dfs():
+                    yield res
+            del sol[x]
+        else:
+            for res in dfs():
+                yield res
         lp.set_max(lp[x],omax)
         if not hi_first:
             omin = lp.get_min(lp[x])
             lp.set_min(lp[x],v+1)
-            for sol in dfs():
-                yield sol
+            if v+1 == lp.get_max(lp[x]):
+                sol[x] = v+1
+                if prunef(sol):
+                    for res in dfs():
+                        yield res
+                del sol[x]
+            else:
+                for res in dfs():
+                    yield res
             lp.set_min(lp[x],omin)
     return dfs()
         
