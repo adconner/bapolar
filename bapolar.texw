@@ -551,6 +551,49 @@ def three_place_ideals_up_to(ba,d=1,Jxi=None):
                 yield Jxifull
         except StopIteration:
             pass
+
+
+def lp_only_look(ba):
+    from operator import concat
+    lp1 = ba.get_linear_program(((1,1,0),),((2,1,0),(1,2,0)))
+    xs1 = [x for vs in ba.get_vss((1,1,0)).values() for x in vs]
+    lp1 = lp_integer_points(lp1,xs1)
+    lp2 = ba.get_linear_program(((1,0,1),),((2,0,1),(1,0,2)))
+    xs2 = [x for vs in ba.get_vss((1,0,1)).values() for x in vs]
+    lp2 = lp_integer_points(lp2,xs2)
+    lp3 = ba.get_linear_program(((0,1,1),),((0,2,1),(0,1,2)))
+    xs3 = [x for vs in ba.get_vss((0,1,1)).values() for x in vs]
+    lp3 = lp_integer_points(lp3,xs3)
+    lps = [lp1,lp2,lp3]
+    xss = [xs1,xs2,xs3]
+    lp = ba.get_linear_program((),((1,1,0),(1,0,1),(0,1,1),(1,1,1)))
+    si = 0 
+    yss = [[],[],[]]
+    while True:
+        fails = 0
+        for lpi,(lpx,xsx) in enumerate(zip(lps,xss)):
+            try:
+                sol = next(lpx)
+                for x in xsx:
+                    if sol[x.lm()] == 1.0:
+                        lp.add_constraint(lp[(lpi,si)] <= lp[x.lm()])
+                    else:
+                        lp.add_constraint(lp[(lpi,si)] <= 1-lp[x.lm()])
+                yss[lpi].append((lpi,si))
+                lp.set_min(lp[(lpi,si)],0.0)
+                lp.set_max(lp[(lpi,si)],1.0)
+                lpc = deepcopy(lp)
+                lpc.set_min(lp[(lpi,si)],1.0)
+                for lpj in range(3):
+                    if lpj != lpi:
+                        lpc.add_constraint(lp.sum(lp[v] for v in yss[lpj]) == 1)
+                for sol in lp_integer_points(lpc,reduce(concat,yss)):
+                    yield sol
+            except StopIteration:
+                fails += 1
+        if fails == 3:
+            break
+        si += 1
         
 @
 
