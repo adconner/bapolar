@@ -50,3 +50,55 @@ def get_set_system():
                     cur.pop()
         return dfs(sets)
     return add_set,iter_subsets
+
+def lp_integer_points(lp,xs=None):
+    from copy import deepcopy
+    from sage.numerical.mip import MIPSolverException
+    lp = deepcopy(lp)
+    if xs is None:
+        xs = list(lp.default_variable().keys())
+    lp.solve()
+    def dfs():
+        remxs = [x for x in xs if lp.get_min(lp[x]) < lp.get_max(lp[x])]
+        sol = lp.get_values(lp.default_variable())
+        if len(remxs) == 0:
+            yield sol
+            return
+        x = max(remxs, key=lambda x: abs(sol[x]-round(sol[x])))
+        v = floor(sol[x]+1e-10)
+        omax = lp.get_max(lp[x])
+        if v == omax:
+            v -= 1
+        print('%s%s %d %.2f %d' % (' '*(len(xs)-len(remxs)),str(x),lp.get_min(lp[x]),
+                                 sol[x],lp.get_max(lp[x])))
+        hi_first = sol[x] - v >= 0.5
+        if hi_first:
+            omin = lp.get_min(lp[x])
+            lp.set_min(lp[x],v+1)
+            try:
+                lp.solve()
+                for sol in dfs():
+                    yield sol
+            except MIPSolverException:
+                pass
+            lp.set_min(lp[x],omin)
+        lp.set_max(lp[x],v)
+        try:
+            lp.solve()
+            for sol in dfs():
+                yield sol
+        except MIPSolverException:
+            pass
+        lp.set_max(lp[x],omax)
+        if not hi_first:
+            omin = lp.get_min(lp[x])
+            lp.set_min(lp[x],v+1)
+            try:
+                lp.solve()
+                for sol in dfs():
+                    yield sol
+            except MIPSolverException:
+                pass
+            lp.set_min(lp[x],omin)
+    return dfs()
+        
