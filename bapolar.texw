@@ -1335,7 +1335,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             froms = [(tm,wt) for (tm,wt),_,_ in Q.incoming_edges((tmr,wtr)) if tmr != tm]
             for k in range(1,3):
                 for fs in combinations(froms,k):
-                    add_relations((tmr,wtr), fs, interval_length_bound = 2)
+                    add_relations((tmr,wtr), fs, interval_length_bound = 1)
         return prog
         
         # constraint that all of ps implies at least one of the qs
