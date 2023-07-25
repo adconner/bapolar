@@ -848,8 +848,12 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                      for i in range(len(vs)))
         
         def guaranteed_lms(J,S):
-            lms = []
+            add_set, iter_subsets = get_set_system()
             if J.ring().ngens() == self.nvarsx:
+                for p in J.gens():
+                    if not p.is_zero():
+                        add_set([xi for xi,e in p.lm().
+                                 exponents()[0].sparse_iter() for _ in range(e)],None)
                 lms = [p.lm() for p in J.gens() if not p.is_zero()]
             else:
                 I,coerce = self.get_param_ideal(J)
@@ -860,20 +864,30 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         continue
                     It = I + coerce(p.coefficient(self.lm(p)))
                     if any(s in It for s in SI):
-                        lms.append(self.lm(p,True))
-            return lms
-        
+                        add_set([xi for xi,e in self.lm(p,True).
+                                 exponents()[0].sparse_iter() for _ in range(e)],None)
+            def in_lti(m):
+                return any(True for _ in iter_subsets([xi 
+                       for xi,e in m.exponents()[0].sparse_iter() for _ in range(e)]))
+            return in_lti
+                        
         lp = deepcopy(self.get_linear_program(tms,tmcs,simple=simple_lp))
-        lms = guaranteed_lms(J,S)
+        unset = set()
+        params_needed = {vks : vks[2] for vks in tmsvks}
+        num_in = {tm:0 for tm in tms+tmcs}
+        num_out = {tm:0 for tm in tms+tmcs}
+        in_lti = guaranteed_lms(J,S)
         for tm in tms+tmcs:
             for wt,vs in self.get_vss(tm).items():
                 for i,p in enumerate(vs):
-                    if any(self.R0.monomial_divides(m,p.lm()) for m in lms):
+                    if in_lti(p.lm()):
                         lp.set_min(lp[p.lm()],1.0)
-                        lp.set_max(lp[p.lm()],1.0)
+                        num_in[tm] += 1
+                        if tm in tms:
+                            for j in range(i+1,len(vs)):
+                                params_needed[(tm,wt,j)] -= 1
                     else:
-                        lp.set_min(lp[p.lm()],0.0)
-                        lp.set_max(lp[p.lm()],1.0)
+                        unset.add((tm,wt,i))
                         
         from sage.numerical.mip import MIPSolverException
         try:
@@ -883,37 +897,25 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             return
         
         J = gb(J)
+        in_lti = guaranteed_lms(J,S)
+        sav = []
+        for vk in unset:
+            tm,wt,i = vk
+            vs = self.get_vss(tm)[wt]
+            p = vs[i].lm()
+            if in_lti(p):
+                sav.append(vk)
+                lp.set_min(lp[p.lm()],1.0)
+                num_in[tm] += 1
+                if tm in tms:
+                    for j in range(i+1,len(vs)):
+                        params_needed[(tm,wt,j)] -= 1
+        for vk in sav:
+            unset.remove(vk)
                         
-        unset = set()
-        params_needed = {vks : vks[2] for vks in tmsvks}
-        num_in = {tm:0 for tm in tms+tmcs}
-        num_out = {tm:0 for tm in tms+tmcs}
-        lms = guaranteed_lms(J,S)
-        for tm in tms+tmcs:
-            for wt,vs in self.get_vss(tm).items():
-                for i,p in enumerate(vs):
-                    if any(self.R0.monomial_divides(m,p.lm()) for m in lms):
-                        lp.set_min(lp[p.lm()],1.0)
-                        lp.set_max(lp[p.lm()],1.0)
-                        num_in[tm] += 1
-                        if tm in tms:
-                            for j in range(i+1,len(vs)):
-                                params_needed[(tm,wt,j)] -= 1
-                    else:
-                        lp.set_min(lp[p.lm()],0.0)
-                        lp.set_max(lp[p.lm()],1.0)
-                        unset.add((tm,wt,i))
-
-        from sage.numerical.mip import MIPSolverException
-        #global cnt
-        # global ttt
         try:
             lp.solve()
         except MIPSolverException:
-            #if len(tms) > 0:
-            #    write_JS(J,S,'bapolarsols/mmult2nosol/nosol%d_%s_0.txt'% (cnt[0],str(tms[0])))
-            #    cnt[0] += 1
-            # ttt.append((J,S,xi,tms))
             print ("get_ideals_for_tm: no solution to start needed gb")
             return
         
@@ -1043,9 +1045,9 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         yield (JI, [self.lift_param(J.ring(),s) for s in S], curfull)
                         
                 def rec(J,S,xi,curfull):
-                    lms = guaranteed_lms(J,S)
+                    in_lti = guaranteed_lms(J,S)
                     if not sound: 
-                        if not curfull and any(self.R0.monomial_divides(m,v.lm()) for m in lms):
+                        if not curfull and in_lti(v.lm()):
                             # If killing ts causes a more leading term of
                             # another generator to zero out leaving an
                             # intermediate term to lead, which is us. This
@@ -1053,8 +1055,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                             # generically present, but still may only over
                             # approximate the resulting ideals
                             return
-                        if any(self.R0.monomial_divides(m,w.lm()) 
-                              for w in vs[:vi] if lp.get_max(lp[w.lm()]) == 0.0 for m in lms):
+                        if any(in_lti(w.lm()) for w in vs[:vi] if lp.get_max(lp[w.lm()]) == 0.0):
                             # Check similarly as above for smaller monomials of
                             # this same weight we have previously excluded (common case)
                             return
@@ -1062,7 +1063,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     for wk in unset:
                         ws = self.get_vss(wk[0])[wk[1]]
                         p = ws[wk[2]].lm()
-                        if any(self.R0.monomial_divides(m,p) for m in lms):
+                        if in_lti(p):
                             lp.set_min(lp[p],1.0)
                             sav.add(wk)
                             num_in[wk[0]] += 1
