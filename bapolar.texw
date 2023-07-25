@@ -555,40 +555,63 @@ def three_place_ideals_up_to(ba,d=1,Jxi=None):
 
 def lp_only_look(ba):
     from operator import concat
-    lp1 = ba.get_linear_program(((1,1,0),),((2,1,0),(1,2,0)))
-    xs1 = [x for vs in ba.get_vss((1,1,0)).values() for x in vs]
-    lp1 = lp_integer_points(lp1,xs1)
-    lp2 = ba.get_linear_program(((1,0,1),),((2,0,1),(1,0,2)))
-    xs2 = [x for vs in ba.get_vss((1,0,1)).values() for x in vs]
-    lp2 = lp_integer_points(lp2,xs2)
-    lp3 = ba.get_linear_program(((0,1,1),),((0,2,1),(0,1,2)))
-    xs3 = [x for vs in ba.get_vss((0,1,1)).values() for x in vs]
-    lp3 = lp_integer_points(lp3,xs3)
-    lps = [lp1,lp2,lp3]
-    xss = [xs1,xs2,xs3]
-    lp = ba.get_linear_program((),((1,1,0),(1,0,1),(0,1,1),(1,1,1)))
-    si = 0 
+    tmtmcs = [((1,1,0),((2,1,0),(1,2,0))), 
+              ((1,0,1),((2,0,1),(1,0,2))),
+              ((0,1,1),((0,2,1),(0,1,2)))]
+    lps = []
+    xss = []
+    for tm,tmcs in tmtmcs:
+        lp = ba.get_linear_program((tm,),tmcs)
+        xs = [x.lm() for vs in ba.get_vss(tm).values() for x in vs]
+        lps.append(lp_integer_points(lp,xs))
+        xss.append(xs)
+    lp = ba.get_linear_program(((1,1,0),(1,0,1),(0,1,1)),((1,1,1),))
+    xs = [x.lm() for tm,_ in tmtmcs for vs in ba.get_vss(tm).values() for x in vs]
     yss = [[],[],[]]
+    sols = [[],[],[]]
+    @cache
+    def getJxis(lpi,si):
+        tm,tmcs = tmtmcs[lpi]
+        res = list(ba.get_ideals_for_tm((tm,),tmcs,preset_choices=sols[lpi][si]))
+        if len(res) == 0:
+            lp.set_max(lp[(lpi,si)],0.0)
+        return res
+    si = 0 
     while True:
         fails = 0
         for lpi,(lpx,xsx) in enumerate(zip(lps,xss)):
+            print(lpi,si)
             try:
                 sol = next(lpx)
-                for x in xsx:
-                    if sol[x.lm()] == 1.0:
-                        lp.add_constraint(lp[(lpi,si)] <= lp[x.lm()])
-                    else:
-                        lp.add_constraint(lp[(lpi,si)] <= 1-lp[x.lm()])
-                yss[lpi].append((lpi,si))
                 lp.set_min(lp[(lpi,si)],0.0)
                 lp.set_max(lp[(lpi,si)],1.0)
+                sol_small = {}
+                for x in xsx:
+                    if round(sol[x]) == 1.0:
+                        lp.add_constraint(lp[(lpi,si)] <= lp[x])
+                        sol_small[x] = True
+                    else:
+                        lp.add_constraint(lp[(lpi,si)] <= 1-lp[x])
+                        sol_small[x] = False
+                yss[lpi].append((lpi,si))
+                sols[lpi].append(sol_small)
                 lpc = deepcopy(lp)
                 lpc.set_min(lp[(lpi,si)],1.0)
                 for lpj in range(3):
                     if lpj != lpi:
                         lpc.add_constraint(lp.sum(lp[v] for v in yss[lpj]) == 1)
-                for sol in lp_integer_points(lpc,reduce(concat,yss)):
-                    yield sol
+                for sol in lp_integer_points(lpc,xs):
+                # for sol in lp_integer_points(lpc,reduce(concat,yss)):
+                # for sol in lp_integer_points(lpc,xs+reduce(concat,yss)):
+                    Jxiss = [getJxis(*y) for ys in yss for y in ys if round(sol[y]) == 1.0]
+                    assert len(Jxiss) == 3
+                    for Jxis in product(*Jxiss):
+                        Jxi = ba.sum_ideals_S(Jxis)
+                        try:
+                            next(ba.get_ideals_for_tm([],[(1,1,1)],*Jxi))
+                            yield Jxi
+                        except StopIteration:
+                            pass
             except StopIteration:
                 fails += 1
         if fails == 3:
@@ -848,7 +871,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         return R(t(R.gens()[self.nvarsx:self.nvarsx+tg]+(R.zero(),)*(tg-Rg)))
     
     def get_ideals_for_tm(self,tms=[],tmcs=[],J=None,S=None,xi=0,
-                          search_above=True,simple_lp=False,sound=False):
+                          search_above=True,simple_lp=False,sound=False,
+                          preset_choices = {}):
         tms = tuple(tms)
         tmcs = tuple(tmcs)
         
@@ -1088,6 +1112,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         yield (JI, [self.lift_param(J.ring(),s) for s in S], curfull)
                         
                 def rec(J,S,xi,curfull):
+                    if preset_choices.get(v.lm(),curfull) != curfull:
+                        return
                     in_lti = guaranteed_lms(J,S)
                     if not sound: 
                         if not curfull and in_lti(v.lm()):
