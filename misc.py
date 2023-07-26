@@ -85,48 +85,49 @@ def lp_integer_points(lp,xs=None,fullsol=True,prunef=lambda psol: True):
                 yield copy(sol)
             return
         x = max(remxs, key=lambda x: abs(csol[x]-round(csol[x])))
-        print('%s%s %d %.2f %d' % (' '*len(sol),str(x),lp.get_min(lp[x]),
-                                 csol[x],lp.get_max(lp[x])))
-        v = floor(csol[x]+1e-13)
+        v = floor(csol[x]+1e-10)
+        omin = lp.get_min(lp[x])
         omax = lp.get_max(lp[x])
         if v == omax:
             v -= 1
+        assert v >= lp.get_min(lp[x])
+        assert v+1 <= lp.get_max(lp[x])
+        print('%s%s %d %.2f %d' % (' '*len(sol),str(x),lp.get_min(lp[x]),
+                                 csol[x],lp.get_max(lp[x])))
         hi_first = csol[x] - v >= 0.5
         if hi_first:
-            omin = lp.get_min(lp[x])
             lp.set_min(lp[x],v+1)
             if v+1 == lp.get_max(lp[x]):
                 sol[x] = v+1
                 if prunef(sol):
-                    for res in dfs(abs(csol[x]-(v+1)) > 1e-13):
+                    for res in dfs(abs(csol[x]-(v+1)) > 1e-10):
                         yield res
                 del sol[x]
             else:
-                for res in dfs(abs(csol[x]-(v+1)) > 1e-13):
+                for res in dfs(abs(csol[x]-(v+1)) > 1e-10):
                     yield res
             lp.set_min(lp[x],omin)
         lp.set_max(lp[x],v)
         if v == lp.get_min(lp[x]):
             sol[x] = v
             if prunef(sol):
-                for res in dfs(abs(csol[x]-v) > 1e-13):
+                for res in dfs(abs(csol[x]-v) > 1e-10):
                     yield res
             del sol[x]
         else:
-            for res in dfs(abs(csol[x]-v) > 1e-13):
+            for res in dfs(abs(csol[x]-v) > 1e-10):
                 yield res
         lp.set_max(lp[x],omax)
         if not hi_first:
-            omin = lp.get_min(lp[x])
             lp.set_min(lp[x],v+1)
             if v+1 == lp.get_max(lp[x]):
                 sol[x] = v+1
                 if prunef(sol):
-                    for res in dfs(abs(csol[x]-(v+1)) > 1e-13):
+                    for res in dfs(abs(csol[x]-(v+1)) > 1e-10):
                         yield res
                 del sol[x]
             else:
-                for res in dfs(abs(csol[x]-(v+1)) > 1e-13):
+                for res in dfs(abs(csol[x]-(v+1)) > 1e-10):
                     yield res
             lp.set_min(lp[x],omin)
     return dfs()
