@@ -555,26 +555,31 @@ def three_place_ideals_up_to(ba,d=1,Jxi=None):
 
 def lp_only_look(ba):
     from operator import concat
-    tmtmcs = [((1,1,0),((2,1,0),(1,2,0))), 
-              ((1,0,1),((2,0,1),(1,0,2))),
-              ((0,1,1),((0,2,1),(0,1,2)))]
+    tms = [(1,1,0),(1,0,1),(0,1,1)]
+    tmcss = [((2,1,0),(1,2,0)), 
+              ((2,0,1),(1,0,2)),
+              ((0,2,1),(0,1,2))]
     lps = []
     xss = []
-    for tm,tmcs in tmtmcs:
+    for tm,tmcs in zip(tms,tmcss):
         lp = ba.get_linear_program((tm,),tmcs)
         xs = [x.lm() for vs in ba.get_vss(tm).values() for x in vs]
-        lps.append(lp_integer_points(lp,xs))
+        lps.append(lp_integer_points(lp,xs,fullsol=False))
         xss.append(xs)
     lp = ba.get_linear_program(((1,1,0),(1,0,1),(0,1,1)),((1,1,1),))
-    xs = [x.lm() for tm,_ in tmtmcs for vs in ba.get_vss(tm).values() for x in vs]
-    yss = [[],[],[]]
-    sols = [[],[],[]]
+    xs = [x.lm() for tm in tms for vs in ba.get_vss(tm).values() for x in vs]
+    yss = [[] for _ in range(3)]
+    sols = [[] for _ in range(3)]
+    sols_ss = [get_set_system() for _ in range(3)]
+    remove = set()
     @cache
     def getJxis(lpi,si):
-        tm,tmcs = tmtmcs[lpi]
+        tm = tms[lpi]
+        tmcs = tmcss[lpi]
         res = list(ba.get_ideals_for_tm((tm,),tmcs,preset_choices=sols[lpi][si]))
         if len(res) == 0:
-            lp.set_max(lp[(lpi,si)],0.0)
+            remove.add((lpi,si))
+            print("REMOVE",remove)
         return res
     si = 0 
     while True:
@@ -583,28 +588,39 @@ def lp_only_look(ba):
             print(lpi,si)
             try:
                 sol = next(lpx)
-                lp.set_min(lp[(lpi,si)],0.0)
-                lp.set_max(lp[(lpi,si)],1.0)
-                sol_small = {}
-                for x in xsx:
-                    if round(sol[x]) == 1.0:
-                        lp.add_constraint(lp[(lpi,si)] <= lp[x])
-                        sol_small[x] = True
-                    else:
-                        lp.add_constraint(lp[(lpi,si)] <= 1-lp[x])
-                        sol_small[x] = False
                 yss[lpi].append((lpi,si))
-                sols[lpi].append(sol_small)
-                lpc = deepcopy(lp)
-                lpc.set_min(lp[(lpi,si)],1.0)
-                for lpj in range(3):
-                    if lpj != lpi:
-                        lpc.add_constraint(lp.sum(lp[v] for v in yss[lpj]) == 1)
-                for sol in lp_integer_points(lpc,xs):
-                # for sol in lp_integer_points(lpc,reduce(concat,yss)):
-                # for sol in lp_integer_points(lpc,xs+reduce(concat,yss)):
-                    Jxiss = [getJxis(*y) for ys in yss for y in ys if round(sol[y]) == 1.0]
-                    assert len(Jxiss) == 3
+                sols[lpi].append(sol)
+                sols_ss[lpi][0]([m for m,v in sol.items() if v==0],si)
+                def getSlohis(psol):
+                    Slohis = [([],set([v.lm() for vs in ba.get_vss(tm).values() 
+                                   for v in vs])) for tm in tms]
+                    for m,v in psol.items():
+                        lpj = tms.index(ba.polynomial_tm(m))
+                        if v == 0:
+                            Slohis[lpj][0].append(m)
+                        else:
+                            Slohis[lpj][1].remove(m)
+                    return Slohis
+                def prunef(psol):
+                    Slohis = getSlohis(psol)
+                    Slo,Shi = Slohis[lpi]
+                    return all(sol[e] == 0 for e in Slo) and \
+                            all(m in Shi for m,v in sol.items() if v == 0) and \
+                            all( any(True for _,si in iter_sets(Slo,Shi) 
+                                     if (lpj,si) not in remove)
+                               for lpj,((_,iter_sets),(Slo,Shi))
+                               in enumerate(zip(sols_ss,Slohis)) if lpi != lpj)
+                for sol in lp_integer_points(lp,xs,fullsol=False,prunef=prunef):
+                    Slohis = getSlohis(sol)
+                    # assert all(sorted(Slo) == sorted(Shi) for Slo,Shi in Slohis)
+                    sis = [next(iter_sets(Slo,Shi))[1]
+                           for (_,iter_sets),(Slo,Shi) in zip(sols_ss,Slohis)]
+                    Jxiss = [getJxis(lpj,si) for lpj,si in enumerate(sis)]
+                    try:
+                        assert len(Jxiss) == 3
+                    except:
+                        embed()
+                        raise
                     for Jxis in product(*Jxiss):
                         Jxi = ba.sum_ideals_S(Jxis)
                         try:
