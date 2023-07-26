@@ -555,6 +555,7 @@ def three_place_ideals_up_to(ba,d=1,Jxi=None):
 
 def lp_only_look(ba):
     from operator import concat
+    from sage.numerical.mip import MIPSolverException
     tms = [(1,1,0),(1,0,1),(0,1,1)]
     tmcss = [((2,1,0),(1,2,0)), 
               ((2,0,1),(1,0,2)),
@@ -590,7 +591,6 @@ def lp_only_look(ba):
                 sol = next(lpx)
                 yss[lpi].append((lpi,si))
                 sols[lpi].append(sol)
-                sols_ss[lpi][0]([m for m,v in sol.items() if v==0],si)
                 def getSlohis(psol):
                     Slohis = [([],set([v.lm() for vs in ba.get_vss(tm).values() 
                                    for v in vs])) for tm in tms]
@@ -611,24 +611,30 @@ def lp_only_look(ba):
                         lp.set_max(lp[m],0.0)
                     else:
                         lp.set_min(lp[m],1.0)
-                for fsol in lp_integer_points(lp,xs,fullsol=False,prunef=prunef):
-                    Slohis = getSlohis(fsol)
-                    # assert all(sorted(Slo) == sorted(Shi) for Slo,Shi in Slohis)
-                    sis = [next(iter_sets(Slo,Shi))[1]
-                           for (_,iter_sets),(Slo,Shi) in zip(sols_ss,Slohis)]
-                    Jxiss = [getJxis(lpj,si) for lpj,si in enumerate(sis)]
-                    try:
-                        assert len(Jxiss) == 3
-                    except:
-                        embed()
-                        raise
-                    for Jxis in product(*Jxiss):
-                        Jxi = ba.sum_ideals_S(Jxis)
+                try:
+                    lp.solve()
+                    sols_ss[lpi][0]([m for m,v in sol.items() if v==0],si)
+                    for fsol in lp_integer_points(lp,xs,fullsol=False,prunef=prunef):
+                        Slohis = getSlohis(fsol)
+                        # assert all(sorted(Slo) == sorted(Shi) for Slo,Shi in Slohis)
+                        sis = [next(iter_sets(Slo,Shi))[1]
+                               for (_,iter_sets),(Slo,Shi) in zip(sols_ss,Slohis)]
+                        Jxiss = [getJxis(lpj,si) for lpj,si in enumerate(sis)]
                         try:
-                            next(ba.get_ideals_for_tm([],[(1,1,1)],*Jxi))
-                            yield Jxi
-                        except StopIteration:
-                            pass
+                            assert len(Jxiss) == 3
+                        except:
+                            embed()
+                            raise
+                        for Jxis in product(*Jxiss):
+                            Jxi = ba.sum_ideals_S(Jxis)
+                            try:
+                                next(ba.get_ideals_for_tm([],[(1,1,1)],*Jxi))
+                                yield Jxi
+                            except StopIteration:
+                                pass
+                except MIPSolverException:
+                    print("SKIPPING")
+                    pass
                 for m in sol.keys():
                     lp.set_max(lp[m],1.0)
                     lp.set_min(lp[m],0.0)
