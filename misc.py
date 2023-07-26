@@ -80,7 +80,7 @@ def lp_integer_points(lp,xs=None,fullsol=True,prunef=lambda psol: True):
             if fullsol:
                 yield csol
             else:
-                yield sol
+                yield copy(sol)
             return
         x = max(remxs, key=lambda x: abs(csol[x]-round(csol[x])))
         print('%s%s %d %.2f %d' % (' '*len(sol),str(x),lp.get_min(lp[x]),
