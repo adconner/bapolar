@@ -1325,7 +1325,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
 
     @cache
     def get_linear_program(self, tms, tmcs=(), simple=False):
-        prog = MixedIntegerLinearProgram(solver='GLPK',maximization=False)
+        prog = MixedIntegerLinearProgram(solver='GLPK')
         # prog.set_binary(prog.default_variable())
         # # if set_real, be sure to change exact comparisons to within machine precision
         prog.set_real(prog.default_variable())
@@ -1344,7 +1344,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         add_set, iter_sets = get_set_system()
             
         nconstraints = 0
-        def add_constraint(rowvks,colvks,kerdim):
+        def add_constraint(rowvks,colvks,kerdim,deduplp=None):
             assert kerdim <= len(colvks)
             if len(colvks) == kerdim:
                 return False
@@ -1361,14 +1361,18 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     # this condition is one we have added plus conditions 
                     # x <= 1 or 0 <= x
                     return False
-            # cc = prog.sum(prog[self.get_vss(tm)[vk][i].lm()] for tm,vk,i in rowvks) + kerdim - \
-            #      prog.sum(prog[self.get_vss(tm)[vk][i].lm()] for tm,vk,i in colvks)
-            # from sage.numerical.mip import MIPSolverException
-            # prog.set_objective(cc)
-            # s = prog.solve()
-            # prog.set_objective(0.0)
-            # if s >= -1e-9:
-            #     return
+            if deduplp is not None:
+                from sage.numerical.mip import MIPSolverException
+                cc = deduplp.sum(deduplp[self.get_vss(tm)[vk][i].lm()] for tm,vk,i in rowvks) + kerdim - \
+                     deduplp.sum(deduplp[self.get_vss(tm)[vk][i].lm()] for tm,vk,i in colvks)
+                deduplp.set_objective(cc)
+                deduplp.set_min(deduplp.default_variable(),0.0)
+                deduplp.set_max(deduplp.default_variable(),1.0)
+                s = deduplp.solve()
+                deduplp.set_objective(0.0)
+                if s >= -1e-9:
+                    return False
+                deduplp.add_constraint(cc >= 0)
             prows = [self.get_vss(tm)[vk][i] for tm,vk,i in rowvks]
             pcols = [self.get_vss(tm)[vk][i] for tm,vk,i in colvks]
             print(prows,pcols,kerdim)
@@ -1382,7 +1386,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             return True
             
         Q = self.get_quiver_representation(tms,tmcs)
-        def add_relations(to,froms,interval_length_bound=oo):
+        def add_relations(to,froms,deduplp,interval_length_bound=oo):
             if len(froms) == 0:
                 return
             rowvksall = [to + (i,) for i in range(len(self.get_vss(to[0])[to[1]]))]
@@ -1415,23 +1419,27 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     quotdim = Msub[:len(quotcols)].rank()
                     Msub.echelonize()
                     kerdim = len(subcols) - Msub[quotdim:].rank()
-                    add_constraint(rowvks,colvks,kerdim)
+                    add_constraint(rowvks,colvks,kerdim,deduplp)
                     if kerdim == 0:
                         break
                 if len(quotcols) == 0: # most precise knowledge here
                     for i in M[::-1,subcols].pivot_rows():
                         i = M.nrows() - 1 - i
                         if add_constraint([rowvksall[i]],[colvksall[j] for j in subcols], 
-                                          len(subcols)-1):
+                                          len(subcols)-1,deduplp):
                             print ('EXACT')
+        deduplps = {}
         for (tm,wt),(tmr,wtr),M in Q.edges():
             if tm == tmr:
-                add_relations((tmr,wtr),[(tm,wt)])
+                deduplp = deduplps.setdefault(tm,MixedIntegerLinearProgram(
+                    solver='GLPK',maximization=False))
+                add_relations((tmr,wtr),[(tm,wt)],deduplp)
         for (tmr,wtr) in Q:
             froms = [(tm,wt) for (tm,wt),_,_ in Q.incoming_edges((tmr,wtr)) if tmr != tm]
+            deduplp = MixedIntegerLinearProgram(solver='GLPK',maximization=False)
             for k in range(1,3):
                 for fs in combinations(froms,k):
-                    add_relations((tmr,wtr), fs, interval_length_bound = 1)
+                    add_relations((tmr,wtr), fs, deduplp, interval_length_bound = 1)
         return prog
         
         # constraint that all of ps implies at least one of the qs
