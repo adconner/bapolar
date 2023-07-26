@@ -68,7 +68,8 @@ def lp_integer_points(lp,xs=None,fullsol=True,prunef=lambda psol: True):
     lp = deepcopy(lp)
     if xs is None:
         xs = list(lp.default_variable().keys())
-    sol = {}
+    sol = {x : lp.get_min(lp[x]) for x in xs 
+           if lp.get_min(lp[x]) == lp.get_max(lp[x])}
     def dfs():
         try:
             lp.solve()

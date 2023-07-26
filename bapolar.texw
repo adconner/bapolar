@@ -602,16 +602,17 @@ def lp_only_look(ba):
                             Slohis[lpj][1].remove(m)
                     return Slohis
                 def prunef(psol):
-                    Slohis = getSlohis(psol)
-                    Slo,Shi = Slohis[lpi]
-                    return all(sol[e] == 0 for e in Slo) and \
-                            all(m in Shi for m,v in sol.items() if v == 0) and \
-                            all( any(True for _,si in iter_sets(Slo,Shi) 
+                    return all( any(True for _,si in iter_sets(Slo,Shi) 
                                      if (lpj,si) not in remove)
                                for lpj,((_,iter_sets),(Slo,Shi))
-                               in enumerate(zip(sols_ss,Slohis)) if lpi != lpj)
-                for sol in lp_integer_points(lp,xs,fullsol=False,prunef=prunef):
-                    Slohis = getSlohis(sol)
+                               in enumerate(zip(sols_ss,getSlohis(psol))) if lpi != lpj)
+                for m,v in sol.items():
+                    if v == 0:
+                        lp.set_max(lp[m],0.0)
+                    else:
+                        lp.set_min(lp[m],1.0)
+                for fsol in lp_integer_points(lp,xs,fullsol=False,prunef=prunef):
+                    Slohis = getSlohis(fsol)
                     # assert all(sorted(Slo) == sorted(Shi) for Slo,Shi in Slohis)
                     sis = [next(iter_sets(Slo,Shi))[1]
                            for (_,iter_sets),(Slo,Shi) in zip(sols_ss,Slohis)]
@@ -628,6 +629,9 @@ def lp_only_look(ba):
                             yield Jxi
                         except StopIteration:
                             pass
+                for m in sol.keys():
+                    lp.set_max(lp[m],1.0)
+                    lp.set_min(lp[m],0.0)
             except StopIteration:
                 fails += 1
         if fails == 3:
