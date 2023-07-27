@@ -70,6 +70,7 @@ def lp_integer_points(lp,xs=None,fullsol=True,prunef=lambda psol: True):
         xs = list(lp.default_variable().keys())
     sol = {x : lp.get_min(lp[x]) for x in xs 
            if lp.get_min(lp[x]) == lp.get_max(lp[x])}
+    st = []
     def dfs(check_solvable=True):
         try:
             if check_solvable:
@@ -92,11 +93,12 @@ def lp_integer_points(lp,xs=None,fullsol=True,prunef=lambda psol: True):
             v -= 1
         assert v >= lp.get_min(lp[x])
         assert v+1 <= lp.get_max(lp[x])
-        print('%s%s %d %.2f %d' % (' '*len(sol),str(x),lp.get_min(lp[x]),
+        print('%s%s %d %.2f %d' % (''.join(st),str(x),lp.get_min(lp[x]),
                                  csol[x],lp.get_max(lp[x])))
         hi_first = csol[x] - v >= 0.5
         if hi_first:
             lp.set_min(lp[x],v+1)
+            st.append(' ')
             if v+1 == lp.get_max(lp[x]):
                 sol[x] = v+1
                 if prunef(sol):
@@ -107,6 +109,9 @@ def lp_integer_points(lp,xs=None,fullsol=True,prunef=lambda psol: True):
                 for res in dfs(abs(csol[x]-(v+1)) > 1e-10):
                     yield res
             lp.set_min(lp[x],omin)
+            st[-1] = '.'
+        else:
+            st.append(' ')
         lp.set_max(lp[x],v)
         if v == lp.get_min(lp[x]):
             sol[x] = v
@@ -119,6 +124,7 @@ def lp_integer_points(lp,xs=None,fullsol=True,prunef=lambda psol: True):
                 yield res
         lp.set_max(lp[x],omax)
         if not hi_first:
+            st[-1] = '.'
             lp.set_min(lp[x],v+1)
             if v+1 == lp.get_max(lp[x]):
                 sol[x] = v+1
@@ -130,5 +136,6 @@ def lp_integer_points(lp,xs=None,fullsol=True,prunef=lambda psol: True):
                 for res in dfs(abs(csol[x]-(v+1)) > 1e-10):
                     yield res
             lp.set_min(lp[x],omin)
+        st.pop()
     return dfs()
         
