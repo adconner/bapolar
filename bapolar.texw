@@ -1022,7 +1022,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             #             self.get_vs((1,1,0)) if lp.get_min(lp[w.lm()]) ==
             #             lp.get_max(lp[w.lm()]))
             if all(num_in[tm] == max(self.tm_dim(tm) - self.r,0) and \
-                           num_out[tm] == min(self.r - self.tm_codim_tperp(tm),self.tm_dim(tm)) for tm in tms) and \
+                           num_out[tm] == min(self.r - self.tm_codim_tperp(tm),self.tm_dim_tperp(tm)) for tm in tms) and \
                        (not cur_search_above or all(num_out[tm] >= min(self.r - self.tm_codim_tperp(tm),self.tm_dim(tm)) for tm in tmcs)):
                 yield (J,S,xi)
                 return
