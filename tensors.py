@@ -12,11 +12,26 @@ def matrixmult(m,n,l):
     T = sum(u[i*n+j]*v[j*l+k]*w[k*m+i] for i,j,k in product(range(m),range(n),range(l)))
     return (T,dims)
 
+def tensor_W():
+    dims = (2,2,2)
+    R = PolynomialRing(QQ,['%s%d'%(x,i) for x,d in zip('abc',dims) for i in range(d)])
+    T = R.gen(0)*R.gen(3)*R.gen(5) + R.gen(1)*R.gen(2)*R.gen(5) + R.gen(1)*R.gen(3)*R.gen(4)
+    return T,dims
+
 def skewcw(q=2):
     assert q % 2 == 0
     dims=(q+1,q+1,q+1)
-    R = PolynomialRing(QQ,['%s%d'%(x,i) for x in 'abc' for i in range(q+1)])
+    R = PolynomialRing(QQ,['%s%d'%(x,i) for x,d in zip('abc',dims) for i in range(d)])
     T = sum([sigma.sign()*prod(R.gen(i*(q+1)+
+        (0 if sigma(i+1) == 1 else 1+(q//2)*(sigma(i+1)-2)+rho )) for i in range(3))
+             for sigma in SymmetricGroup(3) for rho in range(q//2)])
+    return T,dims
+
+def cw2(q=2):
+    assert q % 2 == 0
+    dims=(q+1,q+1,q+1)
+    R = PolynomialRing(QQ,['%s%d'%(x,i) for x,d in zip('abc',dims) for i in range(d)])
+    T = sum([prod(R.gen(i*(q+1)+
         (0 if sigma(i+1) == 1 else 1+(q//2)*(sigma(i+1)-2)+rho )) for i in range(3))
              for sigma in SymmetricGroup(3) for rho in range(q//2)])
     return T,dims
@@ -65,4 +80,30 @@ def tensor_sum(Sdat,Tdat):
         curd += d1 + d2
     return S(Sxs) + T(Txs),tuple(d1+d2 for d1,d2 in zip(Sdim,Tdim))
 
+unextendible_suppert_333_dat = [
+    [(1,1,3), (1,2,2), (2,1,2), (3,3,1)],
+    [(1,1,3), (1,3,2), (2,3,1), (3,2,2)],
+    [(1,1,3), (1,2,2), (1,3,1), (2,1,2), (3,2,1)],
+    [(1,1,3), (1,2,2), (2,1,2), (2,3,1), (3,2,1)],
+    [(1,1,3), (1,2,2), (2,3,1), (3,1,2), (3,2,1)],
+    [(1,1,3), (1,3,2), (2,2,2), (3,1,2), (3,3,1)],
+    [(1,1,3), (1,2,2), (1,3,1), (2,1,2), (2,2,1), (3,1,1)],
+    [(1,1,3), (1,3,2), (2,2,2), (2,3,1), (3,1,2), (3,2,1)],
+    [(1,2,3), (1,3,2), (2,1,3), (2,2,2), (2,3,1), (3,1,2), (3,2,1)]]
+def unextenible_supports_333():
+    dims = (3,3,3)
+    R = PolynomialRing(QQ,'x',9)
+    Ts = []
+    for supp in unextendible_suppert_333_dat:
+        supp = [[i-1 for i in ix] for ix in supp]
+        Ts.append((sum(R.gen(i)*R.gen(3+j)*R.gen(6+k) for i,j,k in supp),dims))
+    T,_ = Ts.pop()
+    Ts.append((T - 2*R.gen(2)*R.gen(3+1)*R.gen(6+0),dims))
+    Ts.append((T,dims))
+    return Ts
 
+def fromT(T):
+    dims = (len(T),) + T[0].dimensions()
+    R = PolynomialRing(T[0].base_ring(),['%s%d' % (c,i+1) 
+                 for c,d in zip('abc',dims) for i in range(d)])
+    return (R.sum([e*R.gen(i)*R.gen(dims[0]+j)*R.gen(dims[0]+dims[1]+k) for i,m in enumerate(T) for (j,k),e in m.dict().items()]),dims)
