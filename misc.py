@@ -1,4 +1,6 @@
     
+# reimplementation of product from itertools which reorders its output to
+# achieve maximum laziness 
 def lproduct(*its):
     its = [iter(it) for it in its]
     pools = [[] for e in its]
@@ -16,6 +18,11 @@ def lproduct(*its):
         if not added:
             return
         
+# creates a data structure representing families of submultisets of some
+# universe set with two functions add_set and iter_sets. add_set adds a
+# multiset to the collection and iter_sets returns an iterator over all
+# multisets in the collection containing Slo and contained in Shi. Elements of
+# sets must be hashable
 def get_set_system():
     from functools import cache
     sets = {}
@@ -62,6 +69,11 @@ def get_set_system():
         return dfs(sets)
     return add_set,iter_sets
 
+# function to enumerate integer points of a polytope defined by input linear program
+# (sage MixedIntegerLinearProgram). If xs, a subset of variables, is provided,
+# this problem is solved for the projection of the polytope away from the
+# variables not in xs (solutions with integer values for the xs and possibly
+# noninteger values for the rest, achieving all the possible xs values).
 def lp_integer_points(lp,xs=None,fullsol=True,prunef=lambda psol: True):
     from copy import deepcopy
     from sage.numerical.mip import MIPSolverException
