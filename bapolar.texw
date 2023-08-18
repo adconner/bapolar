@@ -1340,6 +1340,23 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             prog.add_constraint(prog.sum(prog[v.lm()] 
                     for vs in self.get_vss(tm).values() for v in vs) <= 
                     max(self.tm_dim(tm) - self.r,0))
+            
+        if simple:
+            # constraint that all of ps implies at least one of the qs
+            def le_constraint(ps,qs):
+                ps = [p.lm() for p in ps]
+                qs = [p.lm() for p in qs]
+                prog.add_constraint(prog.sum(1-prog[p] for p in ps) +\
+                    prog.sum(prog[p] for p in qs) >= 1)
+            P = Poset((tms+tmcs,lambda a,b: all(i<=j for i,j in zip(a,b))))
+            for tm,tmr in P.cover_relations():
+                for vs in self.get_vss(tm).values():
+                    for v in vs:
+                        for y in self.all_monomials(tuple(map(sub,tmr,tm))):
+                            # print('simple',[v],[v*y])
+                            le_constraint([v],[v*y])
+            return prog
+
 
         add_set, iter_sets = get_set_system()
             
@@ -1442,25 +1459,6 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     add_relations((tmr,wtr), fs, deduplp, interval_length_bound = 1)
         return prog
         
-        # constraint that all of ps implies at least one of the qs
-        constraints = []
-        def le_constraint(ps,qs):
-            ps = [p.lm() for p in ps]
-            qs = [p.lm() for p in qs]
-            if any(all(p in ps for p in ps1) and
-                    all(p in qs for p in qs1)
-                   for ps1,qs1 in constraints):
-                return
-            constraints.append((ps,qs))
-            prog.add_constraint(prog.sum(1-prog[p] for p in ps) +\
-                prog.sum(prog[p] for p in qs) >= 1)
-        P = Poset((tms+tmcs,lambda a,b: all(i<=j for i,j in zip(a,b))))
-        for tm,tmr in P.cover_relations():
-            for vs in self.get_vss(tm).values():
-                for v in vs:
-                    for y in self.all_monomials(tuple(map(sub,tmr,tm))):
-                        le_constraint([v],[v*y])
-
         # vsix = {}
         # lmtov = {}
         # for tm in tms+tmcs:
@@ -1543,7 +1541,10 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     for tmvkscur in combinations(tmvks,k):
                         raising_constraints(tmvkscur)
         for tmvks in groups_multiplying_up.values():
+            print(len(tmvks),tmvks)
             for k in range(2,len(tmvks)+1):
+                if binomial(len(tmvks),k) > 1000:
+                    break
                 for tmvkscur in combinations(tmvks,k):
                     wts = set()
                     for tm,wt,i in tmvkscur:
