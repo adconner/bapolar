@@ -1406,45 +1406,86 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         def add_relations(to,froms,deduplp,interval_length_bound=oo):
             if len(froms) == 0:
                 return
-            rowvksall = [to + (i,) for i in range(len(self.get_vss(to[0])[to[1]]))]
-            colvksall = [(tm,wt,i) for tm,wt in froms 
-                         for i in range(len(self.get_vss(tm)[wt]))]
-            M = block_matrix([[Q.edge_label(f,to) for f in froms]])
-            assert M.ncols() == len(colvksall) and M.nrows() == len(rowvksall)
-            _,jx = M.subdivisions()
-            jx = [0]+jx+[M.ncols()]
-
-            # potentially add a relation for each choice of 
-            # filtration subquotient in froms...
-            intervals = [[(s,s+l) for l in range(1,min(b-a+1,interval_length_bound+1)) 
-                          for s in range(a,b-l+1)] for a,b in zip(jx,jx[1:])]
-            for Is in lproduct(*intervals):
-                subcols = [j for a,b in Is for j in range(a,b)]
-                if len(subcols) == 0:
-                    continue
-                quotcols = [j for (a,_),first in zip(Is,jx) for j in range(first,a)]
-                colvks = [colvksall[j] for j in subcols]
-                try:
-                    ilast = next(i+1 for i in range(M.nrows()-1,-1,-1)
-                                 if not M[i,subcols+quotcols].is_zero())
-                except StopIteration:
-                    ilast = 0
-                # and each quotient in tos
-                for quoti in range(ilast-1,-1,-1):
-                    rowvks = [rowvksall[i] for i in range(quoti,ilast)]
-                    Msub = M[quoti:ilast,quotcols+subcols].T
-                    quotdim = Msub[:len(quotcols)].rank()
-                    Msub.echelonize()
-                    kerdim = len(subcols) - Msub[quotdim:].rank()
-                    add_constraint(rowvks,colvks,kerdim,deduplp)
-                    if kerdim == 0:
-                        break
-                if len(quotcols) == 0: # most precise knowledge here
-                    for i in M[::-1,subcols].pivot_rows():
-                        i = M.nrows() - 1 - i
-                        if add_constraint([rowvksall[i]],[colvksall[j] for j in subcols], 
-                                          len(subcols)-1,deduplp):
-                            print ('EXACT')
+            tosize = len(self.get_vss(to[0])[to[1]])
+            for l in range(1,tosize+1):
+            # for l in range(1,min(tosize,interval_length_bound)+1):
+                for a in range(tosize-l+1):
+                    empty = False
+                    b = a+l
+                    interval_choices = []
+                    for f in froms:
+                        M = Q.edge_label(f,to)
+                        # want largest fb so that the subspace indexed up to fb maps into 
+                        # the subspace indexed up to b, ie, so that M[b:,:fb].is_zero()
+                        fb = next(fb for fb in range(M.ncols(),-1,-1) if M[b:,:fb].is_zero())
+                        # want largest fa so so that the subspace indexed up to fa maps 
+                        # into the subspace indexed up to a, ie, so that M[a:,:fa].is_zero()
+                        fa = next(fa for fa in range(M.ncols(),-1,-1) if M[a:,:fa].is_zero())
+                        assert fa <= fb
+                        if fa == fb:
+                            empty = True
+                            break
+                        if b-a <= interval_length_bound:
+                            interval_choices.append([(fal,fbl) for fal,fbl in combinations(range(fa,fb+1),2)])
+                        else:
+                            interval_choices.append([(fa,fb)])
+                        # interval_choices.append([(fal,fbl) for fal,fbl in combinations(range(fa,fb+1),2) if fbl - fal <= interval_length_bound])
+                        # interval_choices.append([(fal,fb) for fal in range(fa,fb) if fb - fal <= interval_length_bound])
+                    if empty:
+                        continue
+                    for intervals in lproduct(*interval_choices):
+                        M = block_matrix([[ Q.edge_label(f,to)[a:b, :fa] for f,(fa,fb) in zip(froms,intervals)] +\
+                                          [ Q.edge_label(f,to)[a:b, fa:fb] for f,(fa,fb) in zip(froms,intervals)]])
+                        quot = sum(fa for fa,_ in intervals)
+                        kerdim = M.ncols() - quot - len([j for j in M.pivots() if j >= quot])
+                        rowvks = [to+(i,) for i in range(a,b)]
+                        colvks = [f+(i,) for f,(fa,fb) in zip(froms,intervals) for i in range(fa,fb)]
+                        add_constraint(rowvks,colvks,kerdim,deduplp)
+                        if quot == 0:
+                            for i in M[::-1].pivot_rows():
+                                i = M.nrows() - 1 - i
+                                if add_constraint([rowvks[i]],colvks,len(colvks)-1,deduplp):
+                                    print ('EXACT')
+                            
+            # rowvksall = [to + (i,) for i in range(len(self.get_vss(to[0])[to[1]]))]
+            # colvksall = [(tm,wt,i) for tm,wt in froms 
+            #              for i in range(len(self.get_vss(tm)[wt]))]
+            # M = block_matrix([[Q.edge_label(f,to) for f in froms]])
+            # assert M.ncols() == len(colvksall) and M.nrows() == len(rowvksall)
+            # _,jx = M.subdivisions()
+            # jx = [0]+jx+[M.ncols()]
+            # # potentially add a relation for each choice of 
+            # # filtration subquotient in froms...
+            # intervals = [[(s,s+l) for l in range(1,min(b-a+1,interval_length_bound+1)) 
+            #               for s in range(a,b-l+1)] for a,b in zip(jx,jx[1:])]
+            # for Is in lproduct(*intervals):
+            #     subcols = [j for a,b in Is for j in range(a,b)]
+            #     if len(subcols) == 0:
+            #         continue
+            #     quotcols = [j for (a,_),first in zip(Is,jx) for j in range(first,a)]
+            #     colvks = [colvksall[j] for j in subcols]
+            #     try:
+            #         ilast = next(i+1 for i in range(M.nrows()-1,-1,-1)
+            #                      if not M[i,subcols+quotcols].is_zero())
+            #     except StopIteration:
+            #         ilast = 0
+            #     # and each quotient in tos
+            #     for quoti in range(ilast-1,-1,-1):
+            #         rowvks = [rowvksall[i] for i in range(quoti,ilast)]
+            #         Msub = M[quoti:ilast,quotcols+subcols].T
+            #         quotdim = Msub[:len(quotcols)].rank()
+            #         Msub.echelonize()
+            #         kerdim = len(subcols) - Msub[quotdim:].rank()
+            #         add_constraint(rowvks,colvks,kerdim,deduplp)
+            #         if kerdim == 0:
+            #             break
+            #     if len(quotcols) == 0: # most precise knowledge here
+            #         for i in M[::-1,subcols].pivot_rows():
+            #             i = M.nrows() - 1 - i
+            #             if add_constraint([rowvksall[i]],[colvksall[j] for j in subcols], 
+            #                               len(subcols)-1,deduplp):
+            #                 print ('EXACT')
+            
         deduplps = {}
         for (tm,wt),(tmr,wtr),M in Q.edges():
             if tm == tmr:
@@ -1454,9 +1495,11 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         for (tmr,wtr) in Q:
             froms = [(tm,wt) for (tm,wt),_,_ in Q.incoming_edges((tmr,wtr)) if tmr != tm]
             deduplp = MixedIntegerLinearProgram(solver='GLPK',maximization=False)
-            for k in range(1,3):
+            for k in range(1,len(froms)+1):
+            # for k in range(1,3):
                 for fs in combinations(froms,k):
-                    add_relations((tmr,wtr), fs, deduplp, interval_length_bound = 1)
+                    # add_relations((tmr,wtr), fs, deduplp)
+                    add_relations((tmr,wtr), fs, deduplp, interval_length_bound = 2)
         return prog
         
         # vsix = {}
