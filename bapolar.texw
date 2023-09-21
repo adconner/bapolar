@@ -1536,8 +1536,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         for (tmr,wtr) in Q:
             froms = [(tm,wt) for (tm,wt),_,_ in Q.incoming_edges((tmr,wtr))]
             # froms = [(tm,wt) for (tm,wt),_,_ in Q.incoming_edges((tmr,wtr)) if tmr != tm]
-            deduplp = None
-            # deduplp = MixedIntegerLinearProgram(solver='GLPK',maximization=False)
+            # deduplp = None
+            deduplp = MixedIntegerLinearProgram(solver='GLPK',maximization=False)
             # for k in range(1,3):
             #     for fs in combinations(froms,k):
             #         # add_relations((tmr,wtr), fs, deduplp)
@@ -1547,6 +1547,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             #     for fs in combinations(froms,k):
             #         add_relations((tmr,wtr), fs, deduplp, interval_length_bound = 0, full_interval_only = True)
             add_relations((tmr,wtr), froms, deduplp)
+        print(tms,tmcs,prog.number_of_constraints(),'constraints')
         return prog
         
         # vsix = {}
