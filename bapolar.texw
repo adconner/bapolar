@@ -552,6 +552,67 @@ def three_place_ideals_up_to(ba,d=1,Jxi=None):
         except StopIteration:
             pass
 
+def lp_only_look_strict(ba):
+    from operator import concat
+    from sage.numerical.mip import MIPSolverException
+    tms = [(1,1,0),(1,0,1),(0,1,1)]
+    tmcss = [((2,1,0),(1,2,0)), 
+              ((2,0,1),(1,0,2)),
+              ((0,2,1),(0,1,2))]
+    sols = []
+    sols_ss = []
+    for lpi,(tm,tmcs) in enumerate(zip(tms,tmcss)):
+        lp = ba.get_linear_program((tm,),tmcs,interval_length_bound=8)
+        xs = [x.lm() for vs in ba.get_vss(tm).values() for x in vs]
+        add_set, iter_sets = get_set_system()
+        sols_ss.append((add_set,iter_sets))
+        cursols = []
+        for si,sol in enumerate(lp_integer_points(lp,xs,fullsol=False)):
+            print(lpi,si)
+            cursols.append(sol)
+            add_set([m for m,v in sol.items() if v==0],si)
+        sols.append(cursols)
+    remove = set()
+    @cache
+    def getJxis(lpi,si):
+        tm = tms[lpi]
+        tmcs = tmcss[lpi]
+        res = list(ba.get_ideals_for_tm((tm,),tmcs,preset_choices=sols[lpi][si]))
+        if len(res) == 0:
+            remove.add((lpi,si))
+            print("REMOVE",remove)
+        return res
+    def getSlohis(psol):
+        Slohis = [([],set([v.lm() for vs in ba.get_vss(tm).values() 
+                       for v in vs])) for tm in tms]
+        for m,v in psol.items():
+            lpj = tms.index(ba.polynomial_tm(m))
+            if v == 0:
+                Slohis[lpj][0].append(m)
+            else:
+                Slohis[lpj][1].remove(m)
+        return Slohis
+    def prunef(psol):
+        return all( any(True for _,si in iter_sets(Slo,Shi) 
+                         if (lpj,si) not in remove)
+                   for lpj,((_,iter_sets),(Slo,Shi))
+                   in enumerate(zip(sols_ss,getSlohis(psol))) )
+    lp = ba.get_linear_program(((1,1,0),(1,0,1),(0,1,1)),((1,1,1),),interval_length_bound=4)
+    xs = [x.lm() for tm in tms for vs in ba.get_vss(tm).values() for x in vs]
+    for fsol in lp_integer_points(lp,xs,fullsol=False,prunef=prunef):
+        Slohis = getSlohis(fsol)
+        # assert all(sorted(Slo) == sorted(Shi) for Slo,Shi in Slohis)
+        sis = [next(iter_sets(Slo,Shi))[1]
+               for (_,iter_sets),(Slo,Shi) in zip(sols_ss,Slohis)]
+        Jxiss = [getJxis(lpj,si) for lpj,si in enumerate(sis)]
+        assert len(Jxiss) == 3
+        for Jxis in product(*Jxiss):
+            Jxi = ba.sum_ideals_S(Jxis)
+            try:
+                next(ba.get_ideals_for_tm([],[(1,1,1)],*Jxi))
+                yield Jxi
+            except StopIteration:
+                pass
 
 def lp_only_look(ba):
     from operator import concat
@@ -563,11 +624,13 @@ def lp_only_look(ba):
     lps = []
     xss = []
     for tm,tmcs in zip(tms,tmcss):
-        lp = ba.get_linear_program((tm,),tmcs)
+        lp = ba.get_linear_program((tm,),tmcs,interval_length_bound=7)
+        # lp = ba.get_linear_program(tuple(tms),tmcs+((1,1,1),))
+        # lp = ba.get_linear_program((tm,),tmcs+((1,1,1),))
         xs = [x.lm() for vs in ba.get_vss(tm).values() for x in vs]
         lps.append(lp_integer_points(lp,xs,fullsol=False))
         xss.append(xs)
-    lp = ba.get_linear_program(((1,1,0),(1,0,1),(0,1,1)),((1,1,1),))
+    lp = ba.get_linear_program(((1,1,0),(1,0,1),(0,1,1)),((1,1,1),),interval_length_bound=4)
     xs = [x.lm() for tm in tms for vs in ba.get_vss(tm).values() for x in vs]
     yss = [[] for _ in range(3)]
     sols = [[] for _ in range(3)]
@@ -586,9 +649,9 @@ def lp_only_look(ba):
     while True:
         fails = 0
         for lpi,(lpx,xsx) in enumerate(zip(lps,xss)):
-            print(lpi,si)
             try:
                 sol = next(lpx)
+                print(lpi,si)
                 yss[lpi].append((lpi,si))
                 sols[lpi].append(sol)
                 def getSlohis(psol):
@@ -620,11 +683,7 @@ def lp_only_look(ba):
                         sis = [next(iter_sets(Slo,Shi))[1]
                                for (_,iter_sets),(Slo,Shi) in zip(sols_ss,Slohis)]
                         Jxiss = [getJxis(lpj,si) for lpj,si in enumerate(sis)]
-                        try:
-                            assert len(Jxiss) == 3
-                        except:
-                            embed()
-                            raise
+                        assert len(Jxiss) == 3
                         for Jxis in product(*Jxiss):
                             Jxi = ba.sum_ideals_S(Jxis)
                             try:
@@ -1324,7 +1383,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         return Q
 
     @cache
-    def get_linear_program(self, tms, tmcs=(), simple=False):
+    def get_linear_program(self, tms, tmcs=(), simple=False, interval_length_bound=6):
         prog = MixedIntegerLinearProgram(solver='GLPK')
         # prog.set_binary(prog.default_variable())
         # # if set_real, be sure to change exact comparisons to within machine precision
@@ -1555,9 +1614,9 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             
         for (tmr,wtr) in Q:
             froms = [(tm,wt) for (tm,wt),_,_ in Q.incoming_edges((tmr,wtr))]
-            # deduplp = None
-            deduplp = MixedIntegerLinearProgram(solver='GLPK',maximization=False)
-            add_relations((tmr,wtr), froms, deduplp, interval_length_bound=3)
+            deduplp = None
+            # deduplp = MixedIntegerLinearProgram(solver='GLPK',maximization=False)
+            add_relations((tmr,wtr), froms, deduplp, interval_length_bound=interval_length_bound)
         print(tms,tmcs,prog.number_of_constraints(),'constraints')
         return prog
         
