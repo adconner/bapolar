@@ -1424,6 +1424,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         continue
                     add_set, iter_sets = get_set_system()
                     cols = []
+                    cols_ech = []
+                    cols_ech_pivots = []
                     jxs = [0 for _ in froms]
                     def dfs():
                         if len(cols) == l:
@@ -1433,18 +1435,29 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                             return
                         for ii,jx in enumerate(jxs):
                             startjx = jx
-                            while jx < Ms[ii].ncols() and block_matrix([
-                                    [Ms[a][:,b] for a,b in cols]+[Ms[ii][:,jx]]]).rank() < len(cols)+1:
+                            while jx < Ms[ii].ncols():
+                                nextcol = Ms[ii][:,jx]
+                                for j,col in zip(cols_ech_pivots,cols_ech):
+                                    nextcol -= nextcol[j,0]*col
+                                assert all(nextcol[j,0] == 0 for j in cols_ech_pivots)
+                                if not nextcol.is_zero():
+                                    break
                                 jx += 1
                             if jx == Ms[ii].ncols():
                                 continue
+                            nextpivot = next(ei for ei,e in enumerate(nextcol.list()) if e != 0)
+                            nextcol /= nextcol[nextpivot,0]
                             cols.append((ii,jx))
                             if any(True for _ in iter_sets([],cols)):
                                 cols.pop()
                                 continue
+                            cols_ech.append(nextcol)
+                            cols_ech_pivots.append(nextpivot)
                             jxs[ii] = jx+1
                             dfs()
                             jxs[ii] = startjx
+                            cols_ech_pivots.pop()
+                            cols_ech.pop()
                             add_set(cols,None)
                             cols.pop()
                     dfs()
