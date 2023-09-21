@@ -1408,44 +1408,85 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 return
             tosize = len(self.get_vss(to[0])[to[1]])
             for l in range(1,tosize+1):
-            # for l in range(1,min(tosize,interval_length_bound)+1):
                 for a in range(tosize-l+1):
-                    empty = False
                     b = a+l
-                    interval_choices = []
+                    rowvks = [to+(i,) for i in range(a,b)]
+                    Ms = []
                     for f in froms:
                         M = Q.edge_label(f,to)
                         # want largest fb so that the subspace indexed up to fb maps into 
                         # the subspace indexed up to b, ie, so that M[b:,:fb].is_zero()
                         fb = next(fb for fb in range(M.ncols(),-1,-1) if M[b:,:fb].is_zero())
-                        # want largest fa so so that the subspace indexed up to fa maps 
-                        # into the subspace indexed up to a, ie, so that M[a:,:fa].is_zero()
-                        fa = next(fa for fa in range(M.ncols(),-1,-1) if M[a:,:fa].is_zero())
-                        assert fa <= fb
-                        if fa == fb:
-                            empty = True
-                            break
-                        if b-a <= interval_length_bound:
-                            interval_choices.append([(fal,fbl) for fal,fbl in combinations(range(fa,fb+1),2)])
-                        else:
-                            interval_choices.append([(fa,fb)])
-                        # interval_choices.append([(fal,fbl) for fal,fbl in combinations(range(fa,fb+1),2) if fbl - fal <= interval_length_bound])
-                        # interval_choices.append([(fal,fb) for fal in range(fa,fb) if fb - fal <= interval_length_bound])
-                    if empty:
+                        Ms.append(M[a:b,:fb])
+                    r = block_matrix([Ms]).rank()
+                    if r != Ms[0].nrows():
+                        # could actually continue here with kerdim equal to defect if want
                         continue
-                    for intervals in lproduct(*interval_choices):
-                        M = block_matrix([[ Q.edge_label(f,to)[a:b, :fa] for f,(fa,fb) in zip(froms,intervals)] +\
-                                          [ Q.edge_label(f,to)[a:b, fa:fb] for f,(fa,fb) in zip(froms,intervals)]])
-                        quot = sum(fa for fa,_ in intervals)
-                        kerdim = M.ncols() - quot - len([j for j in M.pivots() if j >= quot])
-                        rowvks = [to+(i,) for i in range(a,b)]
-                        colvks = [f+(i,) for f,(fa,fb) in zip(froms,intervals) for i in range(fa,fb)]
-                        add_constraint(rowvks,colvks,kerdim,deduplp)
-                        if quot == 0:
-                            for i in M[::-1].pivot_rows():
-                                i = M.nrows() - 1 - i
-                                if add_constraint([rowvks[i]],colvks,len(colvks)-1,deduplp):
-                                    print ('EXACT')
+                    add_set, iter_sets = get_set_system()
+                    cols = []
+                    jxs = [0 for _ in froms]
+                    def dfs():
+                        if len(cols) == l:
+                            assert l > 0
+                            colvks = [froms[ii]+(jx,) for ii,jx in cols]
+                            add_constraint(rowvks,colvks,0,deduplp)
+                            return
+                        for ii,jx in enumerate(jxs):
+                            startjx = jx
+                            while jx < Ms[ii].ncols() and block_matrix([
+                                    [Ms[a][:,b] for a,b in cols]+[Ms[ii][:,jx]]]).rank() < len(cols)+1:
+                                jx += 1
+                            if jx == Ms[ii].ncols():
+                                continue
+                            cols.append((ii,jx))
+                            if any(True for _ in iter_sets([],cols)):
+                                cols.pop()
+                                continue
+                            jxs[ii] = jx+1
+                            dfs()
+                            jxs[ii] = startjx
+                            add_set(cols,None)
+                            cols.pop()
+                    dfs()
+                            
+                        
+
+                    
+                    # b = a+l
+                    # interval_choices = []
+                    # for f in froms:
+                    #     M = Q.edge_label(f,to)
+                    #     # want largest fb so that the subspace indexed up to fb maps into 
+                    #     # the subspace indexed up to b, ie, so that M[b:,:fb].is_zero()
+                    #     fb = next(fb for fb in range(M.ncols(),-1,-1) if M[b:,:fb].is_zero())
+                    #     # want largest fa so so that the subspace indexed up to fa maps 
+                    #     # into the subspace indexed up to a, ie, so that M[a:,:fa].is_zero()
+                    #     fa = next(fa for fa in range(M.ncols(),-1,-1) if M[a:,:fa].is_zero())
+                    #     assert fa <= fb
+                    #     if fa == fb:
+                    #         empty = True
+                    #         break
+                    #     if b-a <= interval_length_bound:
+                    #         interval_choices.append([(fal,fbl) for fal,fbl in combinations(range(fa,fb+1),2)])
+                    #     else:
+                    #         interval_choices.append([(fa,fb)])
+                    #     # interval_choices.append([(fal,fbl) for fal,fbl in combinations(range(fa,fb+1),2) if fbl - fal <= interval_length_bound])
+                    #     # interval_choices.append([(fal,fb) for fal in range(fa,fb) if fb - fal <= interval_length_bound])
+                    # if empty:
+                    #     continue
+                    # for intervals in lproduct(*interval_choices):
+                    #     M = block_matrix([[ Q.edge_label(f,to)[a:b, :fa] for f,(fa,fb) in zip(froms,intervals)] +\
+                    #                       [ Q.edge_label(f,to)[a:b, fa:fb] for f,(fa,fb) in zip(froms,intervals)]])
+                    #     quot = sum(fa for fa,_ in intervals)
+                    #     kerdim = M.ncols() - quot - len([j for j in M.pivots() if j >= quot])
+                    #     rowvks = [to+(i,) for i in range(a,b)]
+                    #     colvks = [f+(i,) for f,(fa,fb) in zip(froms,intervals) for i in range(fa,fb)]
+                    #     add_constraint(rowvks,colvks,kerdim,deduplp)
+                    #     # if quot == 0:
+                    #     #     for i in M[::-1].pivot_rows():
+                    #     #         i = M.nrows() - 1 - i
+                    #     #         if add_constraint([rowvks[i]],colvks,len(colvks)-1,deduplp):
+                    #     #             print ('EXACT')
                             
             # rowvksall = [to + (i,) for i in range(len(self.get_vss(to[0])[to[1]]))]
             # colvksall = [(tm,wt,i) for tm,wt in froms 
@@ -1486,20 +1527,26 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             #                               len(subcols)-1,deduplp):
             #                 print ('EXACT')
             
-        deduplps = {}
-        for (tm,wt),(tmr,wtr),M in Q.edges():
-            if tm == tmr:
-                deduplp = deduplps.setdefault(tm,MixedIntegerLinearProgram(
-                    solver='GLPK',maximization=False))
-                add_relations((tmr,wtr),[(tm,wt)],deduplp)
+        # deduplps = {}
+        # for (tm,wt),(tmr,wtr),M in Q.edges():
+        #     if tm == tmr:
+        #         deduplp = deduplps.setdefault(tm,MixedIntegerLinearProgram(
+        #             solver='GLPK',maximization=False))
+        #         add_relations((tmr,wtr),[(tm,wt)],deduplp)
         for (tmr,wtr) in Q:
-            froms = [(tm,wt) for (tm,wt),_,_ in Q.incoming_edges((tmr,wtr)) if tmr != tm]
-            deduplp = MixedIntegerLinearProgram(solver='GLPK',maximization=False)
-            for k in range(1,len(froms)+1):
+            froms = [(tm,wt) for (tm,wt),_,_ in Q.incoming_edges((tmr,wtr))]
+            # froms = [(tm,wt) for (tm,wt),_,_ in Q.incoming_edges((tmr,wtr)) if tmr != tm]
+            deduplp = None
+            # deduplp = MixedIntegerLinearProgram(solver='GLPK',maximization=False)
             # for k in range(1,3):
-                for fs in combinations(froms,k):
-                    # add_relations((tmr,wtr), fs, deduplp)
-                    add_relations((tmr,wtr), fs, deduplp, interval_length_bound = 2)
+            #     for fs in combinations(froms,k):
+            #         # add_relations((tmr,wtr), fs, deduplp)
+            #         add_relations((tmr,wtr), fs, deduplp, interval_length_bound = 1)
+            # for k in range(3,5):
+            # # for k in range(3,len(froms)+1):
+            #     for fs in combinations(froms,k):
+            #         add_relations((tmr,wtr), fs, deduplp, interval_length_bound = 0, full_interval_only = True)
+            add_relations((tmr,wtr), froms, deduplp)
         return prog
         
         # vsix = {}
