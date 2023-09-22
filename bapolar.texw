@@ -571,6 +571,8 @@ def lp_only_look_strict(ba):
             print(lpi,si)
             cursols.append(sol)
             add_set([m for m,v in sol.items() if v==0],si)
+        if len(cursols) == 0:
+            return
         sols.append(cursols)
     remove = set()
     @cache
