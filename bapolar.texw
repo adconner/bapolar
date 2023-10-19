@@ -1887,7 +1887,14 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         t = FractionField(PolynomialRing(QQ,'t')).gen()
         hs = self.target_hilbert_series()
         return hs((t,)*hs.parent().ngens())
-        
+
+    @cache
+    def Tperp(self):
+        tms = [(0,)*i+(e+1,)+(0,)*(len(self.Tdeg)-i-1)
+             for i,e in enumerate(self.Tdeg)]
+        tms.extend(product(*[range(e+1) for e in self.Tdeg]))
+        return self.R0.ideal([v for tm in tms for vs in 
+                        self.get_vss(tm).values() for v in vs]).twostd()
 
 def liftR(p,R):
     if p.parent() is R:
