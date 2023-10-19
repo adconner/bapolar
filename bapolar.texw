@@ -1864,6 +1864,12 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 if any(s in Jt for s in S):
                     ltIlb.append(m)
         return R.ideal(ltIlb), R.ideal(ltIub)
+    
+    def ideal_constant_generators(self,J):
+        R = PolynomialRing(self.F,self.R0.gens()[:self.nvars])
+        return R.ideal([p(R.gens()+(R.zero(),)*(p.parent().ngens()-R.ngens())) 
+                          for p in J.gens() if 
+           all(e[self.nvars:].is_constant() for e in p.exponents())])
 
     @cache
     def target_hilbert_series(self):
