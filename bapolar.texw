@@ -735,6 +735,12 @@ class BorderApolarity:
             self.Tdeg[ next(j for j in range(len(self.dims)) 
                             if i < sum(self.dims[:j+1])) ] += k
         self.Tdeg = tuple(self.Tdeg)
+
+        self.zero = JDat(self,self.R0.ideal())
+        self.get_vss = self.zero.get_vss
+        self.get_vs = self.zero.get_vs
+        self.get_poset = self.zero.get_poset
+        self.get_poset_info_for_search = self.zero.get_poset_info_for_search
 @
 
 The function \code{get_ring} implements the logic described in
@@ -793,109 +799,6 @@ computes a basis of
 $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
 
 <<complete=False>>=
-    @cache
-    def get_vss(self,tm):
-        ivs = [IntegerVectors(t,self.dims[ti]) for ti,t in enumerate(tm)]
-        from operator import concat
-        vss = {}
-        for v in cartesian_product(ivs):
-            v = reduce(concat,map(tuple,v))
-            wt = tuple(self.vwts*vector(v))
-            vss.setdefault(wt,[]).append(v)
-        mon = lambda m: self.R0.prod(x**k for k,x in zip(m,self.R0.gens()) if k>0)
-        todel = []
-        for wt in vss:
-            vs = vss[wt]
-            vs.sort(key=mon,reverse=True)
-            if all(a <= b for a,b in zip(tm,self.Tdeg)): # restrict to Tperp
-                ms = []
-                msix = {}
-                eqs = {}
-                for vi,v in enumerate(vs):
-                    Td = self.T
-                    for i,k in enumerate(v):
-                        for _ in range(k):
-                            Td = Td.derivative(Td.parent().gen(i))
-                    for m,c in Td.dict().items():
-                        if m not in msix:
-                            msix[m] = len(ms)
-                            ms.append(m)
-                        eqs[(msix[m], vi)] = c
-                eqs = matrix(self.F, len(ms), len(vs), eqs)
-                K = eqs.right_kernel_matrix()
-                vs = [sum(e*mon(vs[i]) for i,e in enumerate(r)) for r in K]
-            else:
-                vs = [mon(v) for v in vs]
-            vss[wt] = list(reversed(vs))
-            if len(vss[wt]) == 0:
-                todel.append(wt)
-        for wt in todel:
-            del vss[wt]
-        return vss
-
-    @cache
-    def get_poset(self, tms, tms_high_to_low):
-        vsix = {}
-        lmtov = {}
-        tms = tms + tms_high_to_low
-        g = DiGraph()
-        for tm in tms:
-            for wt,vs in self.get_vss(tm).items():
-                for vi,v in enumerate(vs):
-                    lmtov[v.lm()] = v
-                    vk = (tm,wt,vi)
-                    vsix[v] = vk
-                    g.add_vertex(vk)
-        for tm in tms:
-            for vs in self.get_vss(tm).values():
-                for x in self.R0.gens()[self.nvars:self.nvars+len(self.xs)]:
-                    wi = 0
-                    for v in vs:
-                        vk = vsix[v]
-                        w = x*v-v*x
-                        if w.is_zero():
-                            continue
-                        _,wt,wicur = vsix[lmtov[w.lm()]]
-                        wi = max(wi,wicur)
-                        for i in range(wi+1):
-                            g.add_edge(vk,(tm,wt,i))
-                        wilast = wi
-        for tm in tms_high_to_low:
-            for vs in self.get_vss(tm).values():
-                for v,w in zip(vs,vs[1:]):
-                    g.add_edge(vsix[w],vsix[v])
-                            
-        tmposet = Poset((tms,lambda a,b: all(i<=j for i,j in zip(a,b))))
-        for tm,tmr in tmposet.cover_relations():
-            for vs in self.get_vss(tm).values():
-                for v in vs:
-                    vk = vsix[v]
-                    for m in self.all_monomials(tuple(map(sub,tmr,tm))):
-                        w = v*m
-                        wk = vsix[lmtov[w.lm()]]
-                        g.add_edge(vk,wk)
-                    
-        return Poset(g)
-    
-    @cache
-    def get_vs(self, tm):
-        vss = self.get_vss(tm)
-        P = self.get_poset((),(tm,))
-        return [vss[wt][i] for _,wt,i in P.linear_extension()]
-    
-    @cache
-    def get_poset_info_for_search(self, tms, tms_high_to_low):
-        P = self.get_poset(tms,tms_high_to_low)
-        wkabove = {wk : [] for wk in P}
-        vkbelowcnt = {wk : 0 for wk in P}
-        for vk,wk in P.cover_relations():
-            wkabove[vk].append(wk)
-            vkbelowcnt[wk] += 1
-        vkstart = set()
-        for vk in P:
-            if vkbelowcnt[vk] == 0:
-                vkstart.add(vk)
-        return vkstart,vkbelowcnt,wkabove
     
     def x_weight(self, x):
         i,j = x.nonzero_positions()[0]
@@ -1901,6 +1804,118 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         tms.extend(product(*[range(e+1) for e in self.Tdeg]))
         return self.R0.ideal([v for tm in tms for vs in 
                         self.get_vss(tm).values() for v in vs]).twostd()
+class JDat:
+    def __init__(self, ba, J):
+        assert all(e[ba.nvars:].is_constant() for p in J.gens() for e in p.exponents())
+        self.ba = ba
+        self.R = PolynomialRing(ba.F,ba.R0.gens()[:ba.nvars])
+        self.J = self.R.ideal([liftR(p,self.R) for p in J.gens()])
+        self.ltJ = self.R.ideal([p.lm() for p in self.J.groebner_basis()])
+        self.kbase = cache(self.kbase)
+        self.get_vss = cache(self.get_vss)
+        self.get_vs = cache(self.get_vs)
+        self.get_poset = cache(self.get_poset)
+        self.get_poset_info_for_search = cache(self.get_poset_info_for_search)
+        
+    def kbase(self,d):
+        return [liftR(m,ba.R0) for m in ff.kbase(self.J,d)]
+    
+    def get_vss(self,tm):
+        vs = self.kbase(sum(tm))
+        vss = {}
+        for v in vs:
+            if ba.polynomial_tm(v) == tm:
+                vss.setdefault(ba.polynomial_weight(v),[]).append(v)
+        todel = []
+        for wt,vs in vss.items():
+            vs.sort(reverse=True)
+            if all(a <= b for a,b in zip(tm,ba.Tdeg)): # restrict to Tperp
+                ms = []
+                msix = {}
+                eqs = {}
+                for vi,v in enumerate(vs):
+                    Td = ba.T
+                    for i,k in v.exponents()[0].sparse_iter():
+                        for _ in range(k):
+                            Td = Td.derivative(Td.parent().gen(i))
+                    for m,c in Td.dict().items():
+                        if m not in msix:
+                            msix[m] = len(ms)
+                            ms.append(m)
+                        eqs[(msix[m], vi)] = c
+                eqs = matrix(ba.F, len(ms), len(vs), eqs)
+                K = eqs.right_kernel_matrix()
+                vs = [sum(e*vs[i] for i,e in enumerate(r)) for r in K]
+            vss[wt] = list(reversed(vs))
+            if len(vss[wt]) == 0:
+                todel.append(wt)
+        for wt in todel:
+            del vss[wt]
+        return vss
+    
+    def get_vs(self, tm):
+        vss = self.get_vss(tm)
+        P = self.get_poset((),(tm,))
+        return [vss[wt][i] for _,wt,i in P.linear_extension()]
+    
+    def get_poset(self, tms, tms_high_to_low):
+        vsix = {}
+        lmtov = {}
+        tms = tms + tms_high_to_low
+        g = DiGraph()
+        for tm in tms:
+            for wt,vs in self.get_vss(tm).items():
+                for vi,v in enumerate(vs):
+                    lmtov[v.lm()] = v
+                    vk = (tm,wt,vi)
+                    vsix[v] = vk
+                    g.add_vertex(vk)
+        for tm in tms:
+            for vs in self.get_vss(tm).values():
+                for x in ba.R0.gens()[ba.nvars:ba.nvars+len(ba.xs)]:
+                    wi = 0
+                    for v in vs:
+                        vk = vsix[v]
+                        w = liftR(self.J.reduce(liftR(x*v-v*x,self.R)),ba.R0)
+                        if w.is_zero():
+                            continue
+                        _,wt,wicur = vsix[lmtov[w.lm()]]
+                        wi = max(wi,wicur)
+                        for i in range(wi+1):
+                            g.add_edge(vk,(tm,wt,i))
+                        wilast = wi
+        for tm in tms_high_to_low:
+            for vs in self.get_vss(tm).values():
+                for v,w in zip(vs,vs[1:]):
+                    g.add_edge(vsix[w],vsix[v])
+                            
+        tmposet = Poset((tms,lambda a,b: all(i<=j for i,j in zip(a,b))))
+        for tm,tmr in tmposet.cover_relations():
+            for vs in self.get_vss(tm).values():
+                for v in vs:
+                    vk = vsix[v]
+                    for m in ba.all_monomials(tuple(map(sub,tmr,tm))):
+                        w = v*m
+                        w = liftR(self.J.reduce(liftR(v*m,self.R)),ba.R0)
+                        if w.is_zero():
+                            continue
+                        wk = vsix[lmtov[w.lm()]]
+                        g.add_edge(vk,wk)
+                    
+        return Poset(g)
+    
+    def get_poset_info_for_search(self, tms, tms_high_to_low):
+        P = self.get_poset(tms,tms_high_to_low)
+        wkabove = {wk : [] for wk in P}
+        vkbelowcnt = {wk : 0 for wk in P}
+        for vk,wk in P.cover_relations():
+            wkabove[vk].append(wk)
+            vkbelowcnt[wk] += 1
+        vkstart = set()
+        for vk in P:
+            if vkbelowcnt[vk] == 0:
+                vkstart.add(vk)
+        return vkstart,vkbelowcnt,wkabove
 
 def liftR(p,R):
     if p.parent() is R:
