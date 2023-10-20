@@ -493,7 +493,7 @@ from functools import cache
 <<complete=False>>=
 
 def three_place_ideals_up_to(ba,d=1,Jxi=None):
-    def dfs(Jxi,tms): 
+    def dfs(Jxi,tms,mod=None): 
         if len(tms) == 0:
             yield Jxi
             return
@@ -502,7 +502,7 @@ def three_place_ideals_up_to(ba,d=1,Jxi=None):
         J,S,xi = Jxi
         for Jxiup in ba.get_ideals_for_tm([tm], [tm[:s]+(tm[s]+1,)+tm[s+1:] for s in range(3)]
                       +([(2,2,2)] if sum(tm) == 4 and all(e <= 2 for e in tm) else []),
-                  J,S,xi,search_above = sum(tm) == 2, simple_lp = sum(tm) >= 3):
+                  J,S,xi,search_above = sum(tm) == 2, simple_lp = sum(tm) >= 3, mod = mod):
             if len(tms) == 1 and sum(tm) < d:
                 ltIlb, ltIub = ba.leading_term_ideal(*Jxiup[:2])
                 R = ltIlb.ring()
@@ -527,10 +527,12 @@ def three_place_ideals_up_to(ba,d=1,Jxi=None):
                 tmsnext.sort(key = lambda p: (p[1], max(p[0]), p[0]))
                 print(tmsnext)
                 tmsnext = [tmc for tmc,_ in tmsnext]
+                modnext = JDat(ba,ba.ideal_constant_generators(Jxiup[0]))
             else:
                 tmsnext = tms[1:]
+                modnext = mod
                 
-            for Jxifull in dfs(Jxiup,tmsnext):
+            for Jxifull in dfs(Jxiup,tmsnext,modnext):
                     yield Jxifull
 
     if Jxi is not None:
@@ -986,9 +988,10 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             #             (s1.reduce(w.lm()) != w.lm()) for w in
             #             mod.get_vs((1,1,0)) if lp.get_min(lp[w.lm()]) ==
             #             lp.get_max(lp[w.lm()]))
-            if all(num_in[tm] == max(self.tm_dim(tm) - self.r,0) and \
-                           num_out[tm] == min(self.r - self.tm_codim_tperp(tm),self.tm_dim_tperp(tm)) for tm in tms) and \
-                       (not cur_search_above or all(num_out[tm] >= min(self.r - self.tm_codim_tperp(tm),self.tm_dim(tm)) for tm in tmcs)):
+            target_out = lambda tm: min(self.r - self.tm_codim_tperp(tm),self.tm_dim_tperp(tm))
+            if all(num_in[tm] == len(mod.get_vs(tm)) - target_out(tm) and \
+                           num_out[tm] == target_out(tm) for tm in tms) and \
+                       (not cur_search_above or all(num_out[tm] >= target_out(tm) for tm in tmcs)):
                 yield (J,S,xi)
                 return
 
@@ -1228,6 +1231,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         return self.tm_dim(tm) - self.tm_dim_tperp(tm)
 
     def polynomial_tm(self, p):
+        if p.is_zero():
+            return (0,)*len(self.Tdeg)
         e = p.exponents()[0]
         return tuple(sum(k for _,k in e[a:b].sparse_iter()) 
                 for a,b in zip(self.vixs,self.vixs[1:]))
@@ -1391,11 +1396,9 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         return R.ideal(ltIlb), R.ideal(ltIub)
     
     def ideal_constant_generators(self,J):
-        R = PolynomialRing(self.F,self.R0.gens()[:self.nvars])
-        return R.ideal([p(R.gens()+(R.zero(),)*(p.parent().ngens()-R.ngens())) 
-                          for p in J.gens() if 
-           all(e[self.nvars:].is_constant() for e in p.exponents())])
-
+        return self.R0.ideal([liftR(p,self.R0) for p in J.gens() if 
+              all(e[self.nvars:].is_constant() for e in p.exponents())],side='twosided')
+                        
     @cache
     def target_hilbert_series(self):
         ts = FractionField(PolynomialRing(QQ,'t',len(self.dims))).gens()
@@ -1597,13 +1600,13 @@ class JDat:
         prog.set_max(prog.default_variable(),1.0)
 
         for tm in tms:
-            prog.add_constraint(prog.sum(prog[v.lm()] 
+            prog.add_constraint(prog.sum(1-prog[v.lm()] 
                     for vs in self.get_vss(tm).values() for v in vs) == 
-                    max(ba.tm_dim(tm) - ba.r,0))
+                    min(ba.tm_dim_tperp(tm),ba.r-ba.tm_codim_tperp(tm)))
         for tm in tmcs:
-            prog.add_constraint(prog.sum(prog[v.lm()] 
-                    for vs in self.get_vss(tm).values() for v in vs) <= 
-                    max(ba.tm_dim(tm) - ba.r,0))
+            prog.add_constraint(prog.sum(1-prog[v.lm()] 
+                    for vs in self.get_vss(tm).values() for v in vs) >= 
+                    min(ba.tm_dim_tperp(tm),ba.r-ba.tm_codim_tperp(tm)))
             
         if simple:
             # constraint that all of ps implies at least one of the qs
