@@ -536,7 +536,8 @@ def three_place_ideals_up_to(ba,d=1,Jxi=None):
                     yield Jxifull
 
     if Jxi is not None:
-        for Jxifull in dfs(Jxi, [(1,0,0),(0,1,0),(0,0,1)]):
+        mod = JDat(ba,ba.ideal_constant_generators(Jxi[0]))
+        for Jxifull in dfs(Jxi, [(1,0,0),(0,1,0),(0,0,1)], mod):
             yield Jxifull
         return
 
@@ -564,8 +565,8 @@ def lp_only_look_strict(ba):
     sols = []
     sols_ss = []
     for lpi,(tm,tmcs) in enumerate(zip(tms,tmcss)):
-        lp = ba.get_linear_program((tm,),tmcs,interval_length_bound=8)
-        xs = [x.lm() for vs in ba.get_vss(tm).values() for x in vs]
+        lp = ba.zero.get_linear_program((tm,),tmcs,interval_length_bound=8)
+        xs = [x.lm() for vs in ba.zero.get_vss(tm).values() for x in vs]
         add_set, iter_sets = get_set_system()
         sols_ss.append((add_set,iter_sets))
         cursols = []
@@ -587,7 +588,7 @@ def lp_only_look_strict(ba):
             print("REMOVE",remove)
         return res
     def getSlohis(psol):
-        Slohis = [([],set([v.lm() for vs in ba.get_vss(tm).values() 
+        Slohis = [([],set([v.lm() for vs in ba.zero.get_vss(tm).values() 
                        for v in vs])) for tm in tms]
         for m,v in psol.items():
             lpj = tms.index(ba.polynomial_tm(m))
@@ -601,8 +602,8 @@ def lp_only_look_strict(ba):
                          if (lpj,si) not in remove)
                    for lpj,((_,iter_sets),(Slo,Shi))
                    in enumerate(zip(sols_ss,getSlohis(psol))) )
-    lp = ba.get_linear_program(((1,1,0),(1,0,1),(0,1,1)),((1,1,1),),interval_length_bound=4)
-    xs = [x.lm() for tm in tms for vs in ba.get_vss(tm).values() for x in vs]
+    lp = ba.zero.get_linear_program(((1,1,0),(1,0,1),(0,1,1)),((1,1,1),),interval_length_bound=4)
+    xs = [x.lm() for tm in tms for vs in ba.zero.get_vss(tm).values() for x in vs]
     for fsol in lp_integer_points(lp,xs,fullsol=False,prunef=prunef):
         Slohis = getSlohis(fsol)
         # assert all(sorted(Slo) == sorted(Shi) for Slo,Shi in Slohis)
@@ -628,14 +629,14 @@ def lp_only_look(ba):
     lps = []
     xss = []
     for tm,tmcs in zip(tms,tmcss):
-        lp = ba.get_linear_program((tm,),tmcs,interval_length_bound=7)
-        # lp = ba.get_linear_program(tuple(tms),tmcs+((1,1,1),))
-        # lp = ba.get_linear_program((tm,),tmcs+((1,1,1),))
-        xs = [x.lm() for vs in ba.get_vss(tm).values() for x in vs]
+        lp = ba.zero.get_linear_program((tm,),tmcs,interval_length_bound=7)
+        # lp = ba.zero.get_linear_program(tuple(tms),tmcs+((1,1,1),))
+        # lp = ba.zero.get_linear_program((tm,),tmcs+((1,1,1),))
+        xs = [x.lm() for vs in ba.zero.get_vss(tm).values() for x in vs]
         lps.append(lp_integer_points(lp,xs,fullsol=False))
         xss.append(xs)
-    lp = ba.get_linear_program(((1,1,0),(1,0,1),(0,1,1)),((1,1,1),),interval_length_bound=4)
-    xs = [x.lm() for tm in tms for vs in ba.get_vss(tm).values() for x in vs]
+    lp = ba.zero.get_linear_program(((1,1,0),(1,0,1),(0,1,1)),((1,1,1),),interval_length_bound=4)
+    xs = [x.lm() for tm in tms for vs in ba.zero.get_vss(tm).values() for x in vs]
     yss = [[] for _ in range(3)]
     sols = [[] for _ in range(3)]
     sols_ss = [get_set_system() for _ in range(3)]
@@ -659,7 +660,7 @@ def lp_only_look(ba):
                 yss[lpi].append((lpi,si))
                 sols[lpi].append(sol)
                 def getSlohis(psol):
-                    Slohis = [([],set([v.lm() for vs in ba.get_vss(tm).values() 
+                    Slohis = [([],set([v.lm() for vs in ba.zero.get_vss(tm).values() 
                                    for v in vs])) for tm in tms]
                     for m,v in psol.items():
                         lpj = tms.index(ba.polynomial_tm(m))
@@ -1454,7 +1455,8 @@ class JDat:
             if ba.polynomial_tm(v) == tm:
                 vss.setdefault(ba.polynomial_weight(v),[]).append(v)
         todel = []
-        for wt,vs in vss.items():
+        for wt in vss:
+            vs = vss[wt]
             vs.sort(reverse=True)
             if all(a <= b for a,b in zip(tm,ba.Tdeg)): # restrict to Tperp
                 ms = []
