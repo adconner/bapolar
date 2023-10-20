@@ -737,10 +737,6 @@ class BorderApolarity:
         self.Tdeg = tuple(self.Tdeg)
 
         self.zero = JDat(self,self.R0.ideal())
-        self.get_vss = self.zero.get_vss
-        self.get_vs = self.zero.get_vs
-        self.get_poset = self.zero.get_poset
-        self.get_poset_info_for_search = self.zero.get_poset_info_for_search
 @
 
 The function \code{get_ring} implements the logic described in
@@ -862,7 +858,9 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
     
     def get_ideals_for_tm(self,tms=[],tmcs=[],J=None,S=None,xi=0,
                           search_above=True,simple_lp=False,sound=False,
-                          preset_choices = {}):
+                          preset_choices = {}, mod=None):
+        if mod is None:
+            mod = self.zero
         tms = tuple(tms)
         tmcs = tuple(tmcs)
         
@@ -894,14 +892,14 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             
         from copy import deepcopy
         if sound:
-            vkstart,vkbelowcnt,wkabove = self.get_poset_info_for_search(
+            vkstart,vkbelowcnt,wkabove = mod.get_poset_info_for_search(
                     (), tms+tmcs if cur_search_above else tms)
         else:
-            vkstart,vkbelowcnt,wkabove = self.get_poset_info_for_search(
+            vkstart,vkbelowcnt,wkabove = mod.get_poset_info_for_search(
                     tms, tmcs if cur_search_above else ())
         vkstart = deepcopy(vkstart)
         vkbelowcnt = deepcopy(vkbelowcnt)
-        tmsvks = set((tm,wt,i) for tm in tms for wt,vs in self.get_vss(tm).items() 
+        tmsvks = set((tm,wt,i) for tm in tms for wt,vs in mod.get_vss(tm).items() 
                      for i in range(len(vs)))
         
         def guaranteed_lms(J,S):
@@ -928,14 +926,17 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                        for xi,e in m.exponents()[0].sparse_iter() for _ in range(e)]))
             return in_lti
                         
-        lp = deepcopy(self.get_linear_program(tms,tmcs,simple=simple_lp))
+        if simple_lp:
+            lp = deepcopy(mod.get_linear_program(tms,tmcs,simple=True))
+        else:
+            lp = deepcopy(mod.get_linear_program(tms,tmcs))
         unset = set()
         params_needed = {vks : vks[2] for vks in tmsvks}
         num_in = {tm:0 for tm in tms+tmcs}
         num_out = {tm:0 for tm in tms+tmcs}
         in_lti = guaranteed_lms(J,S)
         for tm in tms+tmcs:
-            for wt,vs in self.get_vss(tm).items():
+            for wt,vs in mod.get_vss(tm).items():
                 for i,p in enumerate(vs):
                     if in_lti(p.lm()):
                         lp.set_min(lp[p.lm()],1.0)
@@ -958,7 +959,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         sav = []
         for vk in unset:
             tm,wt,i = vk
-            vs = self.get_vss(tm)[wt]
+            vs = mod.get_vss(tm)[wt]
             p = vs[i].lm()
             if in_lti(p):
                 sav.append(vk)
@@ -983,7 +984,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             # global s1
             # found = all((lp.get_min(lp[w.lm()]) == 1.0) ==
             #             (s1.reduce(w.lm()) != w.lm()) for w in
-            #             self.get_vs((1,1,0)) if lp.get_min(lp[w.lm()]) ==
+            #             mod.get_vs((1,1,0)) if lp.get_min(lp[w.lm()]) ==
             #             lp.get_max(lp[w.lm()]))
             if all(num_in[tm] == max(self.tm_dim(tm) - self.r,0) and \
                            num_out[tm] == min(self.r - self.tm_codim_tperp(tm),self.tm_dim_tperp(tm)) for tm in tms) and \
@@ -1033,13 +1034,13 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 if qm.is_constant():
                     continue
                 for vk in vkstart:
-                    v = self.get_vss(vk[0])[vk[1]][vk[2]]
+                    v = mod.get_vss(vk[0])[vk[1]][vk[2]]
                     if self.R0.monomial_divides(liftR(qm,self.R0),v.lm()):
                         tss.setdefault(vk,[]).append(q.coefficient(qm))
                         
             vk = min(vkstart,key=lambda vk: (sum(vk[0]), params_needed.get(vk,0), 
                                              abs(0.5 - lp.get_values(lp.default_variable())[
-                                                 self.get_vss(vk[0])[vk[1]][vk[2]].lm()]),
+                                                 mod.get_vss(vk[0])[vk[1]][vk[2]].lm()]),
                                              len(tss.get(vk,[]))))
             
             set_stack.append(vk)
@@ -1047,11 +1048,11 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             height[0] += 1
             try:
                 tm,wt,vi = vk
-                vs = self.get_vss(tm)[wt]
+                vs = mod.get_vss(tm)[wt]
                 v = vs[vi]
                 
                 var_lp_val = lp.get_values(lp.default_variable())[
-                     self.get_vss(tm)[wt][vi].lm()]
+                     mod.get_vss(tm)[wt][vi].lm()]
                 
                 assert vk in unset
                 assert lp.get_min(lp[v.lm()]) == 0.0
@@ -1120,7 +1121,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                             return
                     sav = set()
                     for wk in unset:
-                        ws = self.get_vss(wk[0])[wk[1]]
+                        ws = mod.get_vss(wk[0])[wk[1]]
                         p = ws[wk[2]].lm()
                         if in_lti(p):
                             lp.set_min(lp[p],1.0)
@@ -1151,7 +1152,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         unset.add(vk)
                         num_out[tm] -= 1
                     for wk in sav:
-                        ws = self.get_vss(wk[0])[wk[1]]
+                        ws = mod.get_vss(wk[0])[wk[1]]
                         lp.set_min(lp[ws[wk[2]].lm()],0.0)
                         unset.add(wk)
                         num_in[wk[0]] -= 1
@@ -1168,7 +1169,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         S = [liftR(s,R) for s in S]
                     R = J.ring()
                     p = liftR(v,R) + R.sum([liftR(w,R)*R.gen(self.nvarsx+xi+wi)
-                                for wi,w in enumerate(w for w in self.get_vss(tm)[wt][:vi] if lp.get_min(lp[w.lm()]) == 0.0)])
+                                for wi,w in enumerate(w for w in mod.get_vss(tm)[wt][:vi] if lp.get_min(lp[w.lm()]) == 0.0)])
                     for JSxi in rec(gb(J+p),S,yi,True):
                         yield JSxi
                 
@@ -1218,7 +1219,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
     @cache
     def tm_dim_tperp(self, tm):
         if all(a <= b for a,b in zip(tm,self.Tdeg)):
-            return len(self.get_vs(tm))
+            return len(self.zero.get_vs(tm))
         else:
             return self.tm_dim(tm)
 
@@ -1243,7 +1244,303 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             yield R.prod(x**k for k,x in 
                     zip((k for e in y for k in e),R.gens()) if k>0)
 
+    def bounded_gb(self, J, d):
+        from sage.libs.singular.option import opt,opt_ctx
+        twostd = sage.libs.singular.function_factory.ff.twostd
+        sav = [p for p in J.gens() if p.degree() > d]
+        with opt_ctx:
+            opt['deg_bound'] = d
+            return J.ring().ideal(twostd(J)+sav,side='twosided')
+    
+    # For testing purposes
+    # This gives the monomials not in the leading term ideal for a generic point
+    # in the family of ideals corresponding to J. If the family J is not
+    # irreducible, this gives the intersection of this set of monomials over all
+    # the irreducible components of J
+    # it is assumed that the family J is nonempty (1 not in J)
+    def generic_codim(self,J,tm):
+        msin = set()
+        for p in J.gens():
+            m = self.lm(p,True)
+            if not m.is_constant(): # otherwise a defining equation of the family
+                for n in self.all_monomials(map(sub,tm,self.polynomial_tm(m))):
+                    msin.add(m*n)
+        return [m for m in self.all_monomials(tm) if m not in msin]
+
+    def simple_greedy_extend(self, J, tm):
+        assert J.ring() is self.get_ring()
+        cod = len(self.generic_codim(J,tm))
+        assert cod >= self.r
+        for v in ba.get_vorder(tm)[0]:
+            if v not in J:
+                K = (J + v).twostd()
+
+                codcur = len(self.generic_codim(K,tm))
+                if codcur < self.r:
+                    continue
+                ok = True
+                for s in range(len(tm)):
+                    if len(self.generic_codim(K, tm[:s]+(tm[s]+1,)+tm[s+1:])) < self.r:
+                        ok = False
+                        break
+                if not ok:
+                    continue
+                J = K
+                if codcur == self.r:
+                    return J
+
+    def sum_ideals(self,Jxis):
+        sxis = sum(xi for J,xi in Jxis)
+        R = self.get_ring(sxis)
+        gens = []
+        xcum = 0
+        for J,xi in Jxis:
+            gens.extend([p(R.gens()[:self.nvarsx] +
+                R.gens()[self.nvarsx+xcum:self.nvarsx+xcum+xi] +
+                (R.zero(),) * (J.ring().ngens()-self.nvarsx-xi))
+                for p in J.gens()])
+            xcum += xi
+        return (R.ideal(gens,side='twosided'),xcum)
+    
+    def sum_ideals_S(self,Jxis):
+        sxis = sum(xi for J,S,xi in Jxis)
+        R = self.get_ring(sxis)
+        gens = []
+        Sgens = []
+        xcum = 0
+        for J,S,xi in Jxis:
+            gens.extend([p(R.gens()[:self.nvarsx] +
+                R.gens()[self.nvarsx+xcum:self.nvarsx+xcum+xi] +
+                (R.zero(),) * (J.ring().ngens()-self.nvarsx-xi))
+                for p in J.gens()])
+            Sgens.extend([ p(R.gens()[:self.nvarsx] +
+                R.gens()[self.nvarsx+xcum:self.nvarsx+xcum+xi] +
+                (R.zero(),) * (J.ring().ngens()-self.nvarsx-xi))
+                for p in S ])
+            xcum += xi
+        return (R.ideal(gens,side='twosided'),Sgens,xcum)
+
+    def quick_simplify(self,J,S=None,xi=None,simple=False):
+        if xi is None:
+            xi = J.ring().ngens() - self.nvarsx
+        if xi == 0:
+            return (J,[J.ring().one()],0)
+        
+        # if variables never occur, add a relation for them so they will be
+        # eliminated in the next step. Missing variables should only be
+        # produced with sound=True searches
+        tis = set()
+        for p in J.gens():
+            for e in p.exponents(): 
+                for ti,_ in e[self.nvarsx:].sparse_iter():
+                    tis.add(ti)
+        J += [J.ring().gen(self.nvarsx+ti) for ti in set(range(xi)).difference(tis)]
+        
+        I,coerce = self.get_param_ideal(J)
+        subs = list(I.ring().gens()[:xi]) + [I.ring().zero()]*(I.ring().ngens()-xi)
+        for ti,t in enumerate(I.ring().gens()[:xi]):
+            subs[ti] = I.reduce(t)
+        if not simple and xi > 1: # try to write each parameter in terms of the rest
+            I = ideal([p(subs) for p in I.gens()])
+            for ti,t in enumerate(I.ring().gens()[:xi]):
+                if subs[ti] == t:
+                    R = PolynomialRing(I.base_ring(),(t,)+tuple(I.ring().gens()[:ti]+I.ring().gens()[ti+1:]),
+                               order = TermOrder('degrevlex',1)+ TermOrder('degrevlex',len(subs)-1))
+                    tR = R(t)
+                    tr = I.change_ring(R).reduce(tR)
+                    if tr != tR:
+                        subs[ti] = I.ring()(tr)
+                        I = ideal([p(subs) for p in I.gens()])
+        tis = set()
+        for p in subs:
+            for e in p.exponents():
+                for ti,_ in e.sparse_iter():
+                    tis.add(ti)
+        tis = sorted(tis)
+        ssubs = [I.ring().zero()]*I.ring().ngens()
+        for j,ti in enumerate(tis):
+            ssubs[ti] = I.ring().gen(j)
+        subs = [t(*ssubs) for t in subs]
+
+        R = self.get_ring(len(tis))
+        if S is None:
+            S = [R.one()]
+        else:
+            S = [self.lift_param(R,I.reduce(coerce(s)(subs))) for s in S]
+            S = [R.one()] + [s for s in S if not s.is_constant()]
+        
+        subs = list(R.gens()[:self.nvarsx]) + [self.lift_param(R,t) for t in subs]
+        Jg = [p(*subs) for p in J.gens()]
+        Jg = [p for p in Jg if not p.is_zero()]
+        J = R.ideal(Jg,side='twosided')
+        return (J,S,len(tis))
+
+    def leading_term_ideal(self,J,S):
+        R = PolynomialRing(self.F,self.R0.gens()[:self.nvars])
+        ltIlb = []
+        ltIub = []
+        for p in J.gens():
+            m = self.lm(p)
+            if not m.is_constant():
+                t = p.coefficient(m)
+                m = m(R.gens()+(R.zero(),)*(p.parent().ngens()-R.ngens()))
+                ltIub.append(m)
+                Jt = (J+t).twostd()
+                if any(s in Jt for s in S):
+                    ltIlb.append(m)
+        return R.ideal(ltIlb), R.ideal(ltIub)
+    
+    def ideal_constant_generators(self,J):
+        R = PolynomialRing(self.F,self.R0.gens()[:self.nvars])
+        return R.ideal([p(R.gens()+(R.zero(),)*(p.parent().ngens()-R.ngens())) 
+                          for p in J.gens() if 
+           all(e[self.nvars:].is_constant() for e in p.exponents())])
+
     @cache
+    def target_hilbert_series(self):
+        ts = FractionField(PolynomialRing(QQ,'t',len(self.dims))).gens()
+        hs = self.r/prod(1-t for t in ts)
+        k = 0
+        while True:
+            done = True
+            for tm in IntegerVectors(k,len(self.dims)):
+                tm = tuple(tm)
+                if self.tm_dim(tm) < self.r:
+                    hs -= (self.r-self.tm_dim(tm))*prod(t**e for t,e in zip(ts,tm))
+                    done = False
+            if done:
+                break
+            k += 1
+        return hs
+
+    @cache
+    def target_hilbert_series_td(self):
+        t = FractionField(PolynomialRing(QQ,'t')).gen()
+        hs = self.target_hilbert_series()
+        return hs((t,)*hs.parent().ngens())
+
+    @cache
+    def Tperp(self):
+        tms = [(0,)*i+(e+1,)+(0,)*(len(self.Tdeg)-i-1)
+             for i,e in enumerate(self.Tdeg)]
+        tms.extend(product(*[range(e+1) for e in self.Tdeg]))
+        return self.R0.ideal([v for tm in tms for vs in 
+                        self.get_vss(tm).values() for v in vs]).twostd()
+class JDat:
+    def __init__(self, ba, J):
+        assert all(e[ba.nvars:].is_constant() for p in J.gens() for e in p.exponents())
+        self.ba = ba
+        self.R = PolynomialRing(ba.F,ba.R0.gens()[:ba.nvars])
+        self.J = self.R.ideal([liftR(p,self.R) for p in J.gens()])
+        self.ltJ = self.R.ideal([p.lm() for p in self.J.groebner_basis()])
+        self.kbase = cache(self.kbase)
+        self.get_vss = cache(self.get_vss)
+        self.get_vs = cache(self.get_vs)
+        self.get_poset = cache(self.get_poset)
+        self.get_poset_info_for_search = cache(self.get_poset_info_for_search)
+        self.get_quiver_representation = cache(self.get_quiver_representation)
+        self.get_linear_program = cache(self.get_linear_program)
+        
+    def kbase(self,d):
+        return [liftR(m,ba.R0) for m in ff.kbase(self.J,d)]
+    
+    def get_vss(self,tm):
+        vs = self.kbase(sum(tm))
+        vss = {}
+        for v in vs:
+            if ba.polynomial_tm(v) == tm:
+                vss.setdefault(ba.polynomial_weight(v),[]).append(v)
+        todel = []
+        for wt,vs in vss.items():
+            vs.sort(reverse=True)
+            if all(a <= b for a,b in zip(tm,ba.Tdeg)): # restrict to Tperp
+                ms = []
+                msix = {}
+                eqs = {}
+                for vi,v in enumerate(vs):
+                    Td = ba.T
+                    for i,k in v.exponents()[0].sparse_iter():
+                        for _ in range(k):
+                            Td = Td.derivative(Td.parent().gen(i))
+                    for m,c in Td.dict().items():
+                        if m not in msix:
+                            msix[m] = len(ms)
+                            ms.append(m)
+                        eqs[(msix[m], vi)] = c
+                eqs = matrix(ba.F, len(ms), len(vs), eqs)
+                K = eqs.right_kernel_matrix()
+                vs = [sum(e*vs[i] for i,e in enumerate(r)) for r in K]
+            vss[wt] = list(reversed(vs))
+            if len(vss[wt]) == 0:
+                todel.append(wt)
+        for wt in todel:
+            del vss[wt]
+        return vss
+    
+    def get_vs(self, tm):
+        vss = self.get_vss(tm)
+        P = self.get_poset((),(tm,))
+        return [vss[wt][i] for _,wt,i in P.linear_extension()]
+    
+    def get_poset(self, tms, tms_high_to_low):
+        vsix = {}
+        lmtov = {}
+        tms = tms + tms_high_to_low
+        g = DiGraph()
+        for tm in tms:
+            for wt,vs in self.get_vss(tm).items():
+                for vi,v in enumerate(vs):
+                    lmtov[v.lm()] = v
+                    vk = (tm,wt,vi)
+                    vsix[v] = vk
+                    g.add_vertex(vk)
+        for tm in tms:
+            for vs in self.get_vss(tm).values():
+                for x in ba.R0.gens()[ba.nvars:ba.nvars+len(ba.xs)]:
+                    wi = 0
+                    for v in vs:
+                        vk = vsix[v]
+                        w = liftR(self.J.reduce(liftR(x*v-v*x,self.R)),ba.R0)
+                        if w.is_zero():
+                            continue
+                        _,wt,wicur = vsix[lmtov[w.lm()]]
+                        wi = max(wi,wicur)
+                        for i in range(wi+1):
+                            g.add_edge(vk,(tm,wt,i))
+                        wilast = wi
+        for tm in tms_high_to_low:
+            for vs in self.get_vss(tm).values():
+                for v,w in zip(vs,vs[1:]):
+                    g.add_edge(vsix[w],vsix[v])
+                            
+        tmposet = Poset((tms,lambda a,b: all(i<=j for i,j in zip(a,b))))
+        for tm,tmr in tmposet.cover_relations():
+            for vs in self.get_vss(tm).values():
+                for v in vs:
+                    vk = vsix[v]
+                    for m in ba.all_monomials(tuple(map(sub,tmr,tm))):
+                        w = v*m
+                        w = liftR(self.J.reduce(liftR(v*m,self.R)),ba.R0)
+                        if w.is_zero():
+                            continue
+                        wk = vsix[lmtov[w.lm()]]
+                        g.add_edge(vk,wk)
+                    
+        return Poset(g)
+    
+    def get_poset_info_for_search(self, tms, tms_high_to_low):
+        P = self.get_poset(tms,tms_high_to_low)
+        wkabove = {wk : [] for wk in P}
+        vkbelowcnt = {wk : 0 for wk in P}
+        for vk,wk in P.cover_relations():
+            wkabove[vk].append(wk)
+            vkbelowcnt[wk] += 1
+        vkstart = set()
+        for vk in P:
+            if vkbelowcnt[vk] == 0:
+                vkstart.add(vk)
+        return vkstart,vkbelowcnt,wkabove
+    
     def get_quiver_representation(self,tms,tmcs=()):
         # ps in span of qs, find matrix expressing each 
         # p as a linear combination of the qs
@@ -1272,22 +1569,25 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         Q = DiGraph()
         for tm,tmr in P.cover_relations():
             for wt,vs in self.get_vss(tm).items():
-                for m in self.all_monomials(tuple(map(sub,tmr,tm))):
-                    vsm = [m*v for v in vs]
-                    wtup = self.polynomial_weight(vsm[0])
+                for m in ba.all_monomials(tuple(map(sub,tmr,tm))):
+                    vms = [liftR(self.J.reduce(liftR(v*m,self.R)),ba.R0)
+                            for v in vs]
+                    if all(vm.is_zero() for vm in vms):
+                        continue
+                    wtup = ba.polynomial_weight(next(vm for vm in vms if not vm.is_zero()))
                     ws = self.get_vss(tmr)[wtup]
-                    Q.add_edge((tm,wt),(tmr,wtup),get_matrix(ws,vsm))
+                    Q.add_edge((tm,wt),(tmr,wtup),get_matrix(ws,vms))
         for tm in tms:
             for wt,vs in self.get_vss(tm).items():
-                for x in self.R0.gens()[self.nvars:]:
-                    vsx = [x*v-v*x for v in vs]
-                    if all(v.is_zero() for v in vsx):
+                for x in ba.R0.gens()[ba.nvars:]:
+                    xvs = [liftR(self.J.reduce(liftR(x*v-v*x,self.R)),ba.R0)
+                            for v in vs]
+                    if all(xv.is_zero() for xv in xvs):
                         continue
-                    wtup = next(self.polynomial_weight(v) for v in vsx if not v.is_zero())
-                    Q.add_edge((tm,wt),(tm,wtup),get_matrix(self.get_vss(tm)[wtup],vsx))
+                    wtup = ba.polynomial_weight(next(vm for vm in xvs if not vm.is_zero()))
+                    Q.add_edge((tm,wt),(tm,wtup),get_matrix(self.get_vss(tm)[wtup],xvs))
         return Q
-
-    @cache
+    
     def get_linear_program(self, tms, tmcs=(), simple=False, interval_length_bound=6):
         prog = MixedIntegerLinearProgram(solver='GLPK')
         # prog.set_binary(prog.default_variable())
@@ -1299,11 +1599,11 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         for tm in tms:
             prog.add_constraint(prog.sum(prog[v.lm()] 
                     for vs in self.get_vss(tm).values() for v in vs) == 
-                    max(self.tm_dim(tm) - self.r,0))
+                    max(ba.tm_dim(tm) - ba.r,0))
         for tm in tmcs:
             prog.add_constraint(prog.sum(prog[v.lm()] 
                     for vs in self.get_vss(tm).values() for v in vs) <= 
-                    max(self.tm_dim(tm) - self.r,0))
+                    max(ba.tm_dim(tm) - ba.r,0))
             
         if simple:
             # constraint that all of ps implies at least one of the qs
@@ -1316,7 +1616,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             for tm,tmr in P.cover_relations():
                 for vs in self.get_vss(tm).values():
                     for v in vs:
-                        for y in self.all_monomials(tuple(map(sub,tmr,tm))):
+                        for y in ba.all_monomials(tuple(map(sub,tmr,tm))):
                             # print('simple',[v],[v*y])
                             le_constraint([v],[v*y])
             return prog
@@ -1536,7 +1836,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         # for tm in tms:
         #     vss = self.get_vss(tm)
         #     for wt,vs in vss.items():
-        #         for x in self.R0.gens()[self.nvars:self.nvars+len(self.xs)]:
+        #         for x in ba.R0.gens()[ba.nvars:ba.nvars+len(ba.xs)]:
         #             wtup = None
         #             vis = []
         #             wis = []
@@ -1572,28 +1872,28 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             return prog
         
         def raising_constraints(tmvks):
-            R = self.get_ring(1)
-            t = R.gen(self.nvarsx)
+            R = ba.get_ring(1)
+            t = R.gen(ba.nvarsx)
             ps = []
             for tm,wt,i in tmvks:
                 vss = self.get_vss(tm)
-                p = liftR(vss[wt][i],R)+ R.sum(liftR(q,R)*t*self.F(ZZ.random_element(10**3))
+                p = liftR(vss[wt][i],R)+ R.sum(liftR(q,R)*t*ba.F(ZZ.random_element(10**3))
                            for j,q in enumerate(vss[wt][:i]) if (tm,wt,j) not in tmvks)
                 ps.append(p)
-            J = self.bounded_gb(R.ideal(ps),max(sum(tm) for tm in tms+tmcs))
+            J = ba.bounded_gb(R.ideal(ps),max(sum(tm) for tm in tms+tmcs))
             for q in J.gens():
-                if self.polynomial_tm(q) in tms+tmcs:
-                    if not any(self.lm(q) == self.lm(p) for p in ps):
+                if ba.polynomial_tm(q) in tms+tmcs:
+                    if not any(ba.lm(q) == ba.lm(p) for p in ps):
                         oneof = []
                         have_constant = False
                         while not q.is_zero():
-                            oneof.append(self.lm(q,True))
-                            if q.coefficient(self.lm(q)).is_constant():
+                            oneof.append(ba.lm(q,True))
+                            if q.coefficient(ba.lm(q)).is_constant():
                                 have_constant = True
                                 break
-                            q -= q.coefficient(self.lm(q))*self.lm(q)
+                            q -= q.coefficient(ba.lm(q))*ba.lm(q)
                         if have_constant:
-                            le_constraint([self.lm(p,True) for p in ps],oneof)
+                            le_constraint([ba.lm(p,True) for p in ps],oneof)
 
         groups_multiplying_up = {}
         for tm in tms:
@@ -1601,7 +1901,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             for wt,vs in vss.items():
                 tmvks = [(tm,wt,i) for i in range(len(vs))]
                 assert len(tmvks) > 0
-                for ywt in self.vwts.columns():
+                for ywt in ba.vwts.columns():
                     groups_multiplying_up.setdefault(tuple(vector(wt) + ywt),[]).extend(tmvks)
                 for k in range(1,len(vs)+1):
                     for tmvkscur in combinations(tmvks,k):
@@ -1622,300 +1922,6 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
 
         return prog
 
-    def bounded_gb(self, J, d):
-        from sage.libs.singular.option import opt,opt_ctx
-        twostd = sage.libs.singular.function_factory.ff.twostd
-        sav = [p for p in J.gens() if p.degree() > d]
-        with opt_ctx:
-            opt['deg_bound'] = d
-            return J.ring().ideal(twostd(J)+sav,side='twosided')
-    
-    # For testing purposes
-    # This gives the monomials not in the leading term ideal for a generic point
-    # in the family of ideals corresponding to J. If the family J is not
-    # irreducible, this gives the intersection of this set of monomials over all
-    # the irreducible components of J
-    # it is assumed that the family J is nonempty (1 not in J)
-    def generic_codim(self,J,tm):
-        msin = set()
-        for p in J.gens():
-            m = self.lm(p,True)
-            if not m.is_constant(): # otherwise a defining equation of the family
-                for n in self.all_monomials(map(sub,tm,self.polynomial_tm(m))):
-                    msin.add(m*n)
-        return [m for m in self.all_monomials(tm) if m not in msin]
-
-    def simple_greedy_extend(self, J, tm):
-        assert J.ring() is self.get_ring()
-        cod = len(self.generic_codim(J,tm))
-        assert cod >= self.r
-        for v in ba.get_vorder(tm)[0]:
-            if v not in J:
-                K = (J + v).twostd()
-
-                codcur = len(self.generic_codim(K,tm))
-                if codcur < self.r:
-                    continue
-                ok = True
-                for s in range(len(tm)):
-                    if len(self.generic_codim(K, tm[:s]+(tm[s]+1,)+tm[s+1:])) < self.r:
-                        ok = False
-                        break
-                if not ok:
-                    continue
-                J = K
-                if codcur == self.r:
-                    return J
-
-    def sum_ideals(self,Jxis):
-        sxis = sum(xi for J,xi in Jxis)
-        R = self.get_ring(sxis)
-        gens = []
-        xcum = 0
-        for J,xi in Jxis:
-            gens.extend([p(R.gens()[:self.nvarsx] +
-                R.gens()[self.nvarsx+xcum:self.nvarsx+xcum+xi] +
-                (R.zero(),) * (J.ring().ngens()-self.nvarsx-xi))
-                for p in J.gens()])
-            xcum += xi
-        return (R.ideal(gens,side='twosided'),xcum)
-    
-    def sum_ideals_S(self,Jxis):
-        sxis = sum(xi for J,S,xi in Jxis)
-        R = self.get_ring(sxis)
-        gens = []
-        Sgens = []
-        xcum = 0
-        for J,S,xi in Jxis:
-            gens.extend([p(R.gens()[:self.nvarsx] +
-                R.gens()[self.nvarsx+xcum:self.nvarsx+xcum+xi] +
-                (R.zero(),) * (J.ring().ngens()-self.nvarsx-xi))
-                for p in J.gens()])
-            Sgens.extend([ p(R.gens()[:self.nvarsx] +
-                R.gens()[self.nvarsx+xcum:self.nvarsx+xcum+xi] +
-                (R.zero(),) * (J.ring().ngens()-self.nvarsx-xi))
-                for p in S ])
-            xcum += xi
-        return (R.ideal(gens,side='twosided'),Sgens,xcum)
-
-    def quick_simplify(self,J,S=None,xi=None,simple=False):
-        if xi is None:
-            xi = J.ring().ngens() - self.nvarsx
-        if xi == 0:
-            return (J,[J.ring().one()],0)
-        
-        # if variables never occur, add a relation for them so they will be
-        # eliminated in the next step. Missing variables should only be
-        # produced with sound=True searches
-        tis = set()
-        for p in J.gens():
-            for e in p.exponents(): 
-                for ti,_ in e[self.nvarsx:].sparse_iter():
-                    tis.add(ti)
-        J += [J.ring().gen(self.nvarsx+ti) for ti in set(range(xi)).difference(tis)]
-        
-        I,coerce = self.get_param_ideal(J)
-        subs = list(I.ring().gens()[:xi]) + [I.ring().zero()]*(I.ring().ngens()-xi)
-        for ti,t in enumerate(I.ring().gens()[:xi]):
-            subs[ti] = I.reduce(t)
-        if not simple and xi > 1: # try to write each parameter in terms of the rest
-            I = ideal([p(subs) for p in I.gens()])
-            for ti,t in enumerate(I.ring().gens()[:xi]):
-                if subs[ti] == t:
-                    R = PolynomialRing(I.base_ring(),(t,)+tuple(I.ring().gens()[:ti]+I.ring().gens()[ti+1:]),
-                               order = TermOrder('degrevlex',1)+ TermOrder('degrevlex',len(subs)-1))
-                    tR = R(t)
-                    tr = I.change_ring(R).reduce(tR)
-                    if tr != tR:
-                        subs[ti] = I.ring()(tr)
-                        I = ideal([p(subs) for p in I.gens()])
-        tis = set()
-        for p in subs:
-            for e in p.exponents():
-                for ti,_ in e.sparse_iter():
-                    tis.add(ti)
-        tis = sorted(tis)
-        ssubs = [I.ring().zero()]*I.ring().ngens()
-        for j,ti in enumerate(tis):
-            ssubs[ti] = I.ring().gen(j)
-        subs = [t(*ssubs) for t in subs]
-
-        R = self.get_ring(len(tis))
-        if S is None:
-            S = [R.one()]
-        else:
-            S = [self.lift_param(R,I.reduce(coerce(s)(subs))) for s in S]
-            S = [R.one()] + [s for s in S if not s.is_constant()]
-        
-        subs = list(R.gens()[:self.nvarsx]) + [self.lift_param(R,t) for t in subs]
-        Jg = [p(*subs) for p in J.gens()]
-        Jg = [p for p in Jg if not p.is_zero()]
-        J = R.ideal(Jg,side='twosided')
-        return (J,S,len(tis))
-
-    def leading_term_ideal(self,J,S):
-        R = PolynomialRing(self.F,self.R0.gens()[:self.nvars])
-        ltIlb = []
-        ltIub = []
-        for p in J.gens():
-            m = self.lm(p)
-            if not m.is_constant():
-                t = p.coefficient(m)
-                m = m(R.gens()+(R.zero(),)*(p.parent().ngens()-R.ngens()))
-                ltIub.append(m)
-                Jt = (J+t).twostd()
-                if any(s in Jt for s in S):
-                    ltIlb.append(m)
-        return R.ideal(ltIlb), R.ideal(ltIub)
-    
-    def ideal_constant_generators(self,J):
-        R = PolynomialRing(self.F,self.R0.gens()[:self.nvars])
-        return R.ideal([p(R.gens()+(R.zero(),)*(p.parent().ngens()-R.ngens())) 
-                          for p in J.gens() if 
-           all(e[self.nvars:].is_constant() for e in p.exponents())])
-
-    @cache
-    def target_hilbert_series(self):
-        ts = FractionField(PolynomialRing(QQ,'t',len(self.dims))).gens()
-        hs = self.r/prod(1-t for t in ts)
-        k = 0
-        while True:
-            done = True
-            for tm in IntegerVectors(k,len(self.dims)):
-                tm = tuple(tm)
-                if self.tm_dim(tm) < self.r:
-                    hs -= (self.r-self.tm_dim(tm))*prod(t**e for t,e in zip(ts,tm))
-                    done = False
-            if done:
-                break
-            k += 1
-        return hs
-
-    @cache
-    def target_hilbert_series_td(self):
-        t = FractionField(PolynomialRing(QQ,'t')).gen()
-        hs = self.target_hilbert_series()
-        return hs((t,)*hs.parent().ngens())
-
-    @cache
-    def Tperp(self):
-        tms = [(0,)*i+(e+1,)+(0,)*(len(self.Tdeg)-i-1)
-             for i,e in enumerate(self.Tdeg)]
-        tms.extend(product(*[range(e+1) for e in self.Tdeg]))
-        return self.R0.ideal([v for tm in tms for vs in 
-                        self.get_vss(tm).values() for v in vs]).twostd()
-class JDat:
-    def __init__(self, ba, J):
-        assert all(e[ba.nvars:].is_constant() for p in J.gens() for e in p.exponents())
-        self.ba = ba
-        self.R = PolynomialRing(ba.F,ba.R0.gens()[:ba.nvars])
-        self.J = self.R.ideal([liftR(p,self.R) for p in J.gens()])
-        self.ltJ = self.R.ideal([p.lm() for p in self.J.groebner_basis()])
-        self.kbase = cache(self.kbase)
-        self.get_vss = cache(self.get_vss)
-        self.get_vs = cache(self.get_vs)
-        self.get_poset = cache(self.get_poset)
-        self.get_poset_info_for_search = cache(self.get_poset_info_for_search)
-        
-    def kbase(self,d):
-        return [liftR(m,ba.R0) for m in ff.kbase(self.J,d)]
-    
-    def get_vss(self,tm):
-        vs = self.kbase(sum(tm))
-        vss = {}
-        for v in vs:
-            if ba.polynomial_tm(v) == tm:
-                vss.setdefault(ba.polynomial_weight(v),[]).append(v)
-        todel = []
-        for wt,vs in vss.items():
-            vs.sort(reverse=True)
-            if all(a <= b for a,b in zip(tm,ba.Tdeg)): # restrict to Tperp
-                ms = []
-                msix = {}
-                eqs = {}
-                for vi,v in enumerate(vs):
-                    Td = ba.T
-                    for i,k in v.exponents()[0].sparse_iter():
-                        for _ in range(k):
-                            Td = Td.derivative(Td.parent().gen(i))
-                    for m,c in Td.dict().items():
-                        if m not in msix:
-                            msix[m] = len(ms)
-                            ms.append(m)
-                        eqs[(msix[m], vi)] = c
-                eqs = matrix(ba.F, len(ms), len(vs), eqs)
-                K = eqs.right_kernel_matrix()
-                vs = [sum(e*vs[i] for i,e in enumerate(r)) for r in K]
-            vss[wt] = list(reversed(vs))
-            if len(vss[wt]) == 0:
-                todel.append(wt)
-        for wt in todel:
-            del vss[wt]
-        return vss
-    
-    def get_vs(self, tm):
-        vss = self.get_vss(tm)
-        P = self.get_poset((),(tm,))
-        return [vss[wt][i] for _,wt,i in P.linear_extension()]
-    
-    def get_poset(self, tms, tms_high_to_low):
-        vsix = {}
-        lmtov = {}
-        tms = tms + tms_high_to_low
-        g = DiGraph()
-        for tm in tms:
-            for wt,vs in self.get_vss(tm).items():
-                for vi,v in enumerate(vs):
-                    lmtov[v.lm()] = v
-                    vk = (tm,wt,vi)
-                    vsix[v] = vk
-                    g.add_vertex(vk)
-        for tm in tms:
-            for vs in self.get_vss(tm).values():
-                for x in ba.R0.gens()[ba.nvars:ba.nvars+len(ba.xs)]:
-                    wi = 0
-                    for v in vs:
-                        vk = vsix[v]
-                        w = liftR(self.J.reduce(liftR(x*v-v*x,self.R)),ba.R0)
-                        if w.is_zero():
-                            continue
-                        _,wt,wicur = vsix[lmtov[w.lm()]]
-                        wi = max(wi,wicur)
-                        for i in range(wi+1):
-                            g.add_edge(vk,(tm,wt,i))
-                        wilast = wi
-        for tm in tms_high_to_low:
-            for vs in self.get_vss(tm).values():
-                for v,w in zip(vs,vs[1:]):
-                    g.add_edge(vsix[w],vsix[v])
-                            
-        tmposet = Poset((tms,lambda a,b: all(i<=j for i,j in zip(a,b))))
-        for tm,tmr in tmposet.cover_relations():
-            for vs in self.get_vss(tm).values():
-                for v in vs:
-                    vk = vsix[v]
-                    for m in ba.all_monomials(tuple(map(sub,tmr,tm))):
-                        w = v*m
-                        w = liftR(self.J.reduce(liftR(v*m,self.R)),ba.R0)
-                        if w.is_zero():
-                            continue
-                        wk = vsix[lmtov[w.lm()]]
-                        g.add_edge(vk,wk)
-                    
-        return Poset(g)
-    
-    def get_poset_info_for_search(self, tms, tms_high_to_low):
-        P = self.get_poset(tms,tms_high_to_low)
-        wkabove = {wk : [] for wk in P}
-        vkbelowcnt = {wk : 0 for wk in P}
-        for vk,wk in P.cover_relations():
-            wkabove[vk].append(wk)
-            vkbelowcnt[wk] += 1
-        vkstart = set()
-        for vk in P:
-            if vkbelowcnt[vk] == 0:
-                vkstart.add(vk)
-        return vkstart,vkbelowcnt,wkabove
 
 def liftR(p,R):
     if p.parent() is R:
