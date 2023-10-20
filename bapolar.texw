@@ -1069,8 +1069,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 assert lp.get_max(lp[v.lm()]) == 1.0
                 
                 def printstep(extra=''):
-                    remhi = self.tm_dim(tm) - self.r - num_in[tm]
-                    remlo = self.r - self.tm_codim_tperp(tm) - num_out[tm]
+                    remhi = len(mod.get_vs(tm)) - target_out(tm) - num_in[tm]
+                    remlo = target_out(tm) - num_out[tm]
                     vstr = str(v.lm())
                     vstr_width[0] = max(vstr_width[0],len(vstr))
                     print ('%s%s %s xi=%d %.3f %s%d %d %s' % ('sound ' if sound else '',
