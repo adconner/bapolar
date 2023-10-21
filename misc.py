@@ -161,4 +161,48 @@ def lp_integer_points(lp,xs=None,fullsol=True,prunef=lambda psol: True):
             lp.set_min(lp[x],omin)
         st.pop()
     return dfs()
+
+class IntegerProgram:
+    def __init__(self,lp,xs=None):
+        self.lp = deepcopy(lp)
+        self.bounds = { x: (lp.get_min(lp[x]), lp.get_max(lp[x])) 
+                    for x in lp.default_variable().keys() }
+        if xs is None:
+            self.xs = list(self.lp.default_variable().keys())
+        else:
+            self.xs = xs
+        self.infeas = SetSystem()
+        self.sols = SetSystem()
+    def extend_sol(self,psol={}):
+        assert all(x in self.lp.default_variable().keys() for x in psol)
+        psol = list(psol.items())
+        try:
+            return next(sol for sol in self.sols.iter_sets(Slo=psol))
+        except StopIteration:
+            pass
+        if any(True for _ in self.infeas.iter_sets(Shi=psol)):
+            return False
+        for x,e in psol:
+            self.lp.set_min(self.lp[x], e)
+            self.lp.set_max(self.lp[x], e)
+        try:
+            def prunef(psol):
+                return not any(True for _ in self.infeas.iter_sets(Shi=list(psol.items())))
+            sol = next(lp_integer_points(self.lp, xs=self.xs, fullsol=False, prunef=prunef))
+            self.sols.add_set([(x,int(round(v))) for x,v in sol.items()])
+            return sol
+        except StopIteration:
+            pass
+        finally:
+            for x,e in psol:
+                self.lp.set_min(self.lp[x], self.bounds[x][0])
+                self.lp.set_max(self.lp[x], self.bounds[x][1])
+        rem = list(self.infeas.iter_sets(Slo=psol))
+        for r,_ in rem:
+            self.infeas.remove_set(r)
+        self.infeas.add_set(psol)
+        return None
+        
+    
+
         
