@@ -493,7 +493,7 @@ from functools import cache
 <<complete=False>>=
 
 def three_place_ideals_up_to(ba,d=1,Jxi=None):
-    def dfs(Jxi,tms,mod=None): 
+    def dfs(Jxi,tms,mod=ba.zero): 
         if len(tms) == 0:
             yield Jxi
             return
@@ -502,7 +502,8 @@ def three_place_ideals_up_to(ba,d=1,Jxi=None):
         J,S,xi = Jxi
         for Jxiup in ba.get_ideals_for_tm([tm], [tm[:s]+(tm[s]+1,)+tm[s+1:] for s in range(3)]
                       +([(2,2,2)] if sum(tm) == 4 and all(e <= 2 for e in tm) else []),
-                  J,S,xi,search_above = sum(tm) == 2, simple_lp = sum(tm) >= 3, mod = mod):
+                  J,S,xi,search_above = sum(tm) == 2, lp_interval_length_bound = 6
+                                          if sum(tm) <= 3 else 2, mod = mod):
             if len(tms) == 1 and sum(tm) < d:
                 ltIlb, ltIub = ba.leading_term_ideal(*Jxiup[:2])
                 R = ltIlb.ring()
@@ -518,8 +519,8 @@ def three_place_ideals_up_to(ba,d=1,Jxi=None):
                         break
                     for tmc in IntegerVectors(dnext,3):
                         tmc = tuple(tmc)
-                        codim_upper_bound = len([m for m in ba.all_monomials(tmc,R) if m not in ltIlb])
-                        codim_noadd_lower_bound = len([m for m in ba.all_monomials(tmc,R) if m not in ltIub])
+                        codim_upper_bound = len([m for m in mod.get_vs(tmc) if liftR(m.lm(),R) not in ltIlb]) + ba.tm_codim_tperp(tmc)
+                        codim_noadd_lower_bound = len([m for m in mod.get_vs(tmc) if liftR(m.lm(),R) not in ltIub]) + ba.tm_codim_tperp(tmc)
                         if codim_upper_bound != ba.r or codim_noadd_lower_bound != ba.r:
                             tmsnext.append((tmc,codim_upper_bound))
                     if len(tmsnext) > 0:
@@ -908,7 +909,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         return R(t(R.gens()[self.nvarsx:self.nvarsx+tg]+(R.zero(),)*(tg-Rg)))
     
     def get_ideals_for_tm(self,tms=[],tmcs=[],J=None,S=None,xi=0,
-                          search_above=True,simple_lp=False,sound=False,
+                          search_above=True,lp_interval_length_bound=6,sound=False,
                           preset_choices = {}, mod=None):
         if mod is None:
             mod = self.zero
@@ -977,10 +978,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                        for xi,e in m.exponents()[0].sparse_iter() for _ in range(e)]))
             return in_lti
                         
-        if simple_lp:
-            lp = deepcopy(mod.get_linear_program(tms,tmcs,simple=True))
-        else:
-            lp = deepcopy(mod.get_linear_program(tms,tmcs))
+        lp = deepcopy(mod.get_linear_program(tms,tmcs,
+             interval_length_bound=lp_interval_length_bound))
         unset = set()
         params_needed = {vks : vks[2] for vks in tmsvks}
         num_in = {tm:0 for tm in tms+tmcs}
@@ -1254,7 +1253,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             else:
                 # yield (J,S,xi)
                 # continue
-                for JSxi in self.get_ideals_for_tm(tms,tmcs,J,S,xi,search_above=search_above,simple_lp=simple_lp,sound=True):
+                for JSxi in self.get_ideals_for_tm(tms,tmcs,J,S,xi,search_above=search_above,
+                                                   lp_interval_length_bound=lp_interval_length_bound,sound=True):
                     yield JSxi
             num += 1
         if num == 0:
@@ -1702,7 +1702,8 @@ class JDat:
                 deduplp.add_constraint(cc >= 0)
             prows = [self.get_vss(tm)[vk][i] for tm,vk,i in rowvks]
             pcols = [self.get_vss(tm)[vk][i] for tm,vk,i in colvks]
-            print(prows,pcols,kerdim)
+            if len(prows) > 1:
+                print(prows,pcols,kerdim)
             nonlocal nconstraints
             constraints.add_set(S, (nconstraints,kerdim))
             nconstraints += 1
