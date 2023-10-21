@@ -109,7 +109,7 @@ def lp_integer_points(lp,xs=None,fullsol=True,prunef=lambda psol: True):
                 yield copy(sol)
             return
         x = max(remxs, key=lambda x: abs(csol[x]-round(csol[x])))
-        v = floor(csol[x]+1e-10)
+        v = math.floor(csol[x]+1e-10)
         omin = lp.get_min(lp[x])
         omax = lp.get_max(lp[x])
         if v == omax:
@@ -165,44 +165,116 @@ def lp_integer_points(lp,xs=None,fullsol=True,prunef=lambda psol: True):
 class IntegerProgram:
     def __init__(self,lp,xs=None):
         self.lp = deepcopy(lp)
-        self.bounds = { x: (lp.get_min(lp[x]), lp.get_max(lp[x])) 
-                    for x in lp.default_variable().keys() }
+        self.bounds = [(x, lp.get_min(lp[x]), lp.get_max(lp[x]))
+                    for x in lp.default_variable().keys()]
         if xs is None:
             self.xs = list(self.lp.default_variable().keys())
         else:
             self.xs = xs
         self.infeas = SetSystem()
         self.sols = SetSystem()
-    def extend_sol(self,psol={}):
-        assert all(x in self.lp.default_variable().keys() for x in psol)
-        psol = list(psol.items())
-        try:
-            return next(sol for sol in self.sols.iter_sets(Slo=psol))
-        except StopIteration:
-            pass
-        if any(True for _ in self.infeas.iter_sets(Shi=psol)):
-            return False
-        for x,e in psol:
-            self.lp.set_min(self.lp[x], e)
-            self.lp.set_max(self.lp[x], e)
-        try:
-            def prunef(psol):
-                return not any(True for _ in self.infeas.iter_sets(Shi=list(psol.items())))
-            sol = next(lp_integer_points(self.lp, xs=self.xs, fullsol=False, prunef=prunef))
-            self.sols.add_set([(x,int(round(v))) for x,v in sol.items()])
-            return sol
-        except StopIteration:
-            pass
-        finally:
-            for x,e in psol:
-                self.lp.set_min(self.lp[x], self.bounds[x][0])
-                self.lp.set_max(self.lp[x], self.bounds[x][1])
-        rem = list(self.infeas.iter_sets(Slo=psol))
+    def add_infeas(self, bans):
+        rem = list(self.infeas.iter_sets(Slo=bans))
         for r,_ in rem:
             self.infeas.remove_set(r)
-        self.infeas.add_set(psol)
-        return None
+        self.infeas.add_set(bans)
+    def reset_bounds(self):
+        for x,lo,hi in self.bounds:
+            self.lp.set_min(self.lp[x],lo)
+            self.lp.set_max(self.lp[x],hi)
+    # if unsafe_no_copy_lp, this generator must either be exhasted before
+    # calling any other methods, or reset_bounds() must be called (and no
+    # more solutions emitted)
+    def extend_psol(self,psol=[],unsafe_no_copy_lp=False):
+        from sage.numerical.mip import MIPSolverException
+        bans = [(x,i) for x,v in psol for i in range(int(self.lp.get_min(self.lp[x])), v) ]
+        bans.extend([(x,i) for x,v in psol for i in range(v+1, int(self.lp.get_max(self.lp[x])+1))])
+        if any(True for _ in self.infeas.iter_sets(Shi=bans)):
+            return
+        if unsafe_no_copy_lp:
+            lp = deepcopy(self.lp)
+        else:
+            lp = self.lp
+        for x,v in psol:
+            lp.set_min(lp[x],v)
+            lp.set_max(lp[x],v)
+        st = []
+        def dfs(check_solvable=True):
+            try:
+                if check_solvable:
+                    lp.solve()
+            except MIPSolverException:
+                return
+            csol = lp.get_values(lp.default_variable())
+            remxs = [x for x in self.xs if lp.get_min(lp[x]) < lp.get_max(lp[x])]
+            if len(remxs) == 0:
+                sol = [(x,csol[x]) for x in self.xs]
+                self.sols.add_set(sol)
+                yield sol
+                return
+            x = max(remxs, key=lambda x: abs(csol[x]-round(csol[x])))
+            v = math.floor(csol[x]+1e-10)
+            omin = int(lp.get_min(lp[x]))
+            omax = int(lp.get_max(lp[x]))
+            if v == omax:
+                v -= 1
+            assert v >= omin and v+1 <= omax
+            print('%s%s %d %.2f %d' % (''.join(st),str(x),lp.get_min(lp[x]),
+                                     csol[x],lp.get_max(lp[x])))
+            def tryhi():
+                for i in range(omin,v+1):
+                    bans.append((x,i))
+                if not any(True for _ in self.infeas.iter_sets(Shi=bans)):
+                    lp.set_min(lp[x],v+1)
+                    havesol = False
+                    for res in dfs(v+1-csol[x] >= 1e-10):
+                        havesol = True
+                        yield res
+                    if not havesol:
+                        self.add_infeas(bans)
+                    lp.set_min(lp[x],omin)
+                for i in range(omin,v+1):
+                    bans.pop()
+            def trylo():
+                for i in range(v+1,omax+1):
+                    bans.append((x,i))
+                if not any(True for _ in self.infeas.iter_sets(Shi=bans)):
+                    lp.set_max(lp[x],v)
+                    havesol = False
+                    for res in dfs(csol[x]-v >= 1e-10):
+                        havesol = True
+                        yield res
+                    if not havesol:
+                        self.add_infeas(bans)
+                    lp.set_max(lp[x],omax)
+                for i in range(v+1,omax):
+                    bans.pop()
+            hi_first = csol[x] - v >= 0.5
+            st.append(' ')
+            if hi_first:
+                for sol in tryhi():
+                    yield sol
+                st[-1] = '.'
+            for sol in trylo():
+                yield sol
+            if not hi_first:
+                st[-1] = '.'
+                for sol in tryhi():
+                    yield sol
+            st.pop()
+        havesol = False
+        for sol in dfs():
+            havesol = True
+            yield sol
+        if not havesol:
+            self.add_infeas(bans)
+    def can_extend_psol(self,psol=[]):
+        if any(True for _ in self.sols.iter_sets(Slo=psol)):
+            return True
+        res = any(True for _ in self.extend_psol(psol,unsafe_no_copy_lp=True))
+        if res:
+            self.reset_bounds()
+        return res
         
-    
 
         

@@ -566,11 +566,11 @@ def lp_only_look_nonstrict(ba):
                            [p.lm() for p in ba.zero.get_vs(tm)])
             for lpi,(tm,tmcs) in enumerate(zip(tms,tmcss)) ]
     def prunef(psol):
-        psols = [{} for _ in tms]
+        psols = [[] for _ in tms]
         for x,v in psol.items():
-            psols[tms.index(ba.polynomial_tm(x))][x] = v
+            psols[tms.index(ba.polynomial_tm(x))].append((x,v))
         for psol, ip in zip(psols,ips):
-            if ip.extend_sol(psol) is None:
+            if not ip.can_extend_psol(psol):
                 return False
         return True
     lp = ba.zero.get_linear_program(((1,1,0),(1,0,1),(0,1,1)),((1,1,1),),
@@ -583,21 +583,19 @@ def lp_only_look_nonstrict(ba):
         tmcs = tmcss[lpi]
         return list(ba.get_ideals_for_tm((tm,),tmcs,preset_choices=dict(sol)))
     
-    def gen():
-        for fsol in lp_integer_points(lp,xs,fullsol=False,prunef=prunef):
-            sols = [{} for _ in tms]
-            for x,v in fsol.items():
-                sols[tms.index(ba.polynomial_tm(x))][x] = v
-            Jxiss = []
-            for Jxis in product(*[getJxis(lpi,tuple(sorted(sol.items()))) 
-                                  for lpi, sol in enumerate(sols)]):
-                Jxi = ba.sum_ideals_S(Jxis)
-                try:
-                    next(ba.get_ideals_for_tm([],[(1,1,1)],*Jxi))
-                    yield Jxi
-                except StopIteration:
-                    pass
-    return gen, ips
+    for fsol in lp_integer_points(lp,xs,fullsol=False,prunef=prunef):
+        sols = [{} for _ in tms]
+        for x,v in fsol.items():
+            sols[tms.index(ba.polynomial_tm(x))][x] = v
+        Jxiss = []
+        for Jxis in product(*[getJxis(lpi,tuple(sorted(sol.items()))) 
+                              for lpi, sol in enumerate(sols)]):
+            Jxi = ba.sum_ideals_S(Jxis)
+            try:
+                next(ba.get_ideals_for_tm([],[(1,1,1)],*Jxi))
+                yield Jxi
+            except StopIteration:
+                pass
 
 def lp_only_look_strict(ba):
     from operator import concat
