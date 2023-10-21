@@ -567,13 +567,13 @@ def lp_only_look_strict(ba):
     for lpi,(tm,tmcs) in enumerate(zip(tms,tmcss)):
         lp = ba.zero.get_linear_program((tm,),tmcs,interval_length_bound=8)
         xs = [x.lm() for vs in ba.zero.get_vss(tm).values() for x in vs]
-        add_set, iter_sets = get_set_system()
-        sols_ss.append((add_set,iter_sets))
+        ss = SetSystem()
+        sols_ss.append(ss)
         cursols = []
         for si,sol in enumerate(lp_integer_points(lp,xs,fullsol=False)):
             print(lpi,si)
             cursols.append(sol)
-            add_set([m for m,v in sol.items() if v==0],si)
+            ss.add_set([m for m,v in sol.items() if v==0],si)
         if len(cursols) == 0:
             return
         sols.append(cursols)
@@ -598,17 +598,17 @@ def lp_only_look_strict(ba):
                 Slohis[lpj][1].remove(m)
         return Slohis
     def prunef(psol):
-        return all( any(True for _,si in iter_sets(Slo,Shi) 
+        return all( any(True for _,si in ss.iter_sets(Slo,Shi) 
                          if (lpj,si) not in remove)
-                   for lpj,((_,iter_sets),(Slo,Shi))
+                   for lpj,(ss,(Slo,Shi))
                    in enumerate(zip(sols_ss,getSlohis(psol))) )
     lp = ba.zero.get_linear_program(((1,1,0),(1,0,1),(0,1,1)),((1,1,1),),interval_length_bound=4)
     xs = [x.lm() for tm in tms for vs in ba.zero.get_vss(tm).values() for x in vs]
     for fsol in lp_integer_points(lp,xs,fullsol=False,prunef=prunef):
         Slohis = getSlohis(fsol)
         # assert all(sorted(Slo) == sorted(Shi) for Slo,Shi in Slohis)
-        sis = [next(iter_sets(Slo,Shi))[1]
-               for (_,iter_sets),(Slo,Shi) in zip(sols_ss,Slohis)]
+        sis = [next(ss.iter_sets(Slo,Shi))[1]
+               for ss,(Slo,Shi) in zip(sols_ss,Slohis)]
         Jxiss = [getJxis(lpj,si) for lpj,si in enumerate(sis)]
         assert len(Jxiss) == 3
         for Jxis in product(*Jxiss):
@@ -639,7 +639,7 @@ def lp_only_look(ba):
     xs = [x.lm() for tm in tms for vs in ba.zero.get_vss(tm).values() for x in vs]
     yss = [[] for _ in range(3)]
     sols = [[] for _ in range(3)]
-    sols_ss = [get_set_system() for _ in range(3)]
+    sols_ss = [SetSystem() for _ in range(3)]
     remove = set()
     @cache
     def getJxis(lpi,si):
@@ -670,9 +670,9 @@ def lp_only_look(ba):
                             Slohis[lpj][1].remove(m)
                     return Slohis
                 def prunef(psol):
-                    return all( any(True for _,si in iter_sets(Slo,Shi) 
+                    return all( any(True for _,si in ss.iter_sets(Slo,Shi) 
                                      if (lpj,si) not in remove)
-                               for lpj,((_,iter_sets),(Slo,Shi))
+                               for lpj,(ss,(Slo,Shi))
                                in enumerate(zip(sols_ss,getSlohis(psol))) if lpi != lpj)
                 for m,v in sol.items():
                     if v == 0:
@@ -681,12 +681,12 @@ def lp_only_look(ba):
                         lp.set_min(lp[m],1.0)
                 try:
                     lp.solve()
-                    sols_ss[lpi][0]([m for m,v in sol.items() if v==0],si)
+                    sols_ss[lpi].add_set([m for m,v in sol.items() if v==0],si)
                     for fsol in lp_integer_points(lp,xs,fullsol=False,prunef=prunef):
                         Slohis = getSlohis(fsol)
                         # assert all(sorted(Slo) == sorted(Shi) for Slo,Shi in Slohis)
-                        sis = [next(iter_sets(Slo,Shi))[1]
-                               for (_,iter_sets),(Slo,Shi) in zip(sols_ss,Slohis)]
+                        sis = [next(ss.iter_sets(Slo,Shi))[1]
+                               for ss,(Slo,Shi) in zip(sols_ss,Slohis)]
                         Jxiss = [getJxis(lpj,si) for lpj,si in enumerate(sis)]
                         assert len(Jxiss) == 3
                         for Jxis in product(*Jxiss):
@@ -912,11 +912,11 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                      for i in range(len(vs)))
         
         def guaranteed_lms(J,S):
-            add_set, iter_sets = get_set_system()
+            lts = SetSystem()
             if J.ring().ngens() == self.nvarsx:
                 for p in J.gens():
                     if not p.is_zero():
-                        add_set([xi for xi,e in p.lm().
+                        lts.add_set([xi for xi,e in p.lm().
                                  exponents()[0].sparse_iter() for _ in range(e)],None)
                 lms = [p.lm() for p in J.gens() if not p.is_zero()]
             else:
@@ -928,10 +928,10 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         continue
                     It = I + coerce(p.coefficient(self.lm(p)))
                     if any(s in It for s in SI):
-                        add_set([xi for xi,e in self.lm(p,True).
+                        lts.add_set([xi for xi,e in self.lm(p,True).
                                  exponents()[0].sparse_iter() for _ in range(e)],None)
             def in_lti(m):
-                return any(True for _ in iter_sets([],[xi 
+                return any(True for _ in lts.iter_sets([],[xi 
                        for xi,e in m.exponents()[0].sparse_iter() for _ in range(e)]))
             return in_lti
                         
@@ -1627,15 +1627,14 @@ class JDat:
             return prog
 
 
-        add_set, iter_sets = get_set_system()
-            
+        constraints = SetSystem()
         nconstraints = 0
         def add_constraint(rowvks,colvks,kerdim,deduplp=None):
             assert kerdim <= len(colvks)
             if len(colvks) == kerdim:
                 return False
             S = [('r',vk) for vk in rowvks]+[('c',vk) for vk in colvks]
-            for S2,(ci,kerdim1) in iter_sets([],S):
+            for S2,(ci,kerdim1) in constraints.iter_sets([],S):
                 rowvks1 = []
                 colvks1 = []
                 for tag,vk in S2:
@@ -1663,7 +1662,7 @@ class JDat:
             pcols = [self.get_vss(tm)[vk][i] for tm,vk,i in colvks]
             print(prows,pcols,kerdim)
             nonlocal nconstraints
-            add_set(S, (nconstraints,kerdim))
+            constraints.add_set(S, (nconstraints,kerdim))
             nconstraints += 1
             prog.add_constraint(prog.sum(prog[self.get_vss(tm)[vk][i].lm()]
                                          for tm,vk,i in colvks)
@@ -1680,8 +1679,8 @@ class JDat:
             for l in range(1,min(interval_length_bound,tosize)+1):
                 for a in range(tosize-l+1):
                     b = a+l
-                    sol_ss[(a,b)] = get_set_system()
-                    add_sol, _ = sol_ss[(a,b)]
+                    sol_ss[(a,b)] = SetSystem()
+                    ss = sol_ss[(a,b)]
                     rowvks = [to+(i,) for i in range(a,b)]
                     Ms = []
                     for f in froms:
@@ -1694,7 +1693,7 @@ class JDat:
                     if r != Ms[0].nrows():
                         # could actually continue here with kerdim equal to defect if want
                         continue
-                    add_set, iter_sets = get_set_system()
+                    cols_ss = SetSystem()
                     cols = []
                     cols_ech = []
                     cols_ech_pivots = []
@@ -1703,13 +1702,13 @@ class JDat:
                         if len(cols) == l:
                             assert l > 0
                             colvks = [froms[ii]+(jx,) for ii,jx in cols]
-                            add_sol(colvks,None)
+                            ss.add_set(colvks,None)
                             have = False
                             for l1 in range(1,l):
-                                _,iter_sols1 = sol_ss[(a,a+l1)]
-                                _,iter_sols2 = sol_ss[(a+l1,b)]
-                                if any(True for psol,_ in iter_sols1([], colvks) 
-                                       for _ in iter_sols2([], [vk for vk in colvks if vk not in psol])):
+                                ss1 = sol_ss[(a,a+l1)]
+                                ss2 = sol_ss[(a+l1,b)]
+                                if any(True for psol,_ in ss1.iter_sets(Shi=colvks) 
+                                       for _ in ss2.iter_sets(Shi=[vk for vk in colvks if vk not in psol])):
                                     have = True
                                     break
                             if not have:
@@ -1730,7 +1729,7 @@ class JDat:
                             nextpivot = next(ei for ei,e in enumerate(nextcol.list()) if e != 0)
                             nextcol /= nextcol[nextpivot,0]
                             cols.append((ii,jx))
-                            if any(True for _ in iter_sets([],cols)):
+                            if any(True for _ in cols_ss.iter_sets([],cols)):
                                 cols.pop()
                                 continue
                             cols_ech.append(nextcol)
@@ -1740,7 +1739,7 @@ class JDat:
                             jxs[ii] = startjx
                             cols_ech_pivots.pop()
                             cols_ech.pop()
-                            add_set(cols,None)
+                            cols_ss.add_set(cols,None)
                             cols.pop()
                     dfs()
                             

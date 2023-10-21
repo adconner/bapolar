@@ -1,4 +1,3 @@
-    
 # reimplementation of product from itertools which reorders its output to
 # achieve maximum laziness 
 def lproduct(*its):
@@ -23,28 +22,39 @@ def lproduct(*its):
 # multiset to the collection and iter_sets returns an iterator over all
 # multisets in the collection containing Slo and contained in Shi. Elements of
 # sets must be hashable
-def get_set_system():
-    from functools import cache
-    sets = {}
-    ei = -1
-    @cache
-    def key(s):
-        nonlocal ei
-        ei += 1
-        return ei
-    def add_set(S,label):
-        S = sorted(S, key=key)
-        cur_sets = sets
+class SetSystem:
+    def __init__(self):
+        self.sets = {}
+        self.ei = -1
+        from functools import cache
+        self.key = cache(self.key)
+    def key(self,s):
+        self.ei += 1
+        return self.ei
+    def add_set(self,S,label=None):
+        S = sorted(S, key=self.key)
+        cur_sets = self.sets
         for s in S:
             cur_sets = cur_sets.setdefault(s,{})
         cur_sets[None] = label
-    from collections import Counter
-    from copy import copy
-    from heapq import heapify,heappush,heappop
-    def iter_sets(Slo,Shi):
-        Slo = [(key(s),s) for s in Slo]
+    def remove_set(self,S):
+        S = sorted(S, key=self.key)
+        def rs(cur_sets,i):
+            if i == len(S):
+                del cur_sets[None]
+            else:
+                rs(cur_sets[S[i]], i+1)
+                if len(cur_sets[S[i]]) == 0:
+                    del cur_sets[S[i]]
+        rs(self.sets,0)
+    def iter_sets(self,Slo=[],Shi=None):
+        from collections import Counter
+        from copy import copy
+        from heapq import heapify,heappush,heappop
+        Slo = [(self.key(s),s) for s in Slo]
         heapify(Slo)
-        Shi = Counter(Shi)
+        if Shi is not None:
+            Shi = Counter(Shi)
         cur = []
         def dfs(cur_sets):
             if None in cur_sets and len(Slo) == 0:
@@ -52,11 +62,12 @@ def get_set_system():
             for e,sets1 in cur_sets.items():
                 if e is None:
                     continue
-                if Shi.get(e,0) > 0 and (
-                        len(Slo) == 0 or key(e) <= Slo[0][0]):
+                if (Shi is None or Shi.get(e,0) > 0) and (
+                        len(Slo) == 0 or self.key(e) <= Slo[0][0]):
                     cur.append(e)
-                    Shi[e] -= 1
-                    if len(Slo) > 0 and key(e) == Slo[0][0]:
+                    if Shi is not None:
+                        Shi[e] -= 1
+                    if len(Slo) > 0 and self.key(e) == Slo[0][0]:
                         topush = heappop(Slo)
                     else:
                         topush = None
@@ -64,10 +75,10 @@ def get_set_system():
                         yield r
                     if topush is not None:
                         heappush(Slo,topush)
-                    Shi[e] += 1
+                    if Shi is not None:
+                        Shi[e] += 1
                     cur.pop()
-        return dfs(sets)
-    return add_set,iter_sets
+        return dfs(self.sets)
 
 # function to enumerate integer points of a polytope defined by input linear program
 # (sage MixedIntegerLinearProgram). If xs, a subset of variables, is provided,
