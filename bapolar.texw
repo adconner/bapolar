@@ -605,32 +605,38 @@ def lp_only_look_strict(ba):
     tmcss = [((2,1,0),(1,2,0)), 
               ((2,0,1),(1,0,2)),
               ((0,2,1),(0,1,2))]
-    sols = []
+    lp = deepcopy(ba.zero.get_linear_program(
+        ((1,1,0),(1,0,1),(0,1,1)),((1,1,1),),interval_length_bound=4))
     sols_ss = []
-    for lpi,(tm,tmcs) in enumerate(zip(tms,tmcss)):
-        lp = ba.zero.get_linear_program((tm,),tmcs,interval_length_bound=8)
+    for tm,tmcs in zip(tms,tmcss):
+        lpcur = ba.zero.get_linear_program((tm,),tmcs,interval_length_bound=6)
         xs = [x.lm() for vs in ba.zero.get_vss(tm).values() for x in vs]
         ss = SetSystem()
         sols_ss.append(ss)
-        cursols = []
-        for si,sol in enumerate(lp_integer_points(lp,xs,fullsol=False)):
-            print(lpi,si)
-            cursols.append(sol)
-            ss.add_set([m for m,v in sol.items() if v==0],si)
-        if len(cursols) == 0:
-            return
-        sols.append(cursols)
-    remove = set()
+        R = PolynomialRing(QQ,'x',len(xs))
+        bad_condition = R.ideal(1)
+        for si,sol in enumerate(lp_integer_points(lpcur,xs,fullsol=False)):
+            print(tm,si)
+            sol = [m for m,v in sol.items() if v==0]
+            ss.add_set(sol)
+            bad_condition = bad_condition.intersection(R.ideal([
+                R.gen(xs.index(m)) for m in sol]))
+        print(bad_condition)
+        for bad in bad_condition.gens():
+            assert len(bad.exponents()) == 1
+            assert all(k==1 for i,k in bad.exponents()[0].sparse_iter())
+            lp.add_constraint(lp.sum(lp[xs[i].lm()] for i,_ in bad.exponents()[0].sparse_iter()) <= bad.degree()-1)
     @cache
-    def getJxis(lpi,si):
+    def getJxis(lpi,sol):
         tm = tms[lpi]
         tmcs = tmcss[lpi]
-        res = list(ba.get_ideals_for_tm((tm,),tmcs,preset_choices=sols[lpi][si]))
+        preset_choices = {v.lm() : True for v in ba.zero.get_vs(tm)}
+        preset_choices.update({m.lm() : False for m in sol})
+        res = list(ba.get_ideals_for_tm((tm,),tmcs,preset_choices=preset_choices))
         if len(res) == 0:
-            remove.add((lpi,si))
-            print("REMOVE",remove)
+            sols_ss[lpi].remove_set(sol)
         return res
-    def getSlohis(psol):
+    def prunef(psol):
         Slohis = [([],set([v.lm() for vs in ba.zero.get_vss(tm).values() 
                        for v in vs])) for tm in tms]
         for m,v in psol.items():
@@ -639,21 +645,17 @@ def lp_only_look_strict(ba):
                 Slohis[lpj][0].append(m)
             else:
                 Slohis[lpj][1].remove(m)
-        return Slohis
-    def prunef(psol):
-        return all( any(True for _,si in ss.iter_sets(Slo,Shi) 
-                         if (lpj,si) not in remove)
-                   for lpj,(ss,(Slo,Shi))
-                   in enumerate(zip(sols_ss,getSlohis(psol))) )
-    lp = ba.zero.get_linear_program(((1,1,0),(1,0,1),(0,1,1)),((1,1,1),),interval_length_bound=4)
+        return all( any(True for _,si in ss.iter_sets(Slo,Shi) )
+                   for ss,(Slo,Shi)
+                   in zip(sols_ss,Slohis) )
     xs = [x.lm() for tm in tms for vs in ba.zero.get_vss(tm).values() for x in vs]
     for fsol in lp_integer_points(lp,xs,fullsol=False,prunef=prunef):
-        Slohis = getSlohis(fsol)
-        # assert all(sorted(Slo) == sorted(Shi) for Slo,Shi in Slohis)
-        sis = [next(ss.iter_sets(Slo,Shi))[1]
-               for ss,(Slo,Shi) in zip(sols_ss,Slohis)]
-        Jxiss = [getJxis(lpj,si) for lpj,si in enumerate(sis)]
-        assert len(Jxiss) == 3
+        sols = [[] for _ in tms]
+        for x,k in fsol.items():
+            if k == 0:
+                sols[tms.index(ba.polynomial_tm(x))].append(x)
+        sols = [tuple(sorted(sol)) for sol in sols]
+        Jxiss = [getJxis(lpj,sol) for lpj,sol in enumerate(sols)]
         for Jxis in product(*Jxiss):
             Jxi = ba.sum_ideals_S(Jxis)
             try:
