@@ -1636,7 +1636,7 @@ class JDat:
                     Q.add_edge((tm,wt),(tm,wtup),get_matrix(self.get_vss(tm)[wtup],xvs))
         return Q
     
-    def get_linear_program(self, tms, tmcs=(), simple=False, interval_length_bound=6):
+    def get_linear_program(self, tms, tmcs=(), interval_length_bound=6, precise=False):
         prog = MixedIntegerLinearProgram(solver='GLPK')
         # prog.set_binary(prog.default_variable())
         # # if set_real, be sure to change exact comparisons to within machine precision
@@ -1800,6 +1800,31 @@ class JDat:
             deduplp = MixedIntegerLinearProgram(solver='GLPK',maximization=False)
             add_relations((tmr,wtr), froms, deduplp, interval_length_bound=interval_length_bound)
         print(tms,tmcs,prog.number_of_constraints(),'constraints')
+        if precise:
+            ms = dict([(next(iter(v.dict().keys())),m) for m,v in prog.default_variable().items()])
+            msix = dict([(m,next(iter(v.dict().keys()))) for m,v in prog.default_variable().items()])
+            for tm in tms:
+                curxis = set(msix[m.lm()] for tmcur in (tm,)+tmcs for m in self.get_vs(tmcur))
+                lp = MixedIntegerLinearProgram(solver='GLPK')
+                lp.set_real(lp.default_variable())
+                lp.set_min(lp.default_variable(),0.0)
+                lp.set_max(lp.default_variable(),1.0)
+                for lo,(xis,cs),hi in prog.constraints():
+                    if all(xi in curxis for xi in xis):
+                        lp.add_constraint(lp.sum(c*lp[ms[xi]] for xi,c in zip(xis,cs)),min=lo,max=hi)
+                xs = [p.lm() for p in self.get_vs(tm)]
+                R = PolynomialRing(QQ,'x',len(xs))
+                bad_condition = R.ideal(1)
+                for si,sol in enumerate(lp_integer_points(lp,xs,fullsol=False)):
+                    print(tm,si)
+                    sol = [m for m,v in sol.items() if v==0]
+                    bad_condition = bad_condition.intersection(R.ideal([
+                        R.gen(xs.index(m)) for m in sol]))
+                print(bad_condition)
+                for bad in bad_condition.gens():
+                    assert len(bad.exponents()) == 1
+                    assert all(k==1 for i,k in bad.exponents()[0].sparse_iter())
+                    prog.add_constraint(prog.sum(prog[xs[i].lm()] for i,_ in bad.exponents()[0].sparse_iter()) <= bad.degree()-1)
         return prog
 
 def liftR(p,R):
