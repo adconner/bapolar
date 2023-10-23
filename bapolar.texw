@@ -492,6 +492,24 @@ from functools import cache
 
 <<complete=False>>=
 
+def lp_look_strict(ba,deg_bound=2):
+    from operator import concat
+    from sage.numerical.mip import MIPSolverException
+    def dfs(Jxi,d):
+        if d > deg_bound:
+            yield Jxi
+            return
+        J,S,xi = Jxi
+        core = ba.ideal_constant_generators(J)
+        mod = ba.zero if core.is_zero() else JDat(ba,core) 
+        tms = tuple(sorted(map(tuple,IntegerVectors(d, len(ba.dims)))))
+        tmcs = tuple(sorted(map(tuple,IntegerVectors(d+1, len(ba.dims)))))
+        for Jxiup in ba.get_ideals_for_tm(tms, tmcs, J, S, xi, 
+                lp_interval_length_bound=max(4, 8-d), precise_lp=True, mod=mod):
+            for res in dfs(Jxiup,d+1):
+                yield res
+    return dfs((ba.R0.ideal(side='twosided'),[ba.R0.one()], 0),1)
+
 def three_place_ideals_up_to(ba,d=1,Jxi=None):
     def dfs(Jxi,tms,mod=ba.zero): 
         if len(tms) == 0:
@@ -910,9 +928,9 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         assert Rg >= tg or all(next(tt.exponents()[0].sparse_iter())[0] < Rg for tt in t.variables())
         return R(t(R.gens()[self.nvarsx:self.nvarsx+tg]+(R.zero(),)*(tg-Rg)))
     
-    def get_ideals_for_tm(self,tms=[],tmcs=[],J=None,S=None,xi=0,
-                          search_above=True,lp_interval_length_bound=6,sound=False,
-                          preset_choices = {}, mod=None):
+    def get_ideals_for_tm(self, tms=[], tmcs=[], J=None, S=None, xi=0,
+                          search_above=True, lp_interval_length_bound=6, precise_lp=False,
+                          preset_choices = {}, mod=None, sound=False):
         if mod is None:
             mod = self.zero
         tms = tuple(tms)
@@ -981,7 +999,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             return in_lti
                         
         lp = deepcopy(mod.get_linear_program(tms,tmcs,
-             interval_length_bound=lp_interval_length_bound))
+             interval_length_bound=lp_interval_length_bound,precise=precise_lp))
         unset = set()
         params_needed = {vks : vks[2] for vks in tmsvks}
         num_in = {tm:0 for tm in tms+tmcs}
@@ -1091,7 +1109,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     if self.R0.monomial_divides(liftR(qm,self.R0),v.lm()):
                         tss.setdefault(vk,[]).append(q.coefficient(qm))
                         
-            vk = min(vkstart,key=lambda vk: (sum(vk[0]), 
+            vk = min(vkstart,key=lambda vk: (sum(vk[0]), max(vk[0]),
                                              self.tm_dim_tperp(vk[0])-num_in[vk[0]]-num_out[vk[0]],
                                              params_needed.get(vk,0), 
                                              abs(0.5 - lp.get_values(lp.default_variable())[
@@ -1257,7 +1275,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 # yield (J,S,xi)
                 # continue
                 for JSxi in self.get_ideals_for_tm(tms,tmcs,J,S,xi,search_above=search_above,
-                                                   lp_interval_length_bound=lp_interval_length_bound,sound=True):
+                               lp_interval_length_bound=lp_interval_length_bound,precise_lp=precise_lp,mod=mod,sound=True):
                     yield JSxi
             num += 1
         if num == 0:
@@ -1656,23 +1674,6 @@ class JDat:
             prog.add_constraint(prog.sum(1-prog[v.lm()] 
                     for vs in self.get_vss(tm).values() for v in vs) >= 
                     min(ba.tm_dim_tperp(tm),ba.r-ba.tm_codim_tperp(tm)))
-            
-        if simple:
-            # constraint that all of ps implies at least one of the qs
-            def le_constraint(ps,qs):
-                ps = [p.lm() for p in ps]
-                qs = [p.lm() for p in qs]
-                prog.add_constraint(prog.sum(1-prog[p] for p in ps) +\
-                    prog.sum(prog[p] for p in qs) >= 1)
-            P = Poset((tms+tmcs,lambda a,b: all(i<=j for i,j in zip(a,b))))
-            for tm,tmr in P.cover_relations():
-                for vs in self.get_vss(tm).values():
-                    for v in vs:
-                        for y in ba.all_monomials(tuple(map(sub,tmr,tm))):
-                            # print('simple',[v],[v*y])
-                            le_constraint([v],[v*y])
-            return prog
-
 
         constraints = SetSystem()
         nconstraints = 0
