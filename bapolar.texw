@@ -492,7 +492,7 @@ from functools import cache
 
 <<complete=False>>=
 
-def lp_look_strict(ba,deg_bound=2):
+def lp_look_strict(ba,deg_bound=2,Jxi=None):
     from operator import concat
     from sage.numerical.mip import MIPSolverException
     def dfs(Jxi,d):
@@ -505,10 +505,10 @@ def lp_look_strict(ba,deg_bound=2):
         tms = tuple(sorted(map(tuple,IntegerVectors(d, len(ba.dims)))))
         tmcs = tuple(sorted(map(tuple,IntegerVectors(d+1, len(ba.dims)))))
         for Jxiup in ba.get_ideals_for_tm(tms, tmcs, J, S, xi, 
-                lp_interval_length_bound=max(4, 8-d), precise_lp=True, mod=mod):
+                lp_interval_length_bound=max(3, 7-d), precise_lp=True, mod=mod):
             for res in dfs(Jxiup,d+1):
                 yield res
-    return dfs((ba.R0.ideal(side='twosided'),[ba.R0.one()], 0),1)
+    return dfs((ba.R0.ideal(side='twosided'),[ba.R0.one()], 0) if Jxi is None else Jxi,1)
 
 def three_place_ideals_up_to(ba,d=1,Jxi=None):
     def dfs(Jxi,tms,mod=ba.zero): 
