@@ -1810,7 +1810,7 @@ class JDat:
             msix = dict([(m,next(iter(v.dict().keys()))) for m,v in prog.default_variable().items()])
             for tm in tms:
                 xs = [p.lm() for p in self.get_vs(tm)]
-                if len(xs) == 0:
+                if len(xs) == 0 or len(xs) == self.ba.tm_dim(tm):
                     continue
                 curxis = set(msix[m.lm()] for tmcur in (tm,)+tmcs for m in self.get_vs(tmcur))
                 lp = MixedIntegerLinearProgram(solver='GLPK')
