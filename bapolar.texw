@@ -1808,6 +1808,9 @@ class JDat:
             ms = dict([(next(iter(v.dict().keys())),m) for m,v in prog.default_variable().items()])
             msix = dict([(m,next(iter(v.dict().keys()))) for m,v in prog.default_variable().items()])
             for tm in tms:
+                xs = [p.lm() for p in self.get_vs(tm)]
+                if len(xs) == 0:
+                    continue
                 curxis = set(msix[m.lm()] for tmcur in (tm,)+tmcs for m in self.get_vs(tmcur))
                 lp = MixedIntegerLinearProgram(solver='GLPK')
                 lp.set_real(lp.default_variable())
@@ -1816,7 +1819,6 @@ class JDat:
                 for lo,(xis,cs),hi in prog.constraints():
                     if all(xi in curxis for xi in xis):
                         lp.add_constraint(lp.sum(c*lp[ms[xi]] for xi,c in zip(xis,cs)),min=lo,max=hi)
-                xs = [p.lm() for p in self.get_vs(tm)]
                 R = PolynomialRing(QQ,'x',len(xs))
                 bad_condition = R.ideal(1)
                 for si,sol in enumerate(lp_integer_points(lp,xs,fullsol=False)):
