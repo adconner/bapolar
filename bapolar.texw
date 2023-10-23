@@ -1288,6 +1288,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
 
     def polynomial_weight(self, p):
         e = p.exponents()[0]
+        if e.is_constant():
+            return (0,)*self.vwts.nrows()
         return tuple(sum(k*self.vwts[:,xi] for xi,k in e.sparse_iter()).list())
 
     def all_monomials(self, tm, R=None):
