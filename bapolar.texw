@@ -1663,8 +1663,8 @@ class JDat:
         # prog.set_binary(prog.default_variable())
         # # if set_real, be sure to change exact comparisons to within machine precision
         prog.set_real(prog.default_variable())
-        prog.set_min(prog.default_variable(),0.0)
-        prog.set_max(prog.default_variable(),1.0)
+        prog.set_min(prog.default_variable(),0)
+        prog.set_max(prog.default_variable(),1)
 
         for tm in tms:
             prog.add_constraint(prog.sum(1-prog[v.lm()] 
@@ -1699,10 +1699,10 @@ class JDat:
                 cc = deduplp.sum(deduplp[self.get_vss(tm)[vk][i].lm()] for tm,vk,i in rowvks) + kerdim - \
                      deduplp.sum(deduplp[self.get_vss(tm)[vk][i].lm()] for tm,vk,i in colvks)
                 deduplp.set_objective(cc)
-                deduplp.set_min(deduplp.default_variable(),0.0)
-                deduplp.set_max(deduplp.default_variable(),1.0)
+                deduplp.set_min(deduplp.default_variable(),0)
+                deduplp.set_max(deduplp.default_variable(),1)
                 s = deduplp.solve()
-                deduplp.set_objective(0.0)
+                deduplp.set_objective(0)
                 if s >= -1e-9:
                     return False
                 deduplp.add_constraint(cc >= 0)
@@ -1815,8 +1815,8 @@ class JDat:
                 curxis = set(msix[m.lm()] for tmcur in (tm,)+tmcs for m in self.get_vs(tmcur))
                 lp = MixedIntegerLinearProgram(solver='GLPK')
                 lp.set_real(lp.default_variable())
-                lp.set_min(lp.default_variable(),0.0)
-                lp.set_max(lp.default_variable(),1.0)
+                lp.set_min(lp.default_variable(),0)
+                lp.set_max(lp.default_variable(),1)
                 for lo,(xis,cs),hi in prog.constraints():
                     if all(xi in curxis for xi in xis):
                         lp.add_constraint(lp.sum(c*lp[ms[xi]] for xi,c in zip(xis,cs)),min=lo,max=hi)
