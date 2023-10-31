@@ -1813,13 +1813,45 @@ class JDat:
                 if len(xs) == 0 or len(xs) == self.ba.tm_dim(tm):
                     continue
                 curxis = set(msix[m.lm()] for tmcur in (tm,)+tmcs for m in self.get_vs(tmcur))
+                
+                # import islpy as isl
+                # space = isl.Space.create_from_names(isl.DEFAULT_CONTEXT, set=['x%d' % i for i in curxis])
+                # constrs = []
+                # for xi in curxis:
+                #     constrs.append(isl.Constraint.ineq_from_names(space, {1:1, 'x%d' % xi: -1}))
+                #     constrs.append(isl.Constraint.ineq_from_names(space, {'x%d' % xi: 1}))
+                # for lo,(xis,cs),hi in prog.constraints():
+                #     if all(xi in curxis for xi in xis):
+                #         if lo is not None:
+                #             constr = {1: -int(lo)} | {'x%d' % xi : int(c) for xi,c in zip(xis,cs) }
+                #             constrs.append(isl.Constraint.ineq_from_names(space,constr))
+                #         if hi is not None:
+                #             constr = {1: int(hi)} | {'x%d' % xi : -int(c) for xi,c in zip(xis,cs) }
+                #             constrs.append(isl.Constraint.ineq_from_names(space,constr))
+                # bset = isl.BasicSet.universe(space).add_constraints(constrs)
+                # # return bset, 
+                # tmxis = [msix[m] for m in xs]
+                # print('projecting...')
+                # bset = bset.project_out_except(['x%d' % xi for xi in tmxis],[isl.dim_type.out]*len(tmxis))
+                # print(bset)
+                # print(tmxis)
+                # ixs = [s.get_var_dict()['x%d'%xi][1] for xi in tmxis]
+                # R = PolynomialRing(QQ,'x',len(xs))
+                # bad_condition = R.ideal(1)
+                # def process_point(pt):
+                #     print(pt)
+                #     nonlocal bad_condition
+                #     bad_condition = bad_condition.intersection(R.ideal(
+                #         [R.gen(i) for i in ixs if pt.get_coordinate_val(isl.dim_type.set,i).is_zero()]))
+                # bset.foreach_point(process_point)
+                                        
                 lp = MixedIntegerLinearProgram(solver='GLPK')
-                lp.set_real(lp.default_variable())
-                lp.set_min(lp.default_variable(),0)
-                lp.set_max(lp.default_variable(),1)
                 for lo,(xis,cs),hi in prog.constraints():
                     if all(xi in curxis for xi in xis):
                         lp.add_constraint(lp.sum(c*lp[ms[xi]] for xi,c in zip(xis,cs)),min=lo,max=hi)
+                lp.set_real(lp.default_variable())
+                lp.set_min(lp.default_variable(),0)
+                lp.set_max(lp.default_variable(),1)
                 R = PolynomialRing(QQ,'x',len(xs))
                 bad_condition = R.ideal(1)
                 for si,sol in enumerate(lp_integer_points(lp,xs,fullsol=False)):
@@ -1827,6 +1859,7 @@ class JDat:
                     sol = [m for m,v in sol.items() if v==0]
                     bad_condition = bad_condition.intersection(R.ideal([
                         R.gen(xs.index(m)) for m in sol]))
+                
                 print(bad_condition)
                 for bad in bad_condition.gens():
                     assert len(bad.exponents()) == 1
