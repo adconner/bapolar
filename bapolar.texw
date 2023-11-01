@@ -1806,66 +1806,115 @@ class JDat:
             add_relations((tmr,wtr), froms, deduplp, interval_length_bound=interval_length_bound)
         print(tms,tmcs,prog.number_of_constraints(),'constraints')
         if precise:
-            ms = dict([(next(iter(v.dict().keys())),m) for m,v in prog.default_variable().items()])
-            msix = dict([(m,next(iter(v.dict().keys()))) for m,v in prog.default_variable().items()])
             for tm in tms:
                 xs = [p.lm() for p in self.get_vs(tm)]
-                if len(xs) == 0 or len(xs) == self.ba.tm_dim(tm):
-                    continue
-                curxis = set(msix[m.lm()] for tmcur in (tm,)+tmcs for m in self.get_vs(tmcur))
+                cur = []
+                st = []
+                from sage.numerical.mip import MIPSolverException
+                def dfs(check_solvable=True):
+                    try:
+                        if check_solvable:
+                            lp.solve()
+                    except MIPSolverException:
+                        return False
+                    csol = lp.get_values(lp.default_variable())
+                    remxs = [x for x in xs if lp.get_min(lp[x]) < lp.get_max(lp[x])]
+                    if len(remxs) == 0:
+                        return True
+                    x = min(remxs, key=lambda x: abs(csol[x]-round(csol[x])))
+                    print('%s%s' % (''.join(st),str(x)))
+                    hi_first = csol[x] < 0.5
+                    if hi_first:
+                        lp.set_min(lp[x],1)
+                        st.append(' ')
+                        cur.append((x,True))
+                        solhi = dfs(csol[x] < 1-1e-10)
+                        cur.pop()
+                        lp.set_min(lp[x],0)
+                        st[-1] = '.'
+                    else:
+                        st.append(' ')
+                    lp.set_max(lp[x],0)
+                    cur.append((x,False))
+                    sollo = dfs(csol[x] > 1e-10)
+                    cur.pop()
+                    lp.set_max(lp[x],1)
+                    if not hi_first:
+                        st[-1] = '.'
+                        lp.set_min(lp[x],1)
+                        cur.append((x,True))
+                        solhi = dfs(csol[x] < 1-1e-10)
+                        cur.pop()
+                        lp.set_min(lp[x],0)
+                    st.pop()
+                    if sollo != solhi:
+                        # print('ban',cur+[(x,sollo)])
+                        lp.add_constraint(lp.sum(lp[x] if v else 1-lp[x] for x,v in cur+[(x,sollo)]) <= len(cur))
+                    return sollo or solhi
+                dfs()
+        
+        
+        #     ms = dict([(next(iter(v.dict().keys())),m) for m,v in lp.default_variable().items()])
+        #     msix = dict([(m,next(iter(v.dict().keys()))) for m,v in lp.default_variable().items()])
+        #     for tm in tms:
+        #         xs = [p.lm() for p in self.get_vs(tm)]
+        #         if len(xs) == 0 or len(xs) == self.ba.tm_dim(tm):
+        #             continue
+        #         curxis = set(msix[m.lm()] for tmcur in (tm,)+tmcs for m in self.get_vs(tmcur))
                 
-                # import islpy as isl
-                # space = isl.Space.create_from_names(isl.DEFAULT_CONTEXT, set=['x%d' % i for i in curxis])
-                # constrs = []
-                # for xi in curxis:
-                #     constrs.append(isl.Constraint.ineq_from_names(space, {1:1, 'x%d' % xi: -1}))
-                #     constrs.append(isl.Constraint.ineq_from_names(space, {'x%d' % xi: 1}))
-                # for lo,(xis,cs),hi in prog.constraints():
-                #     if all(xi in curxis for xi in xis):
-                #         if lo is not None:
-                #             constr = {1: -int(lo)} | {'x%d' % xi : int(c) for xi,c in zip(xis,cs) }
-                #             constrs.append(isl.Constraint.ineq_from_names(space,constr))
-                #         if hi is not None:
-                #             constr = {1: int(hi)} | {'x%d' % xi : -int(c) for xi,c in zip(xis,cs) }
-                #             constrs.append(isl.Constraint.ineq_from_names(space,constr))
-                # bset = isl.BasicSet.universe(space).add_constraints(constrs)
-                # # return bset, 
-                # tmxis = [msix[m] for m in xs]
-                # print('projecting...')
-                # bset = bset.project_out_except(['x%d' % xi for xi in tmxis],[isl.dim_type.out]*len(tmxis))
-                # print(bset)
-                # print(tmxis)
-                # ixs = [s.get_var_dict()['x%d'%xi][1] for xi in tmxis]
-                # R = PolynomialRing(QQ,'x',len(xs))
-                # bad_condition = R.ideal(1)
-                # def process_point(pt):
-                #     print(pt)
-                #     nonlocal bad_condition
-                #     bad_condition = bad_condition.intersection(R.ideal(
-                #         [R.gen(i) for i in ixs if pt.get_coordinate_val(isl.dim_type.set,i).is_zero()]))
-                # bset.foreach_point(process_point)
+        #         # import islpy as isl
+        #         # space = isl.Space.create_from_names(isl.DEFAULT_CONTEXT, set=['x%d' % i for i in curxis])
+        #         # constrs = []
+        #         # for xi in curxis:
+        #         #     constrs.append(isl.Constraint.ineq_from_names(space, {1:1, 'x%d' % xi: -1}))
+        #         #     constrs.append(isl.Constraint.ineq_from_names(space, {'x%d' % xi: 1}))
+        #         # for lo,(xis,cs),hi in lp.constraints():
+        #         #     if all(xi in curxis for xi in xis):
+        #         #         if lo is not None:
+        #         #             constr = {1: -int(lo)} | {'x%d' % xi : int(c) for xi,c in zip(xis,cs) }
+        #         #             constrs.append(isl.Constraint.ineq_from_names(space,constr))
+        #         #         if hi is not None:
+        #         #             constr = {1: int(hi)} | {'x%d' % xi : -int(c) for xi,c in zip(xis,cs) }
+        #         #             constrs.append(isl.Constraint.ineq_from_names(space,constr))
+        #         # bset = isl.BasicSet.universe(space).add_constraints(constrs)
+        #         # # return bset, 
+        #         # tmxis = [msix[m] for m in xs]
+        #         # print('projecting...')
+        #         # bset = bset.project_out_except(['x%d' % xi for xi in tmxis],[isl.dim_type.out]*len(tmxis))
+        #         # print(bset)
+        #         # print(tmxis)
+        #         # ixs = [s.get_var_dict()['x%d'%xi][1] for xi in tmxis]
+        #         # R = PolynomialRing(QQ,'x',len(xs))
+        #         # bad_condition = R.ideal(1)
+        #         # def process_point(pt):
+        #         #     print(pt)
+        #         #     nonlocal bad_condition
+        #         #     bad_condition = bad_condition.intersection(R.ideal(
+        #         #         [R.gen(i) for i in ixs if pt.get_coordinate_val(isl.dim_type.set,i).is_zero()]))
+        #         # bset.foreach_point(process_point)
                                         
-                lp = MixedIntegerLinearProgram(solver='GLPK')
-                for lo,(xis,cs),hi in prog.constraints():
-                    if all(xi in curxis for xi in xis):
-                        lp.add_constraint(lp.sum(c*lp[ms[xi]] for xi,c in zip(xis,cs)),min=lo,max=hi)
-                lp.set_real(lp.default_variable())
-                lp.set_min(lp.default_variable(),0)
-                lp.set_max(lp.default_variable(),1)
-                R = PolynomialRing(QQ,'x',len(xs))
-                bad_condition = R.ideal(1)
-                for si,sol in enumerate(lp_integer_points(lp,xs,fullsol=False)):
-                    print(tm,si)
-                    sol = [m for m,v in sol.items() if v==0]
-                    bad_condition = bad_condition.intersection(R.ideal([
-                        R.gen(xs.index(m)) for m in sol]))
+        #         lp = MixedIntegerLinearProgram(solver='GLPK')
+        #         for lo,(xis,cs),hi in lp.constraints():
+        #             if all(xi in curxis for xi in xis):
+        #                 lp.add_constraint(lp.sum(c*lp[ms[xi]] for xi,c in zip(xis,cs)),min=lo,max=hi)
+        #         lp.set_real(lp.default_variable())
+        #         lp.set_min(lp.default_variable(),0)
+        #         lp.set_max(lp.default_variable(),1)
+        #         R = PolynomialRing(QQ,'x',len(xs))
+        #         bad_condition = R.ideal(1)
+        #         for si,sol in enumerate(lp_integer_points(lp,xs,fullsol=False)):
+        #             print(tm,si)
+        #             sol = [m for m,v in sol.items() if v==0]
+        #             bad_condition = bad_condition.intersection(R.ideal([
+        #                 R.gen(xs.index(m)) for m in sol]))
                 
-                print(bad_condition)
-                for bad in bad_condition.gens():
-                    assert len(bad.exponents()) == 1
-                    assert all(k==1 for i,k in bad.exponents()[0].sparse_iter())
-                    prog.add_constraint(prog.sum(prog[xs[i].lm()] for i,_ in bad.exponents()[0].sparse_iter()) <= bad.degree()-1)
-        return prog
+        #         print(bad_condition)
+        #         for bad in bad_condition.gens():
+        #             assert len(bad.exponents()) == 1
+        #             assert all(k==1 for i,k in bad.exponents()[0].sparse_iter())
+        #             lp.add_constraint(lp.sum(lp[xs[i].lm()] for i,_ in bad.exponents()[0].sparse_iter()) <= bad.degree()-1)
+                    
+        return lp
 
 def liftR(p,R):
     if p.parent() is R:
