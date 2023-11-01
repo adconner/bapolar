@@ -807,6 +807,7 @@ class BorderApolarity:
         self.tm_dim = cache(self.tm_dim)
         self.tm_dim_tperp = cache(self.tm_dim_tperp)
         self.tm_codim_tperp = cache(self.tm_codim_tperp)
+        self.tm_target_out = cache(self.tm_target_out)
         self.target_hilbert_series = cache(self.target_hilbert_series)
         self.target_hilbert_series_td = cache(self.target_hilbert_series_td)
         self.Tperp = cache(self.Tperp)
@@ -1056,10 +1057,9 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             #             (s1.reduce(w.lm()) != w.lm()) for w in
             #             mod.get_vs((1,1,0)) if lp.get_min(lp[w.lm()]) ==
             #             lp.get_max(lp[w.lm()]))
-            target_out = lambda tm: min(self.r - self.tm_codim_tperp(tm),self.tm_dim_tperp(tm))
-            if all(num_in[tm] == len(mod.get_vs(tm)) - target_out(tm) and \
-                           num_out[tm] == target_out(tm) for tm in tms) and \
-                       (not cur_search_above or all(num_out[tm] >= target_out(tm) for tm in tmcs)):
+            if all(num_in[tm] == len(mod.get_vs(tm)) - self.tm_target_out(tm) and \
+                           num_out[tm] == self.tm_target_out(tm) for tm in tms) and \
+                       (not cur_search_above or all(num_out[tm] >= self.tm_target_out(tm) for tm in tmcs)):
                 yield (J,S,xi)
                 return
 
@@ -1132,8 +1132,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 assert lp.get_max(lp[v.lm()]) == 1.0
                 
                 def printstep(extra=''):
-                    remhi = len(mod.get_vs(tm)) - target_out(tm) - num_in[tm]
-                    remlo = target_out(tm) - num_out[tm]
+                    remhi = len(mod.get_vs(tm)) - self.tm_target_out(tm) - num_in[tm]
+                    remlo = self.tm_target_out(tm) - num_out[tm]
                     vstr = str(v.lm())
                     vstr_width[0] = max(vstr_width[0],len(vstr))
                     print ('%s%s %s xi=%d %.3f %s%d %d %s' % ('sound ' if sound else '',
@@ -1296,6 +1296,9 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
 
     def tm_codim_tperp(self, tm):
         return self.tm_dim(tm) - self.tm_dim_tperp(tm)
+    
+    def tm_target_out(self, tm): 
+        return min(ba.tm_dim_tperp(tm),ba.r-ba.tm_codim_tperp(tm))
 
     def polynomial_tm(self, p):
         if p.is_zero():
@@ -1668,12 +1671,10 @@ class JDat:
 
         for tm in tms:
             lp.add_constraint(lp.sum(1-lp[v.lm()] 
-                    for vs in self.get_vss(tm).values() for v in vs) == 
-                    min(ba.tm_dim_tperp(tm),ba.r-ba.tm_codim_tperp(tm)))
+                    for vs in self.get_vss(tm).values() for v in vs) == self.ba.tm_target_out(tm))
         for tm in tmcs:
             lp.add_constraint(lp.sum(1-lp[v.lm()] 
-                    for vs in self.get_vss(tm).values() for v in vs) >= 
-                    min(ba.tm_dim_tperp(tm),ba.r-ba.tm_codim_tperp(tm)))
+                    for vs in self.get_vss(tm).values() for v in vs) >= self.ba.tm_target_out(tm))
 
         constraints = SetSystem()
         nconstraints = 0
