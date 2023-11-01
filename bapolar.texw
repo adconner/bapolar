@@ -1659,19 +1659,19 @@ class JDat:
         return Q
     
     def get_linear_program(self, tms, tmcs=(), interval_length_bound=6, precise=False):
-        prog = MixedIntegerLinearProgram(solver='GLPK')
-        # prog.set_binary(prog.default_variable())
+        lp = MixedIntegerLinearProgram(solver='GLPK')
+        # lp.set_binary(lp.default_variable())
         # # if set_real, be sure to change exact comparisons to within machine precision
-        prog.set_real(prog.default_variable())
-        prog.set_min(prog.default_variable(),0)
-        prog.set_max(prog.default_variable(),1)
+        lp.set_real(lp.default_variable())
+        lp.set_min(lp.default_variable(),0)
+        lp.set_max(lp.default_variable(),1)
 
         for tm in tms:
-            prog.add_constraint(prog.sum(1-prog[v.lm()] 
+            lp.add_constraint(lp.sum(1-lp[v.lm()] 
                     for vs in self.get_vss(tm).values() for v in vs) == 
                     min(ba.tm_dim_tperp(tm),ba.r-ba.tm_codim_tperp(tm)))
         for tm in tmcs:
-            prog.add_constraint(prog.sum(1-prog[v.lm()] 
+            lp.add_constraint(lp.sum(1-lp[v.lm()] 
                     for vs in self.get_vss(tm).values() for v in vs) >= 
                     min(ba.tm_dim_tperp(tm),ba.r-ba.tm_codim_tperp(tm)))
 
@@ -1713,9 +1713,9 @@ class JDat:
             nonlocal nconstraints
             constraints.add_set(S, (nconstraints,kerdim))
             nconstraints += 1
-            prog.add_constraint(prog.sum(prog[self.get_vss(tm)[vk][i].lm()]
+            lp.add_constraint(lp.sum(lp[self.get_vss(tm)[vk][i].lm()]
                                          for tm,vk,i in colvks)
-                             <= prog.sum(prog[self.get_vss(tm)[vk][i].lm()] 
+                             <= lp.sum(lp[self.get_vss(tm)[vk][i].lm()] 
                                          for tm,vk,i in rowvks) + kerdim)
             return True
             
@@ -1804,12 +1804,13 @@ class JDat:
             # deduplp = None
             deduplp = MixedIntegerLinearProgram(solver='GLPK',maximization=False)
             add_relations((tmr,wtr), froms, deduplp, interval_length_bound=interval_length_bound)
-        print(tms,tmcs,prog.number_of_constraints(),'constraints')
+        print(tms,tmcs,lp.number_of_constraints(),'constraints')
         if precise:
             for tm in tms:
                 xs = [p.lm() for p in self.get_vs(tm)]
                 cur = []
                 st = []
+                bads = SetSystem()
                 from sage.numerical.mip import MIPSolverException
                 def dfs(check_solvable=True):
                     try:
@@ -1823,10 +1824,11 @@ class JDat:
                         return True
                     x = min(remxs, key=lambda x: abs(csol[x]-round(csol[x])))
                     print('%s%s' % (''.join(st),str(x)))
-                    hi_first = csol[x] < 0.5
+                    # hi_first = csol[x] < 0.5
+                    hi_first = csol[x] >= 0.5
                     if hi_first:
-                        lp.set_min(lp[x],1)
                         st.append(' ')
+                        lp.set_min(lp[x],1)
                         cur.append((x,True))
                         solhi = dfs(csol[x] < 1-1e-10)
                         cur.pop()
@@ -1848,8 +1850,59 @@ class JDat:
                         lp.set_min(lp[x],0)
                     st.pop()
                     if sollo != solhi:
-                        # print('ban',cur+[(x,sollo)])
-                        lp.add_constraint(lp.sum(lp[x] if v else 1-lp[x] for x,v in cur+[(x,sollo)]) <= len(cur))
+                        bad = cur + [(x,sollo)]
+                        lp.set_min(lp[x],1 if sollo else 0)
+                        lp.set_max(lp[x],1 if sollo else 0)
+                        for xcur in lp.default_variable().keys():
+                            lp.set_min(lp[xcur],0)
+                            lp.set_max(lp[xcur],1)
+                        for xcur,v in bad:
+                            lp.set_min(lp[xcur],v)
+                            lp.set_max(lp[xcur],v)
+                        i = 0
+                        while i < len(bad):
+                            xcur,v = bad[i]
+                            lp.set_min(lp[xcur],0)
+                            lp.set_max(lp[xcur],1)
+
+                            # if any(True for _ in lp_integer_points(lp,xs)):
+                            #     lp.set_min(lp[xcur],1 if v else 0)
+                            #     lp.set_max(lp[xcur],1 if v else 0)
+                            #     i += 1
+                            # else:
+                            #     assert len(bad) == 1 or i < len(bad) - 1
+                            #     if len(bad) == 1:
+                            #         i += 1
+                            #     else:
+                            #         bad = bad[:i]+bad[i+1:]
+                            
+                            try:
+                                lp.solve()
+                                lp.set_min(lp[xcur],1 if v else 0)
+                                lp.set_max(lp[xcur],1 if v else 0)
+                                i += 1
+                            except MIPSolverException:
+                                try:
+                                    assert len(bad) == 1 or i < len(bad) - 1
+                                except:
+                                    embed()
+                                    raise
+                                if len(bad) == 1:
+                                    i += 1
+                                else:
+                                    bad = bad[:i]+bad[i+1:]
+                                    
+                        if not any(True for _ in bads.iter_sets(Shi=bad)):
+                            print(bad)
+                            bads.add_set(bad)
+                            lp.add_constraint(lp.sum(lp[xcur] if v else 1-lp[xcur] for xcur,v in bad) <= len(bad)-1)
+
+                        lp.set_min(lp[x],0)
+                        lp.set_max(lp[x],1)
+                        for xcur,v in cur:
+                            lp.set_min(lp[xcur],1 if v else 0)
+                            lp.set_max(lp[xcur],1 if v else 0)
+                        
                     return sollo or solhi
                 dfs()
         
