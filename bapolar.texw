@@ -1847,131 +1847,133 @@ class JDat:
                 xs = [p.lm() for p in self.get_vs(tm)]
                 from sage.numerical.mip import MIPSolverException
                 
-                # sols = SetSystem()
-                # def extends_to_solution(psol):
-                #     if any(True for _ in sols.iter_sets(Slo=psol)):
-                #         return True
-                #     for x in psol:
-                #         lpcur.set_max(lpcur[x],0)
-                #     res = list(islice(lp_integer_points(lpcur,xs,fullsol=False),1))
-                #     for x in psol:
-                #         lpcur.set_max(lpcur[x],1)
-                #     if len(res) == 0:
-                #         return False
-                #     else:
-                #         sol = [x for x,v in res[0].items() if v==0]
-                #         sols.add_set(sol)
-                #         return True
-                # constraints = SetSystem()
-                # ix = []
-                # def dfs(size_target):
-                #     if len(ix) > size_target or any(True for _ in constraints.iter_sets(Shi=ix)):
-                #         return
-                #     print(size_target,ix)
-                #     if extends_to_solution([xs[i] for i in ix]):
-                #         for i in range(0 if len(ix) == 0 else ix[-1]+1, len(xs)):
-                #             ix.append(i)
-                #             dfs(size_target)
-                #             ix.pop()
-                #     elif len(ix) == size_target:
-                #         print('adding',ix)
-                #         constraints.add_set(ix)
-                #         lp.add_constraint(lp.sum(lp[xs[i]] for i in ix) >= 1)
-                # for size_target in range(1, min(1,self.ba.tm_target_out(tm))+1):
-                #     dfs(size_target)
-
-                st = []
-                cur = []
-                bads = SetSystem()
-                def dfs(check_solvable=True):
-                    try:
-                        if check_solvable:
-                            lpcur.solve()
-                    except MIPSolverException:
-                        return False
-                    csol = lpcur.get_values(lpcur.default_variable())
-                    remxs = [x for x in xs if lpcur.get_min(lpcur[x]) < lpcur.get_max(lpcur[x])]
-                    if len(remxs) == 0:
+                sols = SetSystem()
+                def extends_to_solution(psol):
+                    if any(True for _ in sols.iter_sets(Slo=psol)):
                         return True
-                    x = min(remxs, key=lambda x: abs(csol[x]-round(csol[x])))
-                    print('%s%s' % (''.join(st),str(x)))
-                    # hi_first = csol[x] < 0.5
-                    hi_first = csol[x] >= 0.5
-                    if hi_first:
-                        st.append(' ')
-                        lpcur.set_min(lpcur[x],1)
-                        cur.append((x,True))
-                        solhi = dfs(csol[x] < 1-1e-10)
-                        cur.pop()
-                        lpcur.set_min(lpcur[x],0)
-                        st[-1] = '.'
-                    else:
-                        st.append(' ')
-                    lpcur.set_max(lpcur[x],0)
-                    cur.append((x,False))
-                    sollo = dfs(csol[x] > 1e-10)
-                    cur.pop()
-                    lpcur.set_max(lpcur[x],1)
-                    if not hi_first:
-                        st[-1] = '.'
-                        lpcur.set_min(lpcur[x],1)
-                        cur.append((x,True))
-                        solhi = dfs(csol[x] < 1-1e-10)
-                        cur.pop()
-                        lpcur.set_min(lpcur[x],0)
-                    st.pop()
-                    if sollo != solhi:
-                        bad = cur + [(x,sollo)]
-                        lpcur.set_min(lpcur[x],1 if sollo else 0)
-                        lpcur.set_max(lpcur[x],1 if sollo else 0)
-                        for xcur in lpcur.default_variable().keys():
-                            lpcur.set_min(lpcur[xcur],0)
-                            lpcur.set_max(lpcur[xcur],1)
-                        for xcur,v in bad:
-                            lpcur.set_min(lpcur[xcur],v)
-                            lpcur.set_max(lpcur[xcur],v)
-                        i = 0
-                        while i < len(bad):
-                            xcur,v = bad[i]
-                            lpcur.set_min(lpcur[xcur],0)
-                            lpcur.set_max(lpcur[xcur],1)
-                            # if any(True for _ in lp_integer_points(lpcur,xs)):
-                            #     lpcur.set_min(lpcur[xcur],1 if v else 0)
-                            #     lpcur.set_max(lpcur[xcur],1 if v else 0)
-                            #     i += 1
-                            # else:
-                            #     assert len(bad) == 1 or i < len(bad) - 1
-                            #     if len(bad) == 1:
-                            #         i += 1
-                            #     else:
-                            #         bad = bad[:i]+bad[i+1:]
-                            try:
-                                lpcur.solve()
-                                lpcur.set_min(lpcur[xcur],1 if v else 0)
-                                lpcur.set_max(lpcur[xcur],1 if v else 0)
-                                i += 1
-                            except MIPSolverException:
-                                try:
-                                    assert len(bad) == 1 or i < len(bad) - 1
-                                except:
-                                    embed()
-                                    raise
-                                if len(bad) == 1:
-                                    i += 1
-                                else:
-                                    bad = bad[:i]+bad[i+1:]
-                        if not any(True for _ in bads.iter_sets(Shi=bad)):
-                            print(bad)
-                            bads.add_set(bad)
-                            lpcur.add_constraint(lpcur.sum(lpcur[xcur] if v else 1-lpcur[xcur] for xcur,v in bad) <= len(bad)-1)
-                            lp.add_constraint(lp.sum(lp[xcur] if v else 1-lp[xcur] for xcur,v in bad) <= len(bad)-1)
-                        lpcur.set_min(lpcur[x],0)
+                    for x in psol:
+                        lpcur.set_max(lpcur[x],0)
+                    res = list(islice(lp_integer_points(lpcur,xs,fullsol=False),1))
+                    for x in psol:
                         lpcur.set_max(lpcur[x],1)
-                        for xcur,v in cur:
-                            lpcur.set_min(lpcur[xcur],1 if v else 0)
-                            lpcur.set_max(lpcur[xcur],1 if v else 0)
-                    return sollo or solhi
-                dfs()
+                    if len(res) == 0:
+                        return False
+                    else:
+                        sol = [x for x,v in res[0].items() if v==0]
+                        sols.add_set(sol)
+                        return True
+                constraints = SetSystem()
+                ix = []
+                def dfs(size_target):
+                    if len(ix) > size_target or any(True for _ in constraints.iter_sets(Shi=ix)):
+                        return
+                    print(size_target,ix)
+                    if extends_to_solution([xs[i] for i in ix]):
+                        for i in range(0 if len(ix) == 0 else ix[-1]+1, len(xs)):
+                            ix.append(i)
+                            dfs(size_target)
+                            ix.pop()
+                    elif len(ix) == size_target:
+                        print('adding',ix)
+                        constraints.add_set(ix)
+                        lp.add_constraint(lp.sum(lp[xs[i]] for i in ix) >= 1)
+                        lpcur.add_constraint(lpcur.sum(lpcur[xs[i]] for i in ix) >= 1)
+                for size_target in range(1, min(2,self.ba.tm_target_out(tm))+1):
+                    dfs(size_target)
+                
+
+                # st = []
+                # cur = []
+                # bads = SetSystem()
+                # def dfs(check_solvable=True):
+                #     try:
+                #         if check_solvable:
+                #             lpcur.solve()
+                #     except MIPSolverException:
+                #         return False
+                #     csol = lpcur.get_values(lpcur.default_variable())
+                #     remxs = [x for x in xs if lpcur.get_min(lpcur[x]) < lpcur.get_max(lpcur[x])]
+                #     if len(remxs) == 0:
+                #         return True
+                #     x = min(remxs, key=lambda x: abs(csol[x]-round(csol[x])))
+                #     print('%s%s' % (''.join(st),str(x)))
+                #     # hi_first = csol[x] < 0.5
+                #     hi_first = csol[x] >= 0.5
+                #     if hi_first:
+                #         st.append(' ')
+                #         lpcur.set_min(lpcur[x],1)
+                #         cur.append((x,True))
+                #         solhi = dfs(csol[x] < 1-1e-10)
+                #         cur.pop()
+                #         lpcur.set_min(lpcur[x],0)
+                #         st[-1] = '.'
+                #     else:
+                #         st.append(' ')
+                #     lpcur.set_max(lpcur[x],0)
+                #     cur.append((x,False))
+                #     sollo = dfs(csol[x] > 1e-10)
+                #     cur.pop()
+                #     lpcur.set_max(lpcur[x],1)
+                #     if not hi_first:
+                #         st[-1] = '.'
+                #         lpcur.set_min(lpcur[x],1)
+                #         cur.append((x,True))
+                #         solhi = dfs(csol[x] < 1-1e-10)
+                #         cur.pop()
+                #         lpcur.set_min(lpcur[x],0)
+                #     st.pop()
+                #     if sollo != solhi:
+                #         bad = cur + [(x,sollo)]
+                #         lpcur.set_min(lpcur[x],1 if sollo else 0)
+                #         lpcur.set_max(lpcur[x],1 if sollo else 0)
+                #         for xcur in lpcur.default_variable().keys():
+                #             lpcur.set_min(lpcur[xcur],0)
+                #             lpcur.set_max(lpcur[xcur],1)
+                #         for xcur,v in bad:
+                #             lpcur.set_min(lpcur[xcur],v)
+                #             lpcur.set_max(lpcur[xcur],v)
+                #         i = 0
+                #         while i < len(bad):
+                #             xcur,v = bad[i]
+                #             lpcur.set_min(lpcur[xcur],0)
+                #             lpcur.set_max(lpcur[xcur],1)
+                #             # if any(True for _ in lp_integer_points(lpcur,xs)):
+                #             #     lpcur.set_min(lpcur[xcur],1 if v else 0)
+                #             #     lpcur.set_max(lpcur[xcur],1 if v else 0)
+                #             #     i += 1
+                #             # else:
+                #             #     assert len(bad) == 1 or i < len(bad) - 1
+                #             #     if len(bad) == 1:
+                #             #         i += 1
+                #             #     else:
+                #             #         bad = bad[:i]+bad[i+1:]
+                #             try:
+                #                 lpcur.solve()
+                #                 lpcur.set_min(lpcur[xcur],1 if v else 0)
+                #                 lpcur.set_max(lpcur[xcur],1 if v else 0)
+                #                 i += 1
+                #             except MIPSolverException:
+                #                 try:
+                #                     assert len(bad) == 1 or i < len(bad) - 1
+                #                 except:
+                #                     embed()
+                #                     raise
+                #                 if len(bad) == 1:
+                #                     i += 1
+                #                 else:
+                #                     bad = bad[:i]+bad[i+1:]
+                #         if not any(True for _ in bads.iter_sets(Shi=bad)):
+                #             print(bad)
+                #             bads.add_set(bad)
+                #             lpcur.add_constraint(lpcur.sum(lpcur[xcur] if v else 1-lpcur[xcur] for xcur,v in bad) <= len(bad)-1)
+                #             lp.add_constraint(lp.sum(lp[xcur] if v else 1-lp[xcur] for xcur,v in bad) <= len(bad)-1)
+                #         lpcur.set_min(lpcur[x],0)
+                #         lpcur.set_max(lpcur[x],1)
+                #         for xcur,v in cur:
+                #             lpcur.set_min(lpcur[xcur],1 if v else 0)
+                #             lpcur.set_max(lpcur[xcur],1 if v else 0)
+                #     return sollo or solhi
+                # dfs()
         
         
         #     ms = dict([(next(iter(v.dict().keys())),m) for m,v in lp.default_variable().items()])
