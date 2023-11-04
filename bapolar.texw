@@ -1846,40 +1846,53 @@ class JDat:
                 lpcur.set_max(lpcur.default_variable(),1)
                 xs = [p.lm() for p in self.get_vs(tm)]
                 from sage.numerical.mip import MIPSolverException
+
+                contains_at_least = SetSystem()
+                for size in range(1,3):
+                    for ys in combinations(xs,size):
+                        print(ys)
+                        lpcur.set_objective( lpcur.sum(-lpcur[x] for x in ys) )
+                        at_least = -floor(lpcur.solve() + 1e-10)
+                        if at_least > 0 and all(sum(at_least2) < at_least for _,at_least2 in contains_at_least.iter_unions(Shi=ys)):
+                            print('adding', ys, at_least)
+                            lpcur.add_constraint(lpcur.sum(lpcur[x] for x in ys) >= at_least)
+                            lp.add_constraint(lp.sum(lp[x] for x in ys) >= at_least)
+                            contains_at_least.add_set(ys,at_least)
+                        
                 
-                sols = SetSystem()
-                def extends_to_solution(psol):
-                    if any(True for _ in sols.iter_sets(Slo=psol)):
-                        return True
-                    for x in psol:
-                        lpcur.set_max(lpcur[x],0)
-                    res = list(islice(lp_integer_points(lpcur,xs,fullsol=False),1))
-                    for x in psol:
-                        lpcur.set_max(lpcur[x],1)
-                    if len(res) == 0:
-                        return False
-                    else:
-                        sol = [x for x,v in res[0].items() if v==0]
-                        sols.add_set(sol)
-                        return True
-                constraints = SetSystem()
-                ix = []
-                def dfs(size_target):
-                    if len(ix) > size_target or any(True for _ in constraints.iter_sets(Shi=ix)):
-                        return
-                    print(size_target,ix)
-                    if extends_to_solution([xs[i] for i in ix]):
-                        for i in range(0 if len(ix) == 0 else ix[-1]+1, len(xs)):
-                            ix.append(i)
-                            dfs(size_target)
-                            ix.pop()
-                    elif len(ix) == size_target:
-                        print('adding',ix)
-                        constraints.add_set(ix)
-                        lp.add_constraint(lp.sum(lp[xs[i]] for i in ix) >= 1)
-                        lpcur.add_constraint(lpcur.sum(lpcur[xs[i]] for i in ix) >= 1)
-                for size_target in range(1, min(2,self.ba.tm_target_out(tm))+1):
-                    dfs(size_target)
+                # sols = SetSystem()
+                # def extends_to_solution(psol):
+                #     if any(True for _ in sols.iter_sets(Slo=psol)):
+                #         return True
+                #     for x in psol:
+                #         lpcur.set_max(lpcur[x],0)
+                #     res = list(islice(lp_integer_points(lpcur,xs,fullsol=False),1))
+                #     for x in psol:
+                #         lpcur.set_max(lpcur[x],1)
+                #     if len(res) == 0:
+                #         return False
+                #     else:
+                #         sol = [x for x,v in res[0].items() if v==0]
+                #         sols.add_set(sol)
+                #         return True
+                # constraints = SetSystem()
+                # ix = []
+                # def dfs(size_target):
+                #     if len(ix) > size_target or any(True for _ in constraints.iter_sets(Shi=ix)):
+                #         return
+                #     print(size_target,ix)
+                #     if extends_to_solution([xs[i] for i in ix]):
+                #         for i in range(0 if len(ix) == 0 else ix[-1]+1, len(xs)):
+                #             ix.append(i)
+                #             dfs(size_target)
+                #             ix.pop()
+                #     elif len(ix) == size_target:
+                #         print('adding',ix)
+                #         constraints.add_set(ix)
+                #         lp.add_constraint(lp.sum(lp[xs[i]] for i in ix) >= 1)
+                #         lpcur.add_constraint(lpcur.sum(lpcur[xs[i]] for i in ix) >= 1)
+                # for size_target in range(1, min(2,self.ba.tm_target_out(tm))+1):
+                #     dfs(size_target)
                 
 
                 # st = []
