@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 # reimplementation of product from itertools which reorders its output to
 # achieve maximum laziness 
 def lproduct(*its):
@@ -47,38 +49,65 @@ class SetSystem:
                 if len(cur_sets[S[i]]) == 0:
                     del cur_sets[S[i]]
         rs(self.sets,0)
-    def iter_sets(self,Slo=[],Shi=None):
+    def iter_sets(self,Slo=[],Shi=None,Slolex=[]):
         from collections import Counter
         from copy import copy
         from heapq import heapify,heappush,heappop
-        Slo = [(self.key(s),s) for s in Slo]
+        Slo = [self.key(s) for s in Slo]
         heapify(Slo)
+        Slolex = [s for s in Slolex]
+        heapify(Slolex)
         if Shi is not None:
             Shi = Counter(Shi)
         cur = []
-        def dfs(cur_sets):
-            if None in cur_sets and len(Slo) == 0:
+        def dfs(cur_sets,Slolex):
+            if None in cur_sets and len(Slo) == 0 and len(Slolex) == 0:
                 yield (copy(cur),cur_sets[None])
             for e,sets1 in cur_sets.items():
                 if e is None:
                     continue
-                if (Shi is None or Shi.get(e,0) > 0) and (
-                        len(Slo) == 0 or self.key(e) <= Slo[0][0]):
+                if (Shi is None or Shi.get(e,0) > 0) and \
+                        (len(Slo) == 0 or self.key(e) <= Slo[0]) and \
+                        (len(Slolex) == 0 or Slolex[0] <= e):
                     cur.append(e)
                     if Shi is not None:
                         Shi[e] -= 1
-                    if len(Slo) > 0 and self.key(e) == Slo[0][0]:
-                        topush = heappop(Slo)
+                    topushSlo = heappop(Slo) if len(Slo) > 0 and self.key(e) == Slo[0] else None
+                    if len(Slolex) > 0 and e == Slolex[0]:
+                        topushSlolex = heappop(Slolex)
+                        for r in dfs(sets1,Slolex):
+                            yield r
+                        heappush(Slolex,topushSlolex)
                     else:
-                        topush = None
-                    for r in dfs(sets1):
-                        yield r
-                    if topush is not None:
-                        heappush(Slo,topush)
+                        for r in dfs(sets1,[]):
+                            yield r
+                    if topushSlo is not None:
+                        heappush(Slo,topushSlo)
                     if Shi is not None:
                         Shi[e] += 1
                     cur.pop()
-        return dfs(self.sets)
+        return dfs(self.sets,Slolex)
+    def iter_unions(self,Shi,replacement=False):
+        Shi = Counter(Shi)
+        prev = []
+        for s,k in self.iter_sets(Shi=Shi):
+            prev.append(((s,),(k,)))
+            yield (s,),(k,)
+        for cnt in range(2,Shi.total()+1):
+            nextprev = []
+            for ss,ks in prev:
+                for s in ss:
+                    for e in s:
+                        Shi[e] -= 1
+                for s,k in self.iter_sets(Shi=Shi,Slolex=ss[-1]):
+                    if replacement or s != ss[-1]:
+                        nextprev.append( (ss+(s,),ks+(k,)) )
+                        yield (ss+(s,),ks+(k,))
+                for s in ss:
+                    for e in s:
+                        Shi[e] += 1
+            prev = nextprev
+                
 
 # function to enumerate integer points of a polytope defined by input linear program
 # (sage MixedIntegerLinearProgram). If xs, a subset of variables, is provided,
