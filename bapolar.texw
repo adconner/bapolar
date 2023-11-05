@@ -1060,7 +1060,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             if in_lti(p):
                 sav.append(vk)
                 lp.set_min(lp[p.lm()],1)
-                lpset.append((p.lm(),1))
+                lpset.add((p.lm(),1))
                 num_in[tm] += 1
                 if tm in tms:
                     for j in range(i+1,len(vs)):
@@ -1152,9 +1152,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         
             vk = min(vkstart,key=lambda vk: (sum(vk[0]), max(vk[0]),
                                              self.tm_dim_tperp(vk[0])-num_in[vk[0]]-num_out[vk[0]],
-                                             params_needed.get(vk,0), 
-                                             abs(0.5 - lp.get_values(lp.default_variable())[
-                                                 mod.get_vss(vk[0])[vk[1]][vk[2]].lm()]),
+                                             params_needed.get(vk,0),
                                              len(tss.get(vk,[]))))
             
             set_stack.append(vk)
@@ -1165,8 +1163,11 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 vs = mod.get_vss(tm)[wt]
                 v = vs[vi]
                 
-                var_lp_val = lp.get_values(lp.default_variable())[
-                     mod.get_vss(tm)[wt][vi].lm()]
+                try:
+                    var_lp_val = next(v for x,v in next(lpsols.iter_sets(Slo=lpset))[0] 
+                                      if x == mod.get_vss(tm)[wt][vi].lm())
+                except StopIteration:
+                    var_lp_val = 0.5
                 
                 assert vk in unset
                 assert lp.get_min(lp[v.lm()]) == 0
