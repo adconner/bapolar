@@ -201,14 +201,18 @@ class BinaryProgram:
         self.psol = set()
         self.prunef = prunef
     def set_min(self, x, v):
+        v = int(v)
         self.lp.set_min(self.lp[x], v)
         if v == 1:
+            assert (x,1) not in self.psol
             self.psol.add((x,1))
         else:
             self.psol.remove((x,1))
     def set_max(self, x, v):
+        v = int(v)
         self.lp.set_max(self.lp[x], v)
         if v == 0:
+            assert (x,0) not in self.psol
             self.psol.add((x,0))
         else:
             self.psol.remove((x,0))
@@ -237,61 +241,101 @@ class BinaryProgram:
             return sol
                    
 class BinaryPrograms:
-    def __init__(self,lp,xss,use_infeas=True):
+    def __init__(self,lp,xss,xsshi,use_infeas=True):
         ms = dict([(next(iter(v.dict().keys())),m) for m,v in lp.default_variable().items()])
         msix = dict([(m,next(iter(v.dict().keys()))) for m,v in lp.default_variable().items()])
+        xssi = {}
+        for i,xs in enumerate(xss):
+            for x in xs:
+                xssi.setdefault(x,[]).append(i)
+        xsbpis = [set(xs) for xs in xss]
+        xsbp = set(x for xs in xss for x in xs)
+        for _,(xis,_),_ in lp.constraints():
+            curxs = set([ms[xi] for xi in xis])
+            curbpis = reduce(lambda a,b : a|b, 
+                             (set(xssi.get(x,[])) for x in curxs), set())
+            print(curxs,curbpis)
+            for bpi in curbpis:
+                xsbpis[bpi] |= curxs
+            if len(curbpis) >= 2:
+                xsbp |= curxs
+        # xssalli = deepcopy(xssi)
+        # for i,xs in enumerate(xsshi):
+        #     for x in xs:
+        #         xssalli.setdefault(x,[]).append(len(xs)+i)
+        # for bpi,xs in enumerate(xsbpis):
+        #     xsbpis[bpi] = reduce(lambda a,b: a|b, (set(xss[i])|set([x]) if i < len(xss) else set(xsshi[i-len(xss)])|set([x]) 
+        #          for x in xs for xsi in xssalli[x]), set())
+        # xsbp = reduce(lambda a,b: a|b, (set(xss[i])|set([x]) if i < len(xss) else set(xsshi[i-len(xss)])|set([x]) 
+        #      for x in xsbp for xsi in xssalli[x]), set())
+        
         self.bps = []
-        for xs in xss:
-            curxis = set(msix[x] for x in xs)
+        for xs,ys in zip(xss,xsbpis):
+            curxis = set(msix[x] for x in ys)
             lpcur = MixedIntegerLinearProgram(solver='GLPK')
             lpcur.set_min(lpcur.default_variable(),0)
             lpcur.set_max(lpcur.default_variable(),1)
             for lo,(xis,cs),hi in lp.constraints():
-                if any(xi in curxis for xi in xis):
+                if all(xi in curxis for xi in xis):
                     lpcur.add_constraint(lpcur.sum(c*lpcur[ms[xi]] for xi,c in zip(xis,cs)),min=lo,max=hi)
             self.bps.append(BinaryProgram(lpcur,xs,use_infeas))
-        xiss = {}
-        for i,xs in enumerate(xss):
-            for x in xs:
-                xiss.setdefault(x,[]).append(i)
         def prunef(psol):
+            revert = []
             for x,v in psol.items():
-                for i in xiss.get(x,[]):
+                for i in xssi.get(x,[]):
                     if v == 0:
-                        self.bps[i].set_max(x,0)
+                        assert self.bps[i].get_min(x) == 0
+                        if self.bps[i].get_max(x) == 1:
+                            revert.append((i,x,v))
+                            self.bps[i].set_max(x,0)
                     else:
-                        self.bps[i].set_min(x,1)
+                        assert self.bps[i].get_max(x) == 1
+                        if self.bps[i].get_min(x) == 0:
+                            revert.append((i,x,v))
+                            self.bps[i].set_min(x,1)
             res = all(bp.extend() is not None for bp in self.bps)
-            for x,v in psol.items():
-                for i in xiss.get(x,[]):
-                    if v == 0:
-                        self.bps[i].set_max(x,1)
-                    else:
-                        self.bps[i].set_min(x,0)
+            for i,x,v in revert:
+                if v == 0:
+                    self.bps[i].set_max(x,1)
+                else:
+                    self.bps[i].set_min(x,0)
             return res
+        
         lpcur = MixedIntegerLinearProgram(solver='GLPK')
         lpcur.set_min(lpcur.default_variable(),0)
         lpcur.set_max(lpcur.default_variable(),1)
+        curxis = set(msix[x] for x in xsbp)
         for lo,(xis,cs),hi in lp.constraints():
-            nxs = len(reduce(lambda a,b: a|b, (set(xiss.get(xi,[])) for xi in xis), set()))
-            # assert nxs >= 1
-            if nxs >= 2:
+            if all(xi in curxis for xi in xis):
                 lpcur.add_constraint(lpcur.sum(c*lpcur[ms[xi]] for xi,c in zip(xis,cs)),min=lo,max=hi)
         from operator import concat
-        self.bp = BinaryProgram(lpcur,reduce(concat,xss),use_infeas,prunef=prunef)
+        self.bp = BinaryProgram(lpcur,reduce(concat,xss),use_infeas=False,prunef=prunef)
         self.ysbis = {}
         for y in self.bp.lp.default_variable().keys():
             self.ysbis.setdefault(y,[]).append(-1)
         for bpi, bp in enumerate(self.bps):
             for y in bp.lp.default_variable().keys():
                 self.ysbis.setdefault(y,[]).append(bpi)
+        self.psol = set()
     def set_min(self, x, v):
+        v = int(v)
+        if v == 1:
+            assert (x,1) not in self.psol
+            self.psol.add((x,1))
+        else:
+            self.psol.remove((x,1))
         for bi in self.ysbis[x]:
             if bi == -1:
                 self.bp.set_min(x,v)
             else:
                 self.bps[bi].set_min(x,v)
     def set_max(self, x, v):
+        v = int(v)
+        if v == 0:
+            assert (x,0) not in self.psol
+            self.psol.add((x,0))
+        else:
+            self.psol.remove((x,0))
         for bi in self.ysbis[x]:
             if bi == -1:
                 self.bp.set_max(x,v)
