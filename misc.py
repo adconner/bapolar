@@ -191,119 +191,88 @@ def lp_integer_points(lp,xs=None,fullsol=True,prunef=lambda psol: True):
         st.pop()
     return dfs()
 
-class IntegerProgram:
-    def __init__(self,lp,xs=None):
+class BinaryProgram:
+    def __init__(self,lp,xs=None,use_infeas=True,prunef=lambda psol: True):
         self.lp = deepcopy(lp)
-        self.bounds = [(x, lp.get_min(lp[x]), lp.get_max(lp[x]))
-                    for x in lp.default_variable().keys()]
-        if xs is None:
-            self.xs = list(self.lp.default_variable().keys())
-        else:
-            self.xs = xs
+        self.xs = list(self.lp.default_variable().keys()) if xs is None else xs
+        self.use_infeas = use_infeas
         self.infeas = SetSystem()
         self.sols = SetSystem()
-    def add_infeas(self, bans):
-        rem = list(self.infeas.iter_sets(Slo=bans))
-        for r,_ in rem:
-            self.infeas.remove_set(r)
-        self.infeas.add_set(bans)
-    def reset_bounds(self):
-        for x,lo,hi in self.bounds:
-            self.lp.set_min(self.lp[x],lo)
-            self.lp.set_max(self.lp[x],hi)
-    # if unsafe_no_copy_lp, this generator must either be exhasted before
-    # calling any other methods, or reset_bounds() must be called (and no
-    # more solutions emitted)
-    def extend_psol(self,psol=[],unsafe_no_copy_lp=False):
-        from sage.numerical.mip import MIPSolverException
-        bans = [(x,i) for x,v in psol for i in range(int(self.lp.get_min(self.lp[x])), v) ]
-        bans.extend([(x,i) for x,v in psol for i in range(v+1, int(self.lp.get_max(self.lp[x])+1))])
-        if any(True for _ in self.infeas.iter_sets(Shi=bans)):
-            return
-        if unsafe_no_copy_lp:
-            lp = deepcopy(self.lp)
+        self.psol = set()
+        self.prunef = prunef
+    def set_min(self, x, v):
+        self.lp.set_min(self.lp[x], v)
+        if v == 1:
+            self.psol.add((x,1))
         else:
-            lp = self.lp
-        for x,v in psol:
-            lp.set_min(lp[x],v)
-            lp.set_max(lp[x],v)
-        st = []
-        def dfs(check_solvable=True):
-            try:
-                if check_solvable:
-                    lp.solve()
-            except MIPSolverException:
-                return
-            csol = lp.get_values(lp.default_variable())
-            remxs = [x for x in self.xs if lp.get_min(lp[x]) < lp.get_max(lp[x])]
-            if len(remxs) == 0:
-                sol = [(x,csol[x]) for x in self.xs]
-                self.sols.add_set(sol)
-                yield sol
-                return
-            x = max(remxs, key=lambda x: abs(csol[x]-round(csol[x])))
-            v = math.floor(csol[x]+1e-10)
-            omin = int(lp.get_min(lp[x]))
-            omax = int(lp.get_max(lp[x]))
-            if v == omax:
-                v -= 1
-            assert v >= omin and v+1 <= omax
-            print('%s%s %d %.2f %d' % (''.join(st),str(x),lp.get_min(lp[x]),
-                                     csol[x],lp.get_max(lp[x])))
-            def tryhi():
-                for i in range(omin,v+1):
-                    bans.append((x,i))
-                if not any(True for _ in self.infeas.iter_sets(Shi=bans)):
-                    lp.set_min(lp[x],v+1)
-                    havesol = False
-                    for res in dfs(v+1-csol[x] >= 1e-10):
-                        havesol = True
-                        yield res
-                    if not havesol:
-                        self.add_infeas(bans)
-                    lp.set_min(lp[x],omin)
-                for i in range(omin,v+1):
-                    bans.pop()
-            def trylo():
-                for i in range(v+1,omax+1):
-                    bans.append((x,i))
-                if not any(True for _ in self.infeas.iter_sets(Shi=bans)):
-                    lp.set_max(lp[x],v)
-                    havesol = False
-                    for res in dfs(csol[x]-v >= 1e-10):
-                        havesol = True
-                        yield res
-                    if not havesol:
-                        self.add_infeas(bans)
-                    lp.set_max(lp[x],omax)
-                for i in range(v+1,omax):
-                    bans.pop()
-            hi_first = csol[x] - v >= 0.5
-            st.append(' ')
-            if hi_first:
-                for sol in tryhi():
-                    yield sol
-                st[-1] = '.'
-            for sol in trylo():
-                yield sol
-            if not hi_first:
-                st[-1] = '.'
-                for sol in tryhi():
-                    yield sol
-            st.pop()
-        havesol = False
-        for sol in dfs():
-            havesol = True
-            yield sol
-        if not havesol:
-            self.add_infeas(bans)
-    def can_extend_psol(self,psol=[]):
-        if any(True for _ in self.sols.iter_sets(Slo=psol)):
-            return True
-        res = any(True for _ in self.extend_psol(psol,unsafe_no_copy_lp=True))
-        if res:
-            self.reset_bounds()
+            self.psol.remove((x,1))
+    def set_max(self, x, v):
+        self.lp.set_max(self.lp[x], v)
+        if v == 0:
+            self.psol.add((x,0))
+        else:
+            self.psol.remove((x,0))
+    def get_min(self, x):
+        return int(self.lp.get_min(self.lp[x]))
+    def get_max(self, x):
+        return int(self.lp.get_max(self.lp[x]))
+    def extend(self):
+        sol = list(islice(self.sols.iter_sets(Slo=self.psol),1))
+        if len(sol) == 1:
+            return sol[0][0]
+        def prunef(psol):
+            return not any(True for _ in self.infeas.iter_sets(Shi=psol.items())) and self.prunef(psol)
+        if not self.use_infeas:
+            prunef = self.prunef
+        res = list(islice(lp_integer_points(self.lp,self.xs,fullsol=True,prunef=prunef),1))
+        if len(res) == 0:
+            if self.use_infeas:
+                rem = list(self.infeas.iter_sets(Slo=self.psol))
+                for r,_ in rem:
+                    self.infeas.remove_set(r)
+                self.infeas.add_set(self.psol)
+        else:
+            sol = [(x,int(round(v))) for x,v in res[0].items() if abs(v-round(v)) < 1e-10]
+            self.sols.add_set(sol)
+            return sol
+                   
+def binary_programs(self,lp,xss,use_infeas=True):
+    ms = dict([(next(iter(v.dict().keys())),m) for m,v in lp.default_variable().items()])
+    msix = dict([(m,next(iter(v.dict().keys()))) for m,v in lp.default_variable().items()])
+    bps = []
+    for xs in xss:
+        xis = set(msix[x] for x in xs)
+        lpcur = MixedIntegerLinearProgram(solver='GLPK')
+        for lo,(xis,cs),hi in lp.constraints():
+            if any(xi in curxis for xi in xis):
+                lpcur.add_constraint(lpcur.sum(c*lpcur[ms[xi]] for xi,c in zip(xis,cs)),min=lo,max=hi)
+        bps.append(BinaryProgram(lpcur,xs,use_infeas))
+    xiss = {}
+    for i,xs in enumerate(xss):
+        for x in xs:
+            xiss.setdefault(x,[]).append(i)
+    def prunef(psol):
+        for x,v in psol.items():
+            for i in xiss.get(x,[]):
+                if v == 0:
+                    bps[i].set_max(x,0)
+                else:
+                    bps[i].set_min(x,1)
+        res = all(bp.extend() is not None for bp in bps)
+        for x,v in psol.items():
+            for i in xiss.get(x,[]):
+                if v == 0:
+                    bps[i].set_max(x,1)
+                else:
+                    bps[i].set_min(x,0)
         return res
+    lpcur = MixedIntegerLinearProgram(solver='GLPK')
+    for lo,(xis,cs),hi in lp.constraints():
+        nxs = len(reduce(lambda a,b: a|b, (set(xiss.get(xi,[])) for xi in xis), set()))
+        assert nxs >= 1
+        if nxs >= 2:
+            lpcur.add_constraint(lpcur.sum(c*lpcur[ms[xi]] for xi,c in zip(xis,cs)),min=lo,max=hi)
+    bp = BinaryProgram(lpcur,reduce(concat,xss),use_infeas,prunef=prunef)
         
 
         

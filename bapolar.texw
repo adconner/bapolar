@@ -1022,8 +1022,9 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                        for xi,e in m.exponents()[0].sparse_iter() for _ in range(e)]))
             return in_lti
                         
-        lp = deepcopy(mod.get_linear_program(tms,tmcs,
-             interval_length_bound=lp_interval_length_bound,precise=precise_lp))
+        bp = BinaryProgram(mod.get_linear_program(tms,tmcs,
+             interval_length_bound=lp_interval_length_bound,precise=precise_lp),
+                           xs = [p.lm() for tm in tms for p in mod.get_vs(tm)], use_infeas=False)
         lpset = set()
         unset = set()
         params_needed = {vks : vks[2] for vks in tmsvks}
@@ -1034,7 +1035,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             for wt,vs in mod.get_vss(tm).items():
                 for i,p in enumerate(vs):
                     if in_lti(p.lm()):
-                        lp.set_min(lp[p.lm()],1)
+                        bp.set_min(p.lm(),1)
                         lpset.add((p.lm(),1))
                         num_in[tm] += 1
                         if tm in tms:
@@ -1043,10 +1044,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     else:
                         unset.add((tm,wt,i))
                         
-        from sage.numerical.mip import MIPSolverException
-        try:
-            lp.solve()
-        except MIPSolverException:
+        if bp.extend() is None:
             print ("get_ideals_for_tm: no solution to start")
             return
         
@@ -1059,7 +1057,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             p = vs[i].lm()
             if in_lti(p):
                 sav.append(vk)
-                lp.set_min(lp[p.lm()],1)
+                bp.set_min(p.lm(),1)
                 lpset.add((p.lm(),1))
                 num_in[tm] += 1
                 if tm in tms:
@@ -1071,21 +1069,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         lpsols = SetSystem()
         nlpsols = 0
         tm_xs = [p.lm() for tm in tms for p in mod.get_vs(tm)]
-        def extends_to_lp_solution():
-            nonlocal nlpsols
-            if any(True for _ in lpsols.iter_sets(Slo=lpset)):
-                return True
-            res = list(islice(lp_integer_points(lp,tm_xs,fullsol=True),1))
-            if len(res) == 0:
-                return False
-            else:
-                lpsols.add_set([(x,round(v)) 
-                        for x,v in res[0].items() if abs(v-round(v)) < 1e-10])
-                nlpsols += 1
-                print ("lp sols", nlpsols)
-                return True
 
-        if not extends_to_lp_solution():
+        if bp.extend() is None:
             print ("get_ideals_for_tm: no solution to start needed gb")
             return
         
@@ -1164,14 +1149,13 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 v = vs[vi]
                 
                 try:
-                    var_lp_val = next(v for x,v in next(lpsols.iter_sets(Slo=lpset))[0] 
-                                      if x == mod.get_vss(tm)[wt][vi].lm())
+                    var_lp_val = next(v for x,v in bp.extend() if x == mod.get_vss(tm)[wt][vi].lm())
                 except StopIteration:
                     var_lp_val = 0.5
                 
                 assert vk in unset
-                assert lp.get_min(lp[v.lm()]) == 0
-                assert lp.get_max(lp[v.lm()]) == 1
+                assert bp.get_min(v.lm()) == 0
+                assert bp.get_max(v.lm()) == 1
                 
                 def printstep(extra=''):
                     remhi = len(mod.get_vs(tm)) - self.tm_target_out(tm) - num_in[tm]
@@ -1228,7 +1212,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                             # generically present, but still may only over
                             # approximate the resulting ideals
                             return
-                        if any(in_lti(w.lm()) for w in vs[:vi] if lp.get_max(lp[w.lm()]) == 0):
+                        if any(in_lti(w.lm()) for w in vs[:vi] if bp.get_max(w.lm()) == 0):
                             # Check similarly as above for smaller monomials of
                             # this same weight we have previously excluded (common case)
                             return
@@ -1237,7 +1221,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         ws = mod.get_vss(wk[0])[wk[1]]
                         p = ws[wk[2]].lm()
                         if in_lti(p):
-                            lp.set_min(lp[p],1)
+                            bp.set_min(p,1)
                             lpset.add((p,1))
                             sav.add(wk)
                             num_in[wk[0]] += 1
@@ -1248,25 +1232,25 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     for wk in sav:
                         unset.remove(wk)
                     if not curfull:
-                        lp.set_max(lp[v.lm()],0)
+                        bp.set_max(v.lm(),0)
                         lpset.add((v.lm(),0))
                         unset.remove(vk)
                         num_out[tm] += 1
-                    assert lp.get_min(lp[v.lm()]) == (1 if curfull else 0)
-                    assert lp.get_max(lp[v.lm()]) == (1 if curfull else 0)
-                    if extends_to_lp_solution():
+                    assert bp.get_min(v.lm()) == (1 if curfull else 0)
+                    assert bp.get_max(v.lm()) == (1 if curfull else 0)
+                    if bp.extend() is not None:
                         if vk in tmsvks:
                             printstep()
                         for JSxi in dfs(J,S,xi):
                             yield JSxi
                     if not curfull:
-                        lp.set_max(lp[v.lm()],1)
+                        bp.set_max(v.lm(),1)
                         lpset.remove((v.lm(),0))
                         unset.add(vk)
                         num_out[tm] -= 1
                     for wk in sav:
                         ws = mod.get_vss(wk[0])[wk[1]]
-                        lp.set_min(lp[ws[wk[2]].lm()],0)
+                        bp.set_min(ws[wk[2]].lm(),0)
                         lpset.remove((ws[wk[2]].lm(),1))
                         unset.add(wk)
                         num_in[wk[0]] -= 1
@@ -1283,7 +1267,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         S = [liftR(s,R) for s in S]
                     R = J.ring()
                     p = liftR(v,R) + R.sum([liftR(w,R)*R.gen(self.nvarsx+xi+wi)
-                                for wi,w in enumerate(w for w in mod.get_vss(tm)[wt][:vi] if lp.get_min(lp[w.lm()]) == 0)])
+                                for wi,w in enumerate(w for w in mod.get_vss(tm)[wt][:vi] if bp.get_min(w.lm()) == 0)])
                     for JSxi in rec(gb(J+p),S,yi,True):
                         yield JSxi
                 
