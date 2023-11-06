@@ -1022,9 +1022,9 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                        for xi,e in m.exponents()[0].sparse_iter() for _ in range(e)]))
             return in_lti
                         
-        bp = BinaryProgram(mod.get_linear_program(tms,tmcs,
+        bp = BinaryPrograms(mod.get_linear_program(tms,tmcs,
              interval_length_bound=lp_interval_length_bound,precise=precise_lp),
-                           xs = [p.lm() for tm in tms for p in mod.get_vs(tm)], use_infeas=False)
+                           xss = [[p.lm() for p in mod.get_vs(tm)] for tm in tms], use_infeas=False)
         lpset = set()
         unset = set()
         params_needed = {vks : vks[2] for vks in tmsvks}

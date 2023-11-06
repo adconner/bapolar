@@ -236,43 +236,72 @@ class BinaryProgram:
             self.sols.add_set(sol)
             return sol
                    
-def binary_programs(self,lp,xss,use_infeas=True):
-    ms = dict([(next(iter(v.dict().keys())),m) for m,v in lp.default_variable().items()])
-    msix = dict([(m,next(iter(v.dict().keys()))) for m,v in lp.default_variable().items()])
-    bps = []
-    for xs in xss:
-        xis = set(msix[x] for x in xs)
+class BinaryPrograms:
+    def __init__(self,lp,xss,use_infeas=True):
+        ms = dict([(next(iter(v.dict().keys())),m) for m,v in lp.default_variable().items()])
+        msix = dict([(m,next(iter(v.dict().keys()))) for m,v in lp.default_variable().items()])
+        self.bps = []
+        for xs in xss:
+            curxis = set(msix[x] for x in xs)
+            lpcur = MixedIntegerLinearProgram(solver='GLPK')
+            lpcur.set_min(lpcur.default_variable(),0)
+            lpcur.set_max(lpcur.default_variable(),1)
+            for lo,(xis,cs),hi in lp.constraints():
+                if any(xi in curxis for xi in xis):
+                    lpcur.add_constraint(lpcur.sum(c*lpcur[ms[xi]] for xi,c in zip(xis,cs)),min=lo,max=hi)
+            self.bps.append(BinaryProgram(lpcur,xs,use_infeas))
+        xiss = {}
+        for i,xs in enumerate(xss):
+            for x in xs:
+                xiss.setdefault(x,[]).append(i)
+        def prunef(psol):
+            for x,v in psol.items():
+                for i in xiss.get(x,[]):
+                    if v == 0:
+                        self.bps[i].set_max(x,0)
+                    else:
+                        self.bps[i].set_min(x,1)
+            res = all(bp.extend() is not None for bp in self.bps)
+            for x,v in psol.items():
+                for i in xiss.get(x,[]):
+                    if v == 0:
+                        self.bps[i].set_max(x,1)
+                    else:
+                        self.bps[i].set_min(x,0)
+            return res
         lpcur = MixedIntegerLinearProgram(solver='GLPK')
+        lpcur.set_min(lpcur.default_variable(),0)
+        lpcur.set_max(lpcur.default_variable(),1)
         for lo,(xis,cs),hi in lp.constraints():
-            if any(xi in curxis for xi in xis):
+            nxs = len(reduce(lambda a,b: a|b, (set(xiss.get(xi,[])) for xi in xis), set()))
+            # assert nxs >= 1
+            if nxs >= 2:
                 lpcur.add_constraint(lpcur.sum(c*lpcur[ms[xi]] for xi,c in zip(xis,cs)),min=lo,max=hi)
-        bps.append(BinaryProgram(lpcur,xs,use_infeas))
-    xiss = {}
-    for i,xs in enumerate(xss):
-        for x in xs:
-            xiss.setdefault(x,[]).append(i)
-    def prunef(psol):
-        for x,v in psol.items():
-            for i in xiss.get(x,[]):
-                if v == 0:
-                    bps[i].set_max(x,0)
-                else:
-                    bps[i].set_min(x,1)
-        res = all(bp.extend() is not None for bp in bps)
-        for x,v in psol.items():
-            for i in xiss.get(x,[]):
-                if v == 0:
-                    bps[i].set_max(x,1)
-                else:
-                    bps[i].set_min(x,0)
-        return res
-    lpcur = MixedIntegerLinearProgram(solver='GLPK')
-    for lo,(xis,cs),hi in lp.constraints():
-        nxs = len(reduce(lambda a,b: a|b, (set(xiss.get(xi,[])) for xi in xis), set()))
-        assert nxs >= 1
-        if nxs >= 2:
-            lpcur.add_constraint(lpcur.sum(c*lpcur[ms[xi]] for xi,c in zip(xis,cs)),min=lo,max=hi)
-    bp = BinaryProgram(lpcur,reduce(concat,xss),use_infeas,prunef=prunef)
-        
-
-        
+        from operator import concat
+        self.bp = BinaryProgram(lpcur,reduce(concat,xss),use_infeas,prunef=prunef)
+        self.ysbis = {}
+        for y in self.bp.lp.default_variable().keys():
+            self.ysbis.setdefault(y,[]).append(-1)
+        for bpi, bp in enumerate(self.bps):
+            for y in bp.lp.default_variable().keys():
+                self.ysbis.setdefault(y,[]).append(bpi)
+    def set_min(self, x, v):
+        for bi in self.ysbis[x]:
+            if bi == -1:
+                self.bp.set_min(x,v)
+            else:
+                self.bps[bi].set_min(x,v)
+    def set_max(self, x, v):
+        for bi in self.ysbis[x]:
+            if bi == -1:
+                self.bp.set_max(x,v)
+            else:
+                self.bps[bi].set_max(x,v)
+    def get_min(self, x):
+        bi = self.ysbis[x][0]
+        return self.bp.get_min(x) if bi == -1 else self.bps[bi].get_min(x)
+    def get_max(self, x):
+        bi = self.ysbis[x][0]
+        return self.bp.get_max(x) if bi == -1 else self.bps[bi].get_max(x)
+    def extend(self):
+        return self.bp.extend()
