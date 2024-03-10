@@ -551,7 +551,7 @@ def three_place_ideals_up_to(ba,d=1,Jxi=None):
         J,S,xi = Jxi
         for Jxiup in ba.get_ideals_for_tm([tm], [tm[:s]+(tm[s]+1,)+tm[s+1:] for s in range(3)]
                       +([(2,2,2)] if sum(tm) == 4 and all(e <= 2 for e in tm) else []),
-                  J,S,xi,search_above = sum(tm) == 2, lp_interval_length_bound = 6
+                  J,S,xi,search_above = sum(tm) == 2, lp_interval_length_bound = 3
                                           if sum(tm) <= 3 else 2, mod = mod):
             if len(tms) == 1 and sum(tm) < d:
                 ltIlb, ltIub = ba.leading_term_ideal(Jxiup)
@@ -655,10 +655,10 @@ def lp_only_look_strict(ba):
               ((2,0,1),(1,0,2)),
               ((0,2,1),(0,1,2))]
     lp = deepcopy(ba.zero.get_linear_program(
-        ((1,1,0),(1,0,1),(0,1,1)),((1,1,1),),interval_length_bound=4))
+        ((1,1,0),(1,0,1),(0,1,1)),((1,1,1),),interval_length_bound=3))
     sols_ss = []
     for tm,tmcs in zip(tms,tmcss):
-        lpcur = ba.zero.get_linear_program((tm,),tmcs,interval_length_bound=6)
+        lpcur = ba.zero.get_linear_program((tm,),tmcs,interval_length_bound=3)
         xs = [x.lm() for vs in ba.zero.get_vss(tm).values() for x in vs]
         ss = SetSystem()
         sols_ss.append(ss)
@@ -713,6 +713,7 @@ def lp_only_look_strict(ba):
             except StopIteration:
                 pass
 
+# this is unsound
 def lp_only_look(ba):
     from operator import concat
     from sage.numerical.mip import MIPSolverException
@@ -723,13 +724,13 @@ def lp_only_look(ba):
     lps = []
     xss = []
     for tm,tmcs in zip(tms,tmcss):
-        lp = ba.zero.get_linear_program((tm,),tmcs,interval_length_bound=7)
-        # lp = ba.zero.get_linear_program(tuple(tms),tmcs+((1,1,1),))
+        lp = ba.zero.get_linear_program((tm,),tmcs,interval_length_bound=3)
+        # lp = ba.zero.get_linear_program(tuple(tms),tmcs+((1,1,1),),interval_length_bound=3)
         # lp = ba.zero.get_linear_program((tm,),tmcs+((1,1,1),))
         xs = [x.lm() for vs in ba.zero.get_vss(tm).values() for x in vs]
         lps.append(lp_integer_points(lp,xs,fullsol=False))
         xss.append(xs)
-    lp = ba.zero.get_linear_program(((1,1,0),(1,0,1),(0,1,1)),((1,1,1),),interval_length_bound=4)
+    lp = ba.zero.get_linear_program(((1,1,0),(1,0,1),(0,1,1)),((1,1,1),),interval_length_bound=3)
     xs = [x.lm() for tm in tms for vs in ba.zero.get_vss(tm).values() for x in vs]
     yss = [[] for _ in range(3)]
     sols = [[] for _ in range(3)]
@@ -961,7 +962,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         return R(t(R.gens()[self.nvarsx:self.nvarsx+tg]+(R.zero(),)*(tg-Rg)))
     
     def get_ideals_for_tm(self, tms=[], tmcs=[], J=None, S=None, xi=0,
-                          search_above=True, lp_interval_length_bound=6, precise_lp=False,
+                          search_above=True, lp_interval_length_bound=3, precise_lp=False,
                           preset_choices = {}, mod=None, sound=False):
         if mod is None:
             mod = self.zero
@@ -1507,9 +1508,9 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
     def codimension_bounds(self,Jxi,total_degree):
         ltIlb, ltIub = self.leading_term_ideal(Jxi)
         res = {}
-        for m in ff.kbase(ltIub,total_degree):
+        for m in ltIub.normal_basis(total_degree):
             res.setdefault(self.polynomial_tm(m),[0,0])[0] += 1
-        for m in ff.kbase(ltIlb,total_degree):
+        for m in ltIlb.normal_basis(total_degree):
             res.setdefault(self.polynomial_tm(m),[0,0])[1] += 1
         return res,ltIlb,ltIub
     
@@ -1551,7 +1552,7 @@ class JDat:
         self.R = PolynomialRing(ba.F,ba.R0.gens()[:ba.nvars])
         self.J = self.R.ideal([liftR(p,self.R) for p in J.gens()])
         self.ltJ = self.R.ideal([p.lm() for p in self.J.groebner_basis()])
-        self.kbase = cache(self.kbase)
+        self.normal_basis = cache(self.normal_basis)
         self.get_vss = cache(self.get_vss)
         self.get_vs = cache(self.get_vs)
         self.get_poset = cache(self.get_poset)
@@ -1559,11 +1560,11 @@ class JDat:
         self.get_quiver_representation = cache(self.get_quiver_representation)
         self.get_linear_program = cache(self.get_linear_program)
         
-    def kbase(self,d):
-        return [liftR(m,ba.R0) for m in ff.kbase(self.J,d)]
+    def normal_basis(self,d):
+        return [liftR(m,ba.R0) for m in self.J.normal_basis(d)]
     
     def get_vss(self,tm):
-        vs = self.kbase(sum(tm))
+        vs = self.normal_basis(sum(tm))
         vss = {}
         for v in vs:
             if ba.polynomial_tm(v) == tm:
