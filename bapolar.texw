@@ -499,13 +499,21 @@ def lp_look_strict_by_deg(ba,deg_bound=2,Jxi=None):
         if d > deg_bound:
             yield Jxi
             return
+        bounds, ltIlb, ltIub = ba.codimension_bounds(Jxi,d)
+        if ltIlb.hilbert_series() == ba.target_hilbert_series_td() and \
+                ltIub.hilbert_series() == ba.target_hilbert_series_td():
+            yield Jxi
+            return
         J,S,xi = Jxi
         core = ba.ideal_constant_generators(J)
         mod = ba.zero if core.is_zero() else JDat(ba,core) 
-        tms = tuple(sorted(map(tuple,IntegerVectors(d, len(ba.dims)))))
-        tmcs = tuple(sorted(map(tuple,IntegerVectors(d+1, len(ba.dims)))))
+        tms = tuple(sorted([tm for tm,(lb,ub) in bounds.items() if 
+            lb != min(ba.tm_dim(tm),ba.r) or
+            ub != min(ba.tm_dim(tm),ba.r)]))
+        # tmcs = tuple([tm for k in range(d+1,d+2) for tm in tuple(sorted(map(tuple,IntegerVectors(k, len(ba.dims)))))])
+        tmcs = tuple([tm for k in range(d+1,2*d+1) for tm in tuple(sorted(map(tuple,IntegerVectors(k, len(ba.dims)))))])
         for Jxiup in ba.get_ideals_for_tm(tms, tmcs, J, S, xi, 
-                lp_interval_length_bound=max(3, 7-d), precise_lp=True, mod=mod):
+                lp_interval_length_bound=max(3, 7-d), precise_lp=False, mod=mod):
             for res in dfs(Jxiup,d+1):
                 yield res
     return dfs((ba.R0.ideal(side='twosided'),[ba.R0.one()], 0) if Jxi is None else Jxi,1)
@@ -546,7 +554,7 @@ def three_place_ideals_up_to(ba,d=1,Jxi=None):
                   J,S,xi,search_above = sum(tm) == 2, lp_interval_length_bound = 6
                                           if sum(tm) <= 3 else 2, mod = mod):
             if len(tms) == 1 and sum(tm) < d:
-                ltIlb, ltIub = ba.leading_term_ideal(*Jxiup[:2])
+                ltIlb, ltIub = ba.leading_term_ideal(Jxiup)
                 R = ltIlb.ring()
                 
                 degseries = ltIlb.hilbert_series() == ba.target_hilbert_series_td() and \
@@ -1480,7 +1488,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         J = R.ideal(Jg,side='twosided')
         return (J,S,len(tis))
 
-    def leading_term_ideal(self,J,S):
+    def leading_term_ideal(self,Jxi):
+        J,S,xi = Jxi
         R = PolynomialRing(self.F,self.R0.gens()[:self.nvars])
         ltIlb = []
         ltIub = []
@@ -1494,6 +1503,15 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 if any(s in Jt for s in S):
                     ltIlb.append(m)
         return R.ideal(ltIlb), R.ideal(ltIub)
+
+    def codimension_bounds(self,Jxi,total_degree):
+        ltIlb, ltIub = self.leading_term_ideal(Jxi)
+        res = {}
+        for m in ff.kbase(ltIub,total_degree):
+            res.setdefault(self.polynomial_tm(m),[0,0])[0] += 1
+        for m in ff.kbase(ltIlb,total_degree):
+            res.setdefault(self.polynomial_tm(m),[0,0])[1] += 1
+        return res,ltIlb,ltIub
     
     def ideal_constant_generators(self,J):
         return self.R0.ideal([liftR(p,self.R0) for p in J.gens() if 
