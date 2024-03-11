@@ -515,15 +515,16 @@ def search_by_sequence(ba,tmss,Jxi=None,together=False):
             for res in dfs(Jxi, tmsi+1):
                 yield res
             return
-        tmcs = tuple(sorted(set([tuple(map(add,tm,tma)) for tm in tms for k in range(1,d)
+        maxdincrease = max(1, min(d-1, 6-d))
+        tmcs = tuple(sorted(set([tuple(map(add,tm,tma)) for tm in tms for k in range(1,maxdincrease+1)
                              for tma in IntegerVectors(k,len(ba.dims)) ])))
         if together:
             for Jxiup in ba.get_ideals_for_tm(tms, tmcs, Jxi, mod=mod):
                 for res in dfs(Jxiup,tmsi+1):
                     yield res
         else:
-            tmcss = [tuple(sorted(set([tuple(map(add,tm,tma)) for k in range(1,d)
-                                 for tma in IntegerVectors(k,len(ba.dims)) ]))) for tm in tms]
+            tmcss = [tuple([tmc for tmc in tmcs if all(e <= f for e,f in zip(tm,tmc))])
+                          for tm in tms]
             if J.is_zero():
                 tmcss = [tuple([tmc for tmc in tmcscur if all(e > 0 or f == 0 for e,f in zip(tm,tmc)) ]) 
                          for tmcscur,tm in zip(tmcss,tms)]
@@ -980,13 +981,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         
         gbbound = max([sum(tm) for tm in tms+tmcs])
         def gb(J):
-            return J.twostd()
-            res = self.bounded_gb(J,gbbound)
-            missing = [p for p in J.twostd().gens() if p not in res.gens()]
-            if len(missing) > 0:
-                print('MISSING MISSING MISSING MISSING',missing)
-            return res
-            # return self.bounded_gb(J,gbbound)
+            return self.bounded_gb(J,gbbound)
         
         if Jxi is None:
             Jxi = (self.R0.ideal(side='twosided'), [self.R0.one()], 0)
