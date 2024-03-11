@@ -492,7 +492,7 @@ from functools import cache
 
 <<complete=False>>=
 
-def search_by_sequence(ba,tmss,Jxi=None):
+def search_by_sequence(ba,tmss,Jxi=None,together=True):
     from operator import add
     def dfs(Jxi,tmsi):
         try:
@@ -517,12 +517,27 @@ def search_by_sequence(ba,tmss,Jxi=None):
             return
         tmcs = tuple(sorted(set([tuple(map(add,tm,tma)) for tm in tms for k in range(1,d)
                              for tma in IntegerVectors(k,len(ba.dims)) ])))
-        for Jxiup in ba.get_ideals_for_tm(tms, tmcs, J, S, xi, 
-                lp_interval_length_bound=3, precise_lp=False, mod=mod):
-                # lp_interval_length_bound=max(3, 7-d), precise_lp=False, mod=mod):
-            for res in dfs(Jxiup,tmsi+1):
-                yield res
+        if together:
+            tmcss = [tuple(sorted(set([tuple(map(add,tm,tma)) for k in range(1,d)
+                                 for tma in IntegerVectors(k,len(ba.dims)) ]))) for tm in tms]
+            if J.is_zero():
+                tmcss = [tuple([tmc for tmc in tmcscur if all(e > 0 or f == 0 for e,f in zip(tm,tmc)) ]) 
+                         for tmcscur,tm in zip(tmcss,tms)]
+            tmcs = tuple([tmc for tmc in tmcs
+                          if len([tm for tm in tms if all(e <= f for e,f in zip(tm,tmc))]) > 1 ])
+            gens = [ba.get_ideals_for_tm((tm,),tmcscur,Jxi,mod=mod,simplify_existing=False) for tm,tmcscur in zip(tms,tmcss)]
+            for Jxis in lproduct(*map(enumerate,gens)):
+                print ('index choice %d' % tmsi,[i for i,Ixi in Jxis])
+                Ixi = ba.sum_ideals([Ixi for i,Ixi in Jxis],xi)
+                for Jxiup in ba.get_ideals_for_tm(tms, tmcs, Ixi, mod=mod):
+                    for res in dfs(Jxiup,tmsi+1):
+                        yield res
+        else:
+            for Jxiup in ba.get_ideals_for_tm(tms, tmcs, Jxi, mod=mod):
+                for res in dfs(Jxiup,tmsi+1):
+                    yield res
     return dfs((ba.R0.ideal(side='twosided'),[ba.R0.one()], 0) if Jxi is None else Jxi,0)
+
 
 def lp_look_strict_by_deg(ba,deg_bound=2,Jxi=None):
     tmss = [list(map(tuple,IntegerVectors(k,len(ba.dims)))) for k in range(1,deg_bound+1)]
@@ -540,10 +555,10 @@ def three_place_ideals_up_to(ba,d=1,Jxi=None):
             return
         tm = tms[0]
         print (tm)
-        J,S,xi = Jxi
+        # J,S,xi = Jxi
         for Jxiup in ba.get_ideals_for_tm([tm], [tm[:s]+(tm[s]+1,)+tm[s+1:] for s in range(3)]
                       +([(2,2,2)] if sum(tm) == 4 and all(e <= 2 for e in tm) else []),
-                  J,S,xi,search_above = sum(tm) == 2, lp_interval_length_bound = 3
+                  Jxi,search_tmcs = sum(tm) == 2, lp_interval_length_bound = 3
                                           if sum(tm) <= 3 else 2, mod = mod):
             if len(tms) == 1 and sum(tm) < d:
                 ltIlb, ltIub = ba.leading_term_ideal(Jxiup)
@@ -589,9 +604,9 @@ def three_place_ideals_up_to(ba,d=1,Jxi=None):
 
     for Jxis in lproduct(*map(enumerate,cd2)):
         print ('triple',[i for i,Iyi in Jxis])
-        Jxi = ba.sum_ideals_S([Iyi for i,Iyi in Jxis])
+        Jxi = ba.sum_ideals([Iyi for i,Iyi in Jxis])
         try:
-            next(ba.get_ideals_for_tm([],[(1,1,1)],*Jxi))
+            next(ba.get_ideals_for_tm([],[(1,1,1)],Jxi))
             for Jxifull in dfs(Jxi,[(2,0,0),(0,2,0),(0,0,2)] if d >= 2 else []):
                 yield Jxifull
         except StopIteration:
@@ -632,7 +647,7 @@ def lp_only_look_nonstrict(ba):
         Jxiss = []
         for Jxis in product(*[getJxis(lpi,tuple(sorted(sol.items()))) 
                               for lpi, sol in enumerate(sols)]):
-            Jxi = ba.sum_ideals_S(Jxis)
+            Jxi = ba.sum_ideals(Jxis)
             try:
                 next(ba.get_ideals_for_tm([],[(1,1,1)],*Jxi))
                 yield Jxi
@@ -698,7 +713,7 @@ def lp_only_look_strict(ba):
         sols = [tuple(sorted(sol)) for sol in sols]
         Jxiss = [getJxis(lpj,sol) for lpj,sol in enumerate(sols)]
         for Jxis in product(*Jxiss):
-            Jxi = ba.sum_ideals_S(Jxis)
+            Jxi = ba.sum_ideals(Jxis)
             try:
                 next(ba.get_ideals_for_tm([],[(1,1,1)],*Jxi))
                 yield Jxi
@@ -777,7 +792,7 @@ def lp_only_look(ba):
                         Jxiss = [getJxis(lpj,si) for lpj,si in enumerate(sis)]
                         assert len(Jxiss) == 3
                         for Jxis in product(*Jxiss):
-                            Jxi = ba.sum_ideals_S(Jxis)
+                            Jxi = ba.sum_ideals(Jxis)
                             try:
                                 next(ba.get_ideals_for_tm([],[(1,1,1)],*Jxi))
                                 yield Jxi
@@ -881,7 +896,7 @@ caches the results for the future.
             if not xy.is_zero():
                 xyv = sum(e*yv for e,yv in zip(xy.list(),yvs))
                 rels[xv*yv] = yv*xv + xyv
-        order = TermOrder('degrevlex',sum(self.dims)+len(self.Bxs))
+        order = TermOrder('wdegrevlex',[100]*(sum(self.dims)+len(self.Bxs)))
         if params > 0:
             order = order + TermOrder('degrevlex',params)
         return A.g_algebra(rels,order=order)
@@ -953,47 +968,40 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         assert Rg >= tg or all(next(tt.exponents()[0].sparse_iter())[0] < Rg for tt in t.variables())
         return R(t(R.gens()[self.nvarsx:self.nvarsx+tg]+(R.zero(),)*(tg-Rg)))
     
-    def get_ideals_for_tm(self, tms=[], tmcs=[], J=None, S=None, xi=0,
-                          search_above=True, lp_interval_length_bound=3, precise_lp=False,
-                          preset_choices = {}, mod=None, sound=False):
+    def get_ideals_for_tm(self, tms=[], tmcs=[], Jxi = None,
+                          search_tmcs=True, lp_interval_length_bound=3, precise_lp=False,
+                          preset_choices = {}, mod=None, complete=False, simplify_existing=True):
         if mod is None:
             mod = self.zero
         tms = tuple(tms)
         tmcs = tuple(tmcs)
         
-        tmmax = reduce(lambda a,b: tuple(map(max,a,b)),tms+tmcs)
+        cur_search_tmcs = search_tmcs and complete
         
         gbbound = max([sum(tm) for tm in tms+tmcs])
-        precise_gb_bound = False
-        sound_gb = sound or precise_gb_bound
-        cur_search_above = search_above and sound_gb
-        # searching above only sound if sound_gb, otherwise, might fail to
-        # search possibility of including a leading monomial which is possibly
-        # present but not seen in our generating set
-
         def gb(J):
-            if not sound_gb or J.ring() is self.R0:
-                return self.bounded_gb(J,gbbound)
-            else:
-                return J.twostd()
+            return J.twostd()
+            res = self.bounded_gb(J,gbbound)
+            missing = [p for p in J.twostd().gens() if p not in res.gens()]
+            if len(missing) > 0:
+                print('MISSING MISSING MISSING MISSING',missing)
+            return res
+            # return self.bounded_gb(J,gbbound)
         
-        if J is None:
-            J = self.get_ring().ideal(side='twosided')
-            S = [J.ring().one()]
+        if Jxi is None:
+            Jxi = (self.R0.ideal(side='twosided'), [self.R0.one()], 0)
+        J,S,xi = Jxi
             
         Jorig = J
         xiorig = xi
-        if precise_gb_bound:
-            J += [p for i,e in enumerate(tmmax) for p in
-                    self.all_monomials((0,)*i+(e+1,)+(0,)*(len(tmmax)-i-1),J.ring())]
             
         from copy import deepcopy
-        if sound:
+        if complete:
             vkstart,vkbelowcnt,wkabove = mod.get_poset_info_for_search(
-                    (), tms+tmcs if cur_search_above else tms)
+                    (), tms+tmcs if cur_search_tmcs else tms)
         else:
             vkstart,vkbelowcnt,wkabove = mod.get_poset_info_for_search(
-                    tms, tmcs if cur_search_above else ())
+                    tms, tmcs if cur_search_tmcs else ())
         vkstart = deepcopy(vkstart)
         vkbelowcnt = deepcopy(vkbelowcnt)
         tmsvks = set((tm,wt,i) for tm in tms for wt,vs in mod.get_vss(tm).items() 
@@ -1087,7 +1095,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             #             lp.get_max(lp[w.lm()]))
             if all(num_in[tm] == len(mod.get_vs(tm)) - self.tm_target_out(tm) and \
                            num_out[tm] == self.tm_target_out(tm) for tm in tms) and \
-                       (not cur_search_above or all(num_out[tm] >= self.tm_target_out(tm) for tm in tmcs)):
+                       (not cur_search_tmcs or all(num_out[tm] >= self.tm_target_out(tm) for tm in tmcs)):
                 yield (J,S,xi)
                 return
 
@@ -1164,7 +1172,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     remlo = self.tm_target_out(tm) - num_out[tm]
                     vstr = str(v.lm())
                     vstr_width[0] = max(vstr_width[0],len(vstr))
-                    print ('%s%s %s xi=%d %.3f %s%d %d %s' % ('sound ' if sound else '',
+                    print ('%s%s %s xi=%d %.3f %s%d %d %s' % ('complete ' if complete else '',
                                str(tm),vstr.rjust(vstr_width[0]),xi,var_lp_val,
                                   ' '*height[0],remhi,remlo,extra))
                 # printstep('all')
@@ -1205,7 +1213,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         
                 def rec(J,S,xi,curfull):
                     in_lti = guaranteed_lms(J,S)
-                    if not sound: 
+                    if not complete: 
                         if not curfull and in_lti(v.lm()):
                             # If killing ts causes a more leading term of
                             # another generator to zero out leaving an
@@ -1293,19 +1301,13 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     vkadd(vk)
                         
         num = 0
-        for J,S,xi in dfs(J,S,xi):
-            if precise_gb_bound:
-                J = J.ring().ideal([p for p in J.gens() if not p.is_zero() and 
-                    all([e<=f for e,f in zip(self.polynomial_tm(p),tmmax)])])
-                J += [liftR(p,J.ring()) for p in Jorig.gens()]
-            if xi == 0 or sound:
-                yield self.quick_simplify(J,S,xi)
+        for Jxi in dfs(J,S,xi):
+            if Jxi[-1] == 0 or complete:
+                yield self.quick_simplify(Jxi,0 if simplify_existing else xi)
             else:
-                # yield (J,S,xi)
-                # continue
-                for JSxi in self.get_ideals_for_tm(tms,tmcs,J,S,xi,search_above=search_above,
-                               lp_interval_length_bound=lp_interval_length_bound,precise_lp=precise_lp,mod=mod,sound=True):
-                    yield JSxi
+                for Kxi in self.get_ideals_for_tm(tms,tmcs,Jxi,search_tmcs=search_tmcs,
+                               lp_interval_length_bound=lp_interval_length_bound,precise_lp=precise_lp,mod=mod,complete=True):
+                    yield Kxi
             num += 1
         if num == 0:
             print ("get_ideals_for_tm: no solution found")
@@ -1352,9 +1354,9 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
 
     def bounded_gb(self, J, d):
         from sage.libs.singular.option import opt,opt_ctx
-        sav = [p for p in J.gens() if p.degree() > d]
+        sav = [p for p in J.gens() if p.degree() >= 100*(d+1)]
         with opt_ctx:
-            opt['deg_bound'] = d
+            opt['deg_bound'] = 100*(d+1)-1
             return J.ring().ideal(ff.twostd(J)+sav,side='twosided')
     
     # For testing purposes
@@ -1393,74 +1395,55 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 J = K
                 if codcur == self.r:
                     return J
-
-    def sum_ideals(self,Jxis):
-        sxis = sum(xi for J,xi in Jxis)
-        R = self.get_ring(sxis)
-        gens = []
-        xcum = 0
-        for J,xi in Jxis:
-            gens.extend([p(R.gens()[:self.nvarsx] +
-                R.gens()[self.nvarsx+xcum:self.nvarsx+xcum+xi] +
-                (R.zero(),) * (J.ring().ngens()-self.nvarsx-xi))
-                for p in J.gens()])
-            xcum += xi
-        return (R.ideal(gens,side='twosided'),xcum)
     
-    def sum_ideals_S(self,Jxis):
-        sxis = sum(xi for J,S,xi in Jxis)
+    def sum_ideals(self,Jxis,xi_common=0):
+        assert xi_common == 0 or all(xi >= xi_common for J,S,xi in Jxis)
+        sxis = xi_common + sum(xi-xi_common for J,S,xi in Jxis)
         R = self.get_ring(sxis)
         gens = []
         Sgens = []
-        xcum = 0
+        xcum = xi_common
         for J,S,xi in Jxis:
-            gens.extend([p(R.gens()[:self.nvarsx] +
-                R.gens()[self.nvarsx+xcum:self.nvarsx+xcum+xi] +
+            xi_new = xi - xi_common
+            gens.extend([p(R.gens()[:self.nvarsx+xi_common] +
+                R.gens()[self.nvarsx+xcum:self.nvarsx+xcum+xi_new] +
                 (R.zero(),) * (J.ring().ngens()-self.nvarsx-xi))
                 for p in J.gens()])
-            Sgens.extend([ p(R.gens()[:self.nvarsx] +
-                R.gens()[self.nvarsx+xcum:self.nvarsx+xcum+xi] +
+            Sgens.extend([ p(R.gens()[:self.nvarsx+xi_common] +
+                R.gens()[self.nvarsx+xcum:self.nvarsx+xcum+xi_new] +
                 (R.zero(),) * (J.ring().ngens()-self.nvarsx-xi))
                 for p in S ])
-            xcum += xi
+            xcum += xi_new
+        assert xcum == sxis
         return (R.ideal(gens,side='twosided'),Sgens,xcum)
 
-    def quick_simplify(self,J,S=None,xi=None,simple=False):
-        if xi is None:
-            xi = J.ring().ngens() - self.nvarsx
+    def quick_simplify(self,Jxi,starti=0):
+        J,S,xi = Jxi
+        assert xi >= starti
         if xi == 0:
             return (J,[J.ring().one()],0)
         
         # if variables never occur, add a relation for them so they will be
         # eliminated in the next step. Missing variables should only be
-        # produced with sound=True searches
+        # produced with complete=True searches
         tis = set()
         for p in J.gens():
             for e in p.exponents(): 
                 for ti,_ in e[self.nvarsx:].sparse_iter():
                     tis.add(ti)
-        J += [J.ring().gen(self.nvarsx+ti) for ti in set(range(xi)).difference(tis)]
+        J += [J.ring().gen(self.nvarsx+ti) for ti in set(range(starti,xi)).difference(tis)]
         
         I,coerce = self.get_param_ideal(J)
         subs = list(I.ring().gens()[:xi]) + [I.ring().zero()]*(I.ring().ngens()-xi)
         for ti,t in enumerate(I.ring().gens()[:xi]):
-            subs[ti] = I.reduce(t)
-        if not simple and xi > 1: # try to write each parameter in terms of the rest
-            I = ideal([p(subs) for p in I.gens()])
-            for ti,t in enumerate(I.ring().gens()[:xi]):
-                if subs[ti] == t:
-                    R = PolynomialRing(I.base_ring(),(t,)+tuple(I.ring().gens()[:ti]+I.ring().gens()[ti+1:]),
-                               order = TermOrder('degrevlex',1)+ TermOrder('degrevlex',len(subs)-1))
-                    tR = R(t)
-                    tr = I.change_ring(R).reduce(tR)
-                    if tr != tR:
-                        subs[ti] = I.ring()(tr)
-                        I = ideal([p(subs) for p in I.gens()])
+            if ti >= starti:
+                subs[ti] = I.reduce(t)
         tis = set()
         for p in subs:
             for e in p.exponents():
                 for ti,_ in e.sparse_iter():
                     tis.add(ti)
+        assert all(i in tis for i in range(starti))
         tis = sorted(tis)
         ssubs = [I.ring().zero()]*I.ring().ngens()
         for j,ti in enumerate(tis):
@@ -1468,11 +1451,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         subs = [t(*ssubs) for t in subs]
 
         R = self.get_ring(len(tis))
-        if S is None:
-            S = [R.one()]
-        else:
-            S = [self.lift_param(R,I.reduce(coerce(s)(subs))) for s in S]
-            S = [R.one()] + [s for s in S if not s.is_constant()]
+        S = [self.lift_param(R,I.reduce(coerce(s)(subs))) for s in S]
+        S = [R.one()] + [s for s in S if not s.is_constant()]
         
         subs = list(R.gens()[:self.nvarsx]) + [self.lift_param(R,t) for t in subs]
         Jg = [p(*subs) for p in J.gens()]
@@ -1491,7 +1471,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 t = p.coefficient(m)
                 m = m(R.gens()+(R.zero(),)*(p.parent().ngens()-R.ngens()))
                 ltIub.append(m)
-                Jt = self.bounded_gb(J+t,degree_bound) if degree_bound is not None and J.ring() is self.R0 else (J+t).twostd() 
+                Jt = self.bounded_gb(J+t,degree_bound)
                 if any(s in Jt for s in S):
                     ltIlb.append(m)
         return R.ideal(ltIlb), R.ideal(ltIub)
