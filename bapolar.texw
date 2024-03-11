@@ -492,13 +492,15 @@ from functools import cache
 
 <<complete=False>>=
 
-def lp_look_strict_by_deg(ba,deg_bound=2,Jxi=None):
-    from operator import concat
-    from sage.numerical.mip import MIPSolverException
-    def dfs(Jxi,d):
-        if d > deg_bound:
+def search_by_sequence(ba,tmss,Jxi=None):
+    from operator import add
+    def dfs(Jxi,tmsi):
+        try:
+            tms = tmss[tmsi]
+        except IndexError:
             yield Jxi
             return
+        d = sum(tms[0])
         bounds, ltIlb, ltIub = ba.codimension_bounds(Jxi,d)
         if ltIlb.hilbert_series() == ba.target_hilbert_series_td() and \
                 ltIub.hilbert_series() == ba.target_hilbert_series_td():
@@ -507,39 +509,29 @@ def lp_look_strict_by_deg(ba,deg_bound=2,Jxi=None):
         J,S,xi = Jxi
         core = ba.ideal_constant_generators(J)
         mod = ba.zero if core.is_zero() else JDat(ba,core) 
-        tms = tuple(sorted([tm for tm,(lb,ub) in bounds.items() if 
-            lb != min(ba.tm_dim(tm),ba.r) or
-            ub != min(ba.tm_dim(tm),ba.r)]))
-        # tmcs = tuple([tm for k in range(d+1,d+2) for tm in tuple(sorted(map(tuple,IntegerVectors(k, len(ba.dims)))))])
-        tmcs = tuple([tm for k in range(d+1,2*d+1) for tm in tuple(sorted(map(tuple,IntegerVectors(k, len(ba.dims)))))])
-        for Jxiup in ba.get_ideals_for_tm(tms, tmcs, J, S, xi, 
-                lp_interval_length_bound=max(3, 7-d), precise_lp=False, mod=mod):
-            for res in dfs(Jxiup,d+1):
+        tms = tuple(sorted([tm for tm in tms if 
+            not all(bound == min(ba.tm_dim(tm),ba.r) for bound in bounds[tm]) ]))
+        if len(tms) == 0:
+            for res in dfs(Jxi, tmsi+1):
                 yield res
-    return dfs((ba.R0.ideal(side='twosided'),[ba.R0.one()], 0) if Jxi is None else Jxi,1)
+            return
+        tmcs = tuple(sorted(set([tuple(map(add,tm,tma)) for tm in tms for k in range(1,d)
+                             for tma in IntegerVectors(k,len(ba.dims)) ])))
+        for Jxiup in ba.get_ideals_for_tm(tms, tmcs, J, S, xi, 
+                lp_interval_length_bound=3, precise_lp=False, mod=mod):
+                # lp_interval_length_bound=max(3, 7-d), precise_lp=False, mod=mod):
+            for res in dfs(Jxiup,tmsi+1):
+                yield res
+    return dfs((ba.R0.ideal(side='twosided'),[ba.R0.one()], 0) if Jxi is None else Jxi,0)
+
+def lp_look_strict_by_deg(ba,deg_bound=2,Jxi=None):
+    tmss = [list(map(tuple,IntegerVectors(k,len(ba.dims)))) for k in range(1,deg_bound+1)]
+    return search_by_sequence(ba,tmss,Jxi)
 
 def lp_look_strict(ba,deg_bound=2,tm_max_bound=oo,Jxi=None):
-    from operator import concat
-    from sage.numerical.mip import MIPSolverException
-    @cache
-    def get_tms(d,tmma):
-        tms = sorted(map(tuple,IntegerVectors(d, len(ba.dims))))
-        return tuple([tm for tm in tms if max(tm) == tmma])
-    def dfs(Jxi,d,tmma):
-        if d > deg_bound:
-            yield Jxi
-            return
-        J,S,xi = Jxi
-        core = ba.ideal_constant_generators(J)
-        mod = ba.zero if core.is_zero() else JDat(ba,core) 
-        tms = get_tms(d,tmma)
-        tmcs = tuple((tm for tma in range(1,tmma+2) for tm in get_tms(d+1,tma)))
-        for Jxiup in ba.get_ideals_for_tm(tms, tmcs, J, S, xi, 
-                lp_interval_length_bound=max(3, 7-d), precise_lp=False, mod=mod):
-            for res in dfs(Jxiup,d+1 if tmma == min(d,tm_max_bound) else d, 
-                           1 if tmma == min(d,tm_max_bound) else tmma+1):
-                yield res
-    return dfs((ba.R0.ideal(side='twosided'),[ba.R0.one()], 0) if Jxi is None else Jxi,1,1)
+    tmss = [[tuple(tm) for tm in IntegerVectors(k,len(ba.dims)) if max(tm) == tmm] for k in range(1,deg_bound+1)
+            for tmm in range( (k-1)//len(ba.dims)+1, k+1 ) ]
+    return search_by_sequence(ba,tmss,Jxi)
 
 def three_place_ideals_up_to(ba,d=1,Jxi=None):
     def dfs(Jxi,tms,mod=ba.zero): 
@@ -1708,7 +1700,7 @@ class JDat:
                     Q.add_edge((tm,wt),(tm,wtup),get_matrix(self.get_vss(tm)[wtup],xvs))
         return Q
     
-    def get_linear_program(self, tms, tmcs=(), interval_length_bound=6, precise=False):
+    def get_linear_program(self, tms, tmcs=(), interval_length_bound=3, precise=False):
         lp = MixedIntegerLinearProgram(solver='GLPK')
         # lp.set_binary(lp.default_variable())
         # # if set_real, be sure to change exact comparisons to within machine precision
