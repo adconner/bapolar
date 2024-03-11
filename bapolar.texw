@@ -1352,11 +1352,10 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
 
     def bounded_gb(self, J, d):
         from sage.libs.singular.option import opt,opt_ctx
-        twostd = sage.libs.singular.function_factory.ff.twostd
         sav = [p for p in J.gens() if p.degree() > d]
         with opt_ctx:
             opt['deg_bound'] = d
-            return J.ring().ideal(twostd(J)+sav,side='twosided')
+            return J.ring().ideal(ff.twostd(J)+sav,side='twosided')
     
     # For testing purposes
     # This gives the monomials not in the leading term ideal for a generic point
@@ -1481,7 +1480,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         J = R.ideal(Jg,side='twosided')
         return (J,S,len(tis))
 
-    def leading_term_ideal(self,Jxi):
+    def leading_term_ideal(self,Jxi,degree_bound=None):
         J,S,xi = Jxi
         R = PolynomialRing(self.F,self.R0.gens()[:self.nvars])
         ltIlb = []
@@ -1492,13 +1491,13 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 t = p.coefficient(m)
                 m = m(R.gens()+(R.zero(),)*(p.parent().ngens()-R.ngens()))
                 ltIub.append(m)
-                Jt = (J+t).twostd()
+                Jt = self.bounded_gb(J+t,degree_bound) if degree_bound is not None and J.ring() is self.R0 else (J+t).twostd() 
                 if any(s in Jt for s in S):
                     ltIlb.append(m)
         return R.ideal(ltIlb), R.ideal(ltIub)
 
     def codimension_bounds(self,Jxi,total_degree):
-        ltIlb, ltIub = self.leading_term_ideal(Jxi)
+        ltIlb, ltIub = self.leading_term_ideal(Jxi,degree_bound=total_degree)
         res = {}
         for m in ltIub.normal_basis(total_degree):
             res.setdefault(self.polynomial_tm(m),[0,0])[0] += 1
