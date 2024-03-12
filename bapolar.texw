@@ -1004,23 +1004,27 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         
         def guaranteed_lms(J,S):
             lts = SetSystem()
-            if J.ring().ngens() == self.nvarsx:
-                for p in J.gens():
-                    if not p.is_zero():
-                        lts.add_set([xi for xi,e in p.lm().
-                                 exponents()[0].sparse_iter() for _ in range(e)],None)
-                lms = [p.lm() for p in J.gens() if not p.is_zero()]
-            else:
-                I,coerce = self.get_param_ideal(J)
-                SI = [coerce(s) for s in S]
-                lms = []
-                for p in J.gens():
-                    if p.is_zero():
-                        continue
-                    It = I + coerce(p.coefficient(self.lm(p)))
-                    if any(s in It for s in SI):
-                        lts.add_set([xi for xi,e in self.lm(p,True).
-                                 exponents()[0].sparse_iter() for _ in range(e)],None)
+            for p in J.gens():
+                if not p.is_zero() and p.coefficient(self.lm(p)).is_constant():
+                    lts.add_set([xi for xi,e in self.lm(p,True).
+                             exponents()[0].sparse_iter() for _ in range(e)],None)
+            # if J.ring().ngens() == self.nvarsx:
+            #     for p in J.gens():
+            #         if not p.is_zero():
+            #             lts.add_set([xi for xi,e in p.lm().
+            #                      exponents()[0].sparse_iter() for _ in range(e)],None)
+            # else:
+            #     I,coerce = self.get_param_ideal(J)
+            #     print (I)
+            #     SI = [coerce(s) for s in S]
+            #     lms = []
+            #     for p in J.gens():
+            #         if p.is_zero():
+            #             continue
+            #         It = I + coerce(p.coefficient(self.lm(p)))
+            #         if any(s in It for s in SI):
+            #             lts.add_set([xi for xi,e in self.lm(p,True).
+            #                      exponents()[0].sparse_iter() for _ in range(e)],None)
             def in_lti(m):
                 return any(True for _ in lts.iter_sets([],[xi 
                        for xi,e in m.exponents()[0].sparse_iter() for _ in range(e)]))
@@ -1225,7 +1229,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     for wk in unset:
                         ws = mod.get_vss(wk[0])[wk[1]]
                         p = ws[wk[2]].lm()
-                        if in_lti(p):
+                        if in_lti(p) or (curfull and p == v.lm()):
+                        # if in_lti(p):
                             bp.set_min(p,1)
                             lpset.add((p,1))
                             sav.add(wk)
