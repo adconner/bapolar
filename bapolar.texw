@@ -1353,23 +1353,13 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     zip((k for e in y for k in e),R.gens()) if k>0)
 
     def bounded_gb(self, J, d):
-        from sage.libs.singular.option import opt,opt_ctx
+        from sage.libs.singular.option import opt
         sav = [p for p in J.gens() if p.degree() >= 100*(d+1)]
-        # try:
-        #     with opt_ctx:
-        #         opt['deg_bound'] = 100*(d+1)-1
-        #         return J.ring().ideal(J.twostd().gens()+tuple(sav),side='twosided')
-        # except SignalError:
-        #     print("!!!!!!!!!!!!!!!!!!!!!!!!!!SEG FAULT")
-        #     return J.ring().ideal(J.twostd().gens()+tuple(sav),side='twosided')
-        with opt_ctx:
-            opt['deg_bound'] = 100*(d+1)-1
-            while True:
-                try:
-                    return J.ring().ideal(J.twostd().gens()+tuple(sav),side='twosided')
-                except SignalError:
-                    print("!!!!!!!!!!!!!!!!!!!!!!!!!!SEG FAULT!!!!!!!!!!!!!! retrying...")
-    
+        opt['deg_bound'] = 100*(d+1)-1
+        res = J.ring().ideal(J.twostd().gens()+tuple(sav),side='twosided')
+        opt['deg_bound'] = 0
+        return res
+                
     # For testing purposes
     # This gives the monomials not in the leading term ideal for a generic point
     # in the family of ideals corresponding to J. If the family J is not
