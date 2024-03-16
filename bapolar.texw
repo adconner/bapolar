@@ -990,14 +990,6 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             
         Jorig = J
         xiorig = xi
-            
-        from copy import deepcopy
-        vkstart,vkbelowcnt,wkabove = mod.get_poset_info_for_search(
-                tms, tmcs if complete else ())
-        vkstart = deepcopy(vkstart)
-        vkbelowcnt = deepcopy(vkbelowcnt)
-        tmsvks = set((tm,wt,i) for tm in tms for wt,vs in mod.get_vss(tm).items() 
-                     for i in range(len(vs)))
         
         def trivially_guaranteed_lms(Jxi):
             # J,S,xi = Jxi
@@ -1007,7 +999,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             #         lts.add_set([xi for xi,e in self.lm(p,True).
             #                  exponents()[0].sparse_iter() for _ in range(e)],None)
                     
-            ltI = self.trivially_guaranteed_leading_term_ideal(Jxi)
+            ltI = self.trivially_contained_leading_term_ideal(Jxi)
             lts = SetSystem()
             for m in ltI.gens():
                 if not m.is_zero():
@@ -1041,6 +1033,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                            xs = [p.lm() for tm in tms for p in mod.get_vs(tm)],
                             use_infeas=False)
         unset = set()
+        tmsvks = set((tm,wt,i) for tm in tms for wt,vs in mod.get_vss(tm).items() 
+                     for i in range(len(vs)))
         params_needed = {vks : vks[2] for vks in tmsvks}
         num_in = {tm:0 for tm in tms+tmcs}
         num_out = {tm:0 for tm in tms+tmcs}
@@ -1082,6 +1076,24 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             print ("get_ideals_for_tm: no solution to start needed gb")
             return
         
+        if len(tms) == 0:
+            ltIub = self.containing_leading_term_ideal(Jxi)
+            codim_lower_bounds = {}
+            for td in set(sum(tm) for tm in tmcs):
+                for m in ltIub.normal_basis(td):
+                    codim_lower_bounds[self.polynomial_tm(m)] = codim_lower_bounds.get(self.polynomial_tm(m),0) + 1
+            tm_search = tuple(tm for tm in tmcs if codim_lower_bounds[tm] < self.tm_target_out(tm)) 
+            if len(tm_search) == 0:
+                print('complete: no search needed')
+                yield (J,S,xi)
+                return
+            
+        from copy import deepcopy
+        vkstart,vkbelowcnt,wkabove = mod.get_poset_info_for_search(
+                tms, tm_search if len(tms) == 0 else ())
+        vkstart = deepcopy(vkstart)
+        vkbelowcnt = deepcopy(vkbelowcnt)
+        
         processed = [0]
         height = [0]
         vstr_width = [0]
@@ -1093,7 +1105,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             #             lp.get_max(lp[w.lm()]))
             if all(num_in[tm] == len(mod.get_vs(tm)) - self.tm_target_out(tm) and \
                            num_out[tm] == self.tm_target_out(tm) for tm in tms) and \
-                       (not complete or all(num_out[tm] >= self.tm_target_out(tm) for tm in tmcs)):
+                       (not complete or all(num_out[tm] >= self.tm_target_out(tm) for tm in tm_search)):
                 yield (J,S,xi)
                 return
 
@@ -1143,8 +1155,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     if self.R0.monomial_divides(liftR(qm,self.R0),v.lm()):
                         tss.setdefault(vk,[]).append(q.coefficient(qm))
                         
-            vk = min(vkstart,key=lambda vk: (vk not in vkstart and num_out[tm] >= self.tm_target_out(tm),
-                                             sum(vk[0]), max(vk[0]),
+            vk = min(vkstart,key=lambda vk: (sum(vk[0]), max(vk[0]),
                                              self.tm_dim_tperp(vk[0])-num_in[vk[0]]-num_out[vk[0]],
                                              params_needed.get(vk,0),
                                              len(tss.get(vk,[]))))
@@ -1302,7 +1313,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 yield self.quick_simplify(Jxi,0 if simplify_existing else xi)
             else:
                 for Kxi in self.get_ideals_for_tm((),tms+tmcs,Jxi,lp_interval_length_bound=lp_interval_length_bound,
-                                                  precise_lp=precise_lp,mod=mod):
+                                                  precise_lp=precise_lp,simplify_existing=simplify_existing,mod=mod):
                     yield Kxi
             num += 1
         if num == 0:
@@ -1494,8 +1505,48 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             #         if any(s in It for s in SI):
             #             lts.add_set([xi for xi,e in self.lm(p,True).
             #                      exponents()[0].sparse_iter() for _ in range(e)],None)
+
+    def containing_leading_term_ideal(self,Jxi):
+        J,S,xi = Jxi
+        R = PolynomialRing(self.F,self.R0.gens()[:self.nvars])
+        ltIub = []
+        for p in J.gens():
+            m = self.lm(p)
+            if not m.is_constant():
+                ltIub.append(m)
+        return R.ideal(ltIub)
+            
+    def contained_leading_term_ideal(self,Jxi):
+        J,S,xi = Jxi
+        R = PolynomialRing(self.F,self.R0.gens()[:self.nvars])
+        ltIlb = []
+        for p in J.gens():
+            m = self.lm(p)
+            if not m.is_constant():
+                t = p.coefficient(m)
+                Jt = self.bounded_gb(J+t,0)
+                if any(s in Jt for s in S): # this triggers gb computation
+                    ltIlb.append(m(R.gens()+(R.zero(),)*(p.parent().ngens()-R.ngens())))
+        return R.ideal(ltIlb)
+            # if J.ring().ngens() == self.nvarsx:
+            #     for p in J.gens():
+            #         if not p.is_zero():
+            #             lts.add_set([xi for xi,e in p.lm().
+            #                      exponents()[0].sparse_iter() for _ in range(e)],None)
+            # else:
+            #     I,coerce = self.get_param_ideal(J)
+            #     print (I)
+            #     SI = [coerce(s) for s in S]
+            #     lms = []
+            #     for p in J.gens():
+            #         if p.is_zero():
+            #             continue
+            #         It = I + coerce(p.coefficient(self.lm(p)))
+            #         if any(s in It for s in SI):
+            #             lts.add_set([xi for xi,e in self.lm(p,True).
+            #                      exponents()[0].sparse_iter() for _ in range(e)],None)
     
-    def trivially_guaranteed_leading_term_ideal(self,Jxi):
+    def trivially_contained_leading_term_ideal(self,Jxi):
         J,S,xi = Jxi
         R = PolynomialRing(self.F,self.R0.gens()[:self.nvars])
         ltIlb = []
@@ -1508,7 +1559,10 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         return R.ideal(ltIlb)
 
     def codimension_bounds(self,Jxi,total_degree):
-        ltIlb, ltIub = self.leading_term_ideal(Jxi)
+        J,S,xi = Jxi
+        Jxi = (self.bounded_gb(J,total_degree), S, xi)
+        ltIlb = self.contained_leading_term_ideal(Jxi)
+        ltIub = self.containing_leading_term_ideal(Jxi)
         res = {}
         for m in ltIub.normal_basis(total_degree):
             res.setdefault(self.polynomial_tm(m),[0,0])[0] += 1
