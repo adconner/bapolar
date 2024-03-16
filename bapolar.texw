@@ -954,9 +954,9 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             assert xi == 0
             return None,None
         R = PolynomialRing(ba.F,J.ring().gens()[self.nvarsx:self.nvarsx+xi],implementation='singular')
-        I = R.ideal([R(p) for p in J.gens() if self.lm(p).is_constant()])
         def coerce(t):
-            return R(t)
+            return t((R.zero(),)*self.nvarsx+R.gens())
+        I = R.ideal([coerce(p) for p in J.gens() if self.lm(p).is_constant()])
         return I,coerce
     
     def family_dimension(self,J,xi):
