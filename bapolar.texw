@@ -988,9 +988,6 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             Jxi = (self.R0.ideal(side='twosided'), [self.R0.one()], 0)
         J,S,xi = Jxi
             
-        Jorig = J
-        xiorig = xi
-        
         def trivially_guaranteed_lms(Jxi):
             # J,S,xi = Jxi
             # lts = SetSystem()
@@ -1086,7 +1083,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             tm_search = tuple(tm for tm in tmcs if codim_lower_bounds[tm] < self.tm_target_out(tm)) 
             if len(tm_search) == 0:
                 print('complete: no search needed')
-                yield (J,S,xi)
+                yield self.quick_simplify((J,S,xi),0 if simplify_existing else xi)
                 return
             
         from copy import deepcopy
