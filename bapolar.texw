@@ -999,6 +999,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             #         lts.add_set([xi for xi,e in self.lm(p,True).
             #                  exponents()[0].sparse_iter() for _ in range(e)],None)
                     
+            # ltI = self.contained_leading_term_ideal(Jxi)
             ltI = self.trivially_contained_leading_term_ideal(Jxi)
             lts = SetSystem()
             for m in ltI.gens():
@@ -1372,43 +1373,6 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         opt['deg_bound'] = 0
         return res
                 
-    # For testing purposes
-    # This gives the monomials not in the leading term ideal for a generic point
-    # in the family of ideals corresponding to J. If the family J is not
-    # irreducible, this gives the intersection of this set of monomials over all
-    # the irreducible components of J
-    # it is assumed that the family J is nonempty (1 not in J)
-    def generic_codim(self,J,tm):
-        msin = set()
-        for p in J.gens():
-            m = self.lm(p,True)
-            if not m.is_constant(): # otherwise a defining equation of the family
-                for n in self.all_monomials(map(sub,tm,self.polynomial_tm(m))):
-                    msin.add(m*n)
-        return [m for m in self.all_monomials(tm) if m not in msin]
-
-    def simple_greedy_extend(self, J, tm):
-        assert J.ring() is self.get_ring()
-        cod = len(self.generic_codim(J,tm))
-        assert cod >= self.r
-        for v in ba.get_vorder(tm)[0]:
-            if v not in J:
-                K = (J + v).twostd()
-
-                codcur = len(self.generic_codim(K,tm))
-                if codcur < self.r:
-                    continue
-                ok = True
-                for s in range(len(tm)):
-                    if len(self.generic_codim(K, tm[:s]+(tm[s]+1,)+tm[s+1:])) < self.r:
-                        ok = False
-                        break
-                if not ok:
-                    continue
-                J = K
-                if codcur == self.r:
-                    return J
-    
     def sum_ideals(self,Jxis,xi_common=0):
         assert xi_common == 0 or all(xi >= xi_common for J,S,xi in Jxis)
         sxis = xi_common + sum(xi-xi_common for J,S,xi in Jxis)
@@ -1473,39 +1437,6 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         J = R.ideal(Jg,side='twosided')
         return (J,S,len(tis))
 
-    def leading_term_ideal(self,Jxi):
-        J,S,xi = Jxi
-        R = PolynomialRing(self.F,self.R0.gens()[:self.nvars])
-        ltIlb = []
-        ltIub = []
-        for p in J.gens():
-            m = self.lm(p)
-            if not m.is_constant():
-                t = p.coefficient(m)
-                m = m(R.gens()+(R.zero(),)*(p.parent().ngens()-R.ngens()))
-                ltIub.append(m)
-                Jt = self.bounded_gb(J+t,0)
-                if any(s in Jt for s in S): # this triggers gb computation
-                    ltIlb.append(m)
-        return R.ideal(ltIlb), R.ideal(ltIub)
-            # if J.ring().ngens() == self.nvarsx:
-            #     for p in J.gens():
-            #         if not p.is_zero():
-            #             lts.add_set([xi for xi,e in p.lm().
-            #                      exponents()[0].sparse_iter() for _ in range(e)],None)
-            # else:
-            #     I,coerce = self.get_param_ideal(J)
-            #     print (I)
-            #     SI = [coerce(s) for s in S]
-            #     lms = []
-            #     for p in J.gens():
-            #         if p.is_zero():
-            #             continue
-            #         It = I + coerce(p.coefficient(self.lm(p)))
-            #         if any(s in It for s in SI):
-            #             lts.add_set([xi for xi,e in self.lm(p,True).
-            #                      exponents()[0].sparse_iter() for _ in range(e)],None)
-
     def containing_leading_term_ideal(self,Jxi):
         J,S,xi = Jxi
         R = PolynomialRing(self.F,self.R0.gens()[:self.nvars])
@@ -1518,33 +1449,20 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             
     def contained_leading_term_ideal(self,Jxi):
         J,S,xi = Jxi
+        if xi == 0:
+            return self.containing_leading_term_ideal(Jxi)
+        I,coerce = self.get_param_ideal(J)
+        SI = [coerce(s) for s in S]
         R = PolynomialRing(self.F,self.R0.gens()[:self.nvars])
         ltIlb = []
         for p in J.gens():
             m = self.lm(p)
             if not m.is_constant():
                 t = p.coefficient(m)
-                Jt = self.bounded_gb(J+t,0)
-                if any(s in Jt for s in S): # this triggers gb computation
+                It = I + coerce(t)
+                if any(s in It for s in S):
                     ltIlb.append(m(R.gens()+(R.zero(),)*(p.parent().ngens()-R.ngens())))
         return R.ideal(ltIlb)
-            # if J.ring().ngens() == self.nvarsx:
-            #     for p in J.gens():
-            #         if not p.is_zero():
-            #             lts.add_set([xi for xi,e in p.lm().
-            #                      exponents()[0].sparse_iter() for _ in range(e)],None)
-            # else:
-            #     I,coerce = self.get_param_ideal(J)
-            #     print (I)
-            #     SI = [coerce(s) for s in S]
-            #     lms = []
-            #     for p in J.gens():
-            #         if p.is_zero():
-            #             continue
-            #         It = I + coerce(p.coefficient(self.lm(p)))
-            #         if any(s in It for s in SI):
-            #             lts.add_set([xi for xi,e in self.lm(p,True).
-            #                      exponents()[0].sparse_iter() for _ in range(e)],None)
     
     def trivially_contained_leading_term_ideal(self,Jxi):
         J,S,xi = Jxi
@@ -1601,6 +1519,45 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         tms.extend(product(*[range(e+1) for e in self.Tdeg]))
         return self.R0.ideal([v for tm in tms for vs in 
                         self.get_vss(tm).values() for v in vs]).twostd()
+        
+        
+    # For testing purposes
+    # This gives the monomials not in the leading term ideal for a generic point
+    # in the family of ideals corresponding to J. If the family J is not
+    # irreducible, this gives the intersection of this set of monomials over all
+    # the irreducible components of J
+    # it is assumed that the family J is nonempty (1 not in J)
+    def generic_codim(self,J,tm):
+        msin = set()
+        for p in J.gens():
+            m = self.lm(p,True)
+            if not m.is_constant(): # otherwise a defining equation of the family
+                for n in self.all_monomials(map(sub,tm,self.polynomial_tm(m))):
+                    msin.add(m*n)
+        return [m for m in self.all_monomials(tm) if m not in msin]
+
+    def simple_greedy_extend(self, J, tm):
+        assert J.ring() is self.get_ring()
+        cod = len(self.generic_codim(J,tm))
+        assert cod >= self.r
+        for v in ba.get_vorder(tm)[0]:
+            if v not in J:
+                K = (J + v).twostd()
+
+                codcur = len(self.generic_codim(K,tm))
+                if codcur < self.r:
+                    continue
+                ok = True
+                for s in range(len(tm)):
+                    if len(self.generic_codim(K, tm[:s]+(tm[s]+1,)+tm[s+1:])) < self.r:
+                        ok = False
+                        break
+                if not ok:
+                    continue
+                J = K
+                if codcur == self.r:
+                    return J
+    
 class JDat:
     def __init__(self, ba, J):
         assert all(e[ba.nvars:].is_constant() for p in J.gens() for e in p.exponents())
