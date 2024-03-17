@@ -80,7 +80,7 @@ def tensor_sum(Sdat,Tdat):
         curd += d1 + d2
     return S(Sxs) + T(Txs),tuple(d1+d2 for d1,d2 in zip(Sdim,Tdim))
 
-unextendible_suppert_333_dat = [
+unextendible_supports_333_dat = [
     [(1,1,3), (1,2,2), (2,1,2), (3,3,1)],
     [(1,1,3), (1,3,2), (2,3,1), (3,2,2)],
     [(1,1,3), (1,2,2), (1,3,1), (2,1,2), (3,2,1)],
@@ -90,11 +90,11 @@ unextendible_suppert_333_dat = [
     [(1,1,3), (1,2,2), (1,3,1), (2,1,2), (2,2,1), (3,1,1)],
     [(1,1,3), (1,3,2), (2,2,2), (2,3,1), (3,1,2), (3,2,1)],
     [(1,2,3), (1,3,2), (2,1,3), (2,2,2), (2,3,1), (3,1,2), (3,2,1)]]
-def unextenible_supports_333():
+def unextendible_supports_333():
     dims = (3,3,3)
     R = PolynomialRing(QQ,'x',9)
     Ts = []
-    for supp in unextendible_suppert_333_dat:
+    for supp in unextendible_supports_333_dat:
         supp = [[i-1 for i in ix] for ix in supp]
         Ts.append((sum(R.gen(i)*R.gen(3+j)*R.gen(6+k) for i,j,k in supp),dims))
     T,_ = Ts.pop()
