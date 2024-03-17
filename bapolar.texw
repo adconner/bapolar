@@ -1361,12 +1361,13 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         from sage.libs.singular.option import opt
         sav = [p for p in J.gens() if p.degree() >= 100*(d+1)]
         opt['deg_bound'] = 100*(d+1)-1
-        try:
-            res = J.ring().ideal(J.twostd().gens()+tuple(sav),side='twosided')
-        except SignalError:
-            global aoeu
-            aoeu = J
-            raise
+        while True:
+            try:
+                res = J.ring().ideal(J.twostd().gens()+tuple(sav),side='twosided')
+                break
+            except SignalError:
+                print("!!!!!!!!!!!!!!!!!!!  SINGULAR SEG FAULT, retrying...")
+                pass
         opt['deg_bound'] = 0
         return res
                 
