@@ -536,7 +536,7 @@ def search_by_sequence(ba,tmss,Jxi=None,together=False):
             for Jxis in lproduct(*map(enumerate,gens)):
                 print ('index choice %d' % tmsi,[i for i,Ixi in Jxis])
                 Ixi = ba.sum_ideals([Ixi for i,Ixi in Jxis],xi)
-                for Jxiup in ba.get_ideals_for_tm(tms, tmcs, Ixi, mod=mod):
+                for Jxiup in ba.get_ideals_for_tm((), tms+tmcs, Ixi, mod=mod):
                     for res in dfs(Jxiup,tmsi+1):
                         yield res
     return dfs((ba.R0.ideal(side='twosided'),[ba.R0.one()], 0) if Jxi is None else Jxi,0)
