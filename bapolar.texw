@@ -702,11 +702,17 @@ def lp_only_look_strict(ba,bound=1000):
         return all( any(True for _,si in ss.iter_sets(Slo,Shi) )
                    for ss,(Slo,Shi)
                    in zip(sols_ss,Slohis) )
-    def initial_dfs(lp,faci,Slo,Shi,ys,facsolcnt):
-        print('initial_dfs',faci,Slo,Shi,ys,facsolcnt)
+    def initial_dfs(lp,faci,Slo,Shi,ys):
         ss = sols_ss[faci]
-        assert facsolcnt == sum(1 for _ in ss.iter_sets(Slo,Shi))
-        if facsolcnt < bound:
+        cnttot = 0
+        cnts = {y : 0 for y in ys}
+        for sol,_ in ss.iter_sets(Slo,Shi):
+            for y in sol:
+                if y in ys:
+                    cnts[y] += 1
+            cnttot += 1
+        print('initial_dfs',faci,cnttot)
+        if cnttot < bound:
             lp = deepcopy(lp)
             add_positive_constraints(lp,(sol for sol,_ in ss.iter_sets(Slo,Shi)),ys)
             if faci+1 >= len(tms):
@@ -725,18 +731,16 @@ def lp_only_look_strict(ba,bound=1000):
                             yield Kxi
                 return
             xs = set([x.lm() for vs in ba.zero.get_vss(tms[faci+1]).values() for x in vs])
-            for res in initial_dfs(lp, faci+1, [], copy(xs), xs,
-                                   sum(1 for _ in sols_ss[faci+1].iter_sets())):
+            for res in initial_dfs(lp, faci+1, [], copy(xs), xs):
                 yield res
             return
-        cnts = {y : sum(1 for _ in ss.iter_sets(Slo+[y],Shi)) for y in ys}
-        x = min(ys, key=lambda x: abs(facsolcnt//2-cnts[x]))
+        x = min(ys, key=lambda x: abs(cnttot//2-cnts[x]))
         lp.set_min(lp[x],1.0)
         try:
             lp.solve(objective_only=True)
             Shi.remove(x)
             ys.remove(x)
-            for res in initial_dfs(lp, faci, Slo, Shi, ys, facsolcnt - cnts[x]):
+            for res in initial_dfs(lp, faci, Slo, Shi, ys):
                 yield res
             ys.add(x)
             Shi.add(x)
@@ -748,7 +752,7 @@ def lp_only_look_strict(ba,bound=1000):
             lp.solve(objective_only=True)
             Slo.append(x)
             ys.remove(x)
-            for res in initial_dfs(lp, faci, Slo, Shi, ys, cnts[x]):
+            for res in initial_dfs(lp, faci, Slo, Shi, ys):
                 yield res
             ys.add(x)
             Slo.pop()
@@ -758,7 +762,7 @@ def lp_only_look_strict(ba,bound=1000):
     lp = deepcopy(ba.zero.get_linear_program(
         ((1,1,0),(1,0,1),(0,1,1)),((1,1,1),),interval_length_bound=4))
     xs = set([x.lm() for vs in ba.zero.get_vss(tms[0]).values() for x in vs])
-    return initial_dfs(lp,0,[],copy(xs),xs,sum(1 for _ in sols_ss[0].iter_sets()))
+    return initial_dfs(lp,0,[],copy(xs),xs)
             
     # @cache
     # def getJxis(lpi,sol):
