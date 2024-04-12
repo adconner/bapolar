@@ -2236,6 +2236,16 @@ def read_JS(ba,f):
         else:
             J.append(R(sage_eval(l,locals=locals)))
     return R.ideal(J,side='twosided'),S,tmax
+
+
+# remove when added to itertools
+def batched(iterable, n):
+    "Batch data into tuples of length n. The last batch may be shorter."
+    if n < 1:
+        raise ValueError('n must be at least one')
+    it = iter(iterable)
+    while batch := tuple(islice(it, n)):
+        yield batch
     
 @
 
