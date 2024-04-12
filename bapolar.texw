@@ -492,7 +492,10 @@ from functools import cache
 
 <<complete=False>>=
 
-def search_by_sequence(ba,tmss,Jxi=None,together=False):
+def search_by_sequence(ba,tmss,Jxi=None,mode='togetherlp'):
+    together = mode == 'together'
+    individual = mode == 'individual'
+    togetherlp = mode == 'togetherlp'
     from operator import add
     def dfs(Jxi,tmsi):
         try:
@@ -530,31 +533,50 @@ def search_by_sequence(ba,tmss,Jxi=None,together=False):
             if J.is_zero():
                 tmcss = [tuple([tmc for tmc in tmcscur if all(e > 0 or f == 0 for e,f in zip(tm,tmc)) ]) 
                          for tmcscur,tm in zip(tmcss,tms)]
-            tmcs = tuple([tmc for tmc in tmcs
+            tmcs_last_check = tuple([tmc for tmc in tmcs
                           if len([tm for tm in tms if all(e <= f for e,f in zip(tm,tmc))]) > 1 ])
-            gens = [ba.get_ideals_for_tm((tm,),tmcscur,Jxi,mod=mod,simplify_existing=False
-                                         # lp_interval_length_bound=2 if tmsi > 0 else 100
-                                         ) for tm,tmcscur in zip(tms,tmcss)]
-            for Jxis in lproduct(*map(enumerate,gens)):
-                print ('index choice %d' % tmsi,[i for i,Ixi in Jxis])
-                Ixi = ba.sum_ideals([Ixi for i,Ixi in Jxis],xi)
-                for Jxiup in ba.get_ideals_for_tm((), tms+tmcs, Ixi, mod=mod):
-                    for res in dfs(Jxiup,tmsi+1):
-                        yield res
+            if individual:
+                gens = [ba.get_ideals_for_tm((tm,),tmcscur,Jxi,mod=mod,simplify_existing=False
+                                             # lp_interval_length_bound=2 if tmsi > 0 else 100
+                                             ) for tm,tmcscur in zip(tms,tmcss)]
+                for Jxis in lproduct(*map(enumerate,gens)):
+                    print ('index choice %d' % tmsi,[i for i,Ixi in Jxis])
+                    Ixi = ba.sum_ideals([Ixi for i,Ixi in Jxis],xi)
+                    for Jxiup in ba.get_ideals_for_tm((), tms+tmcs_last_check, Ixi, mod=mod):
+                        for res in dfs(Jxiup,tmsi+1):
+                            yield res
+            elif togetherlp:
+                def constrs_gen(tm,tmscur):
+                    xs = [v.lm() for v in mod.get_vs(tm)]
+                    lp = mod.get_linear_program((tm,),tmscur,interval_length_bound=10)
+                    solgen = (tuple(m for m,v in sol.items() if v == 0) for sol in lp_integer_points(lp,xs=xs,fullsol=False))
+                    return (get_positive_constraints(pts,xs) for pts in batched(solgen,3000))
+                constrss = [constrs_gen(tm,tmscur) for tm,tmscur in zip(tms,tmcss)]
+                for constrsscur in lproduct(*constrss):
+                    lp = copy(mod.get_linear_program(tms,tmcs_last_check,interval_length_bound=4))
+                    xs = [v.lm() for tm in tms for v in mod.get_vs(tm)]
+                    for tm, constrs in zip(tms,constrsscur):
+                        add_positive_constraints(lp, [v.lm() for v in mod.get_vs(tm)], constrs)
+                    for sol in lp_integer_points(lp,xs=xs,fullsol=False):
+                        for Jxiup in ba.get_ideals_for_tm(tms,tmcs,Jxi,mod=mod,preset_choices=sol):
+                            for res in dfs(Jxiup,tmsi+1):
+                                yield res
+            else:
+                raise ValueError('mode invalid')
     return dfs((ba.R0.ideal(side='twosided'),[ba.R0.one()], 0) if Jxi is None else Jxi,0)
 
-def lp_look_strict_by_deg(ba,deg_bound=2,Jxi=None):
+def lp_look_strict_by_deg(ba,deg_bound=2,Jxi=None,mode='individual'):
     tmss = [list(map(tuple,IntegerVectors(k,len(ba.dims)))) for k in range(1,deg_bound+1)]
-    return search_by_sequence(ba,tmss,Jxi)
+    return search_by_sequence(ba,tmss,Jxi,mode=mode)
 
-def lp_look_strict(ba,deg_bound=2,tm_max_bound=oo,Jxi=None,together=False):
+def lp_look_strict(ba,deg_bound=2,tm_max_bound=oo,Jxi=None,mode='individual'):
     tmss = [[tuple(tm) for tm in IntegerVectors(k,len(ba.dims)) if max(tm) == tmm] for k in range(1,deg_bound+1)
             for tmm in range( (k-1)//len(ba.dims)+1, k+1 ) ]
     # tmss = [[(1,1,0),(1,0,1)]] + tmss
     # tmss = [[(1,1,0)],[(1,0,1)]] + tmss
     # tmss = [[(1,1,0)],[(1,0,1)]] + tmss
     # tmss = [[(1,1,0)],[(1,0,1),(0,1,1)]] + tmss
-    return search_by_sequence(ba,tmss,Jxi,together=together)
+    return search_by_sequence(ba,tmss,Jxi,mode=mode)
 
 def three_place_ideals_up_to(ba,d=1,Jxi=None):
     def dfs(Jxi,tms,mod=ba.zero): 
