@@ -1,3 +1,4 @@
+
 from copy import deepcopy
 
 # reimplementation of product from itertools which reorders its output to
@@ -191,9 +192,38 @@ def lp_integer_points(lp,xs=None,fullsol=True,prunef=lambda psol: True):
         st.pop()
     return dfs()
 
+def get_positive_constraints(points,xs):
+    xsix = {x:i for i,x in enumerate(xs)}
+    n = len(xsix)
+    R = PolynomialRing(QQ,'x',n)
+    return frobby.alexander_dual(R.ideal([prod(R.gen(xsix[m]) for m in pt if m in xsix) for pt in points]))
+    # return R.ideal(1).intersection(*[R.ideal([R.gen(xsix[m]) for m in pt if m in xsix]) for pt in points])
+
+def add_positive_constraints(lp,xs,constraints):
+    assert len(xs) == constraints.ring().ngens()
+    for not_all_missing in constraints.gens():
+        if not not_all_missing.is_zero():
+            lp.add_constraint(lp.sum(lp[xs[i]] for i,_ in not_all_missing.exponents()[0].sparse_iter()) <= not_all_missing.degree()-1)
+            
+    # Rfull = PolynomialRing(QQ,'x',2*n)
+    # bad_condition_full = Rfull.ideal(1)
+    # triv = Rfull.ideal([Rfull.gen(2*i)*Rfull.gen(2*i+1) for i in range(n)])
+    # for pt in points:
+    #     bad_condition = bad_condition.intersection(R.ideal([
+    #         R.gen(xsix[m]) for m in sol if m in xsix]))
+    #     bad_condition = R.ideal([m for m in bad_condition.gens() if m.degree() <= 20])
+    #     print (Counter( map(lambda p: p.degree(), bad_condition.gens()) ))
+    #     # bad_condition_full = bad_condition_full.intersection(Rfull.ideal([
+    #     #     Rfull.gen(2*xsix[m]) if v==0 else Rfull.gen(2*xsix[m]+1) for m,v in solall.items() if m in xsix]))
+    #     # bad_condition_full = Rfull.ideal([triv.reduce(m) for m in bad_condition_full.gens()])
+    #     # print (Counter( map(lambda p: p.degree(), bad_condition_full.gens()) ))
+    # for bad in bad_condition_full.gens():
+    #     lp.add_constraint(lp.sum(lp[xs[i//2]] if i % 2 == 0 else 1-lp[xs[i//2]] 
+    #                              for i,_ in bad.exponents()[0].sparse_iter()) <= bad.degree()-1)
+
 class BinaryProgram:
     def __init__(self,lp,xs=None,use_infeas=True,prunef=lambda psol: True):
-        self.lp = deepcopy(lp)
+        self.lp = lp
         self.xs = list(self.lp.default_variable().keys()) if xs is None else xs
         self.use_infeas = use_infeas
         self.infeas = SetSystem()
@@ -239,6 +269,59 @@ class BinaryProgram:
             sol = [(x,int(round(v))) for x,v in res[0].items() if abs(v-round(v)) < 1e-10]
             self.sols.add_set(sol)
             return sol
+        
+# class BinaryProgram:
+#     def __init__(self,lp,xs=None,use_infeas=True,prunef=lambda psol: True):
+#         self.lp = deepcopy(lp)
+#         self.lp.set_binary(self.lp.default_variable())
+#         self.xs = list(self.lp.default_variable().keys()) if xs is None else xs
+#         self.use_infeas = use_infeas
+#         self.infeas = SetSystem()
+#         self.sols = SetSystem()
+#         self.psol = set()
+#         self.prunef = prunef
+#     def set_min(self, x, v):
+#         v = int(v)
+#         self.lp.set_min(self.lp[x], v)
+#         if v == 1:
+#             assert (x,1) not in self.psol
+#             self.psol.add((x,1))
+#         else:
+#             self.psol.remove((x,1))
+#     def set_max(self, x, v):
+#         v = int(v)
+#         self.lp.set_max(self.lp[x], v)
+#         if v == 0:
+#             assert (x,0) not in self.psol
+#             self.psol.add((x,0))
+#         else:
+#             self.psol.remove((x,0))
+#     def get_min(self, x):
+#         return int(self.lp.get_min(self.lp[x]))
+#     def get_max(self, x):
+#         return int(self.lp.get_max(self.lp[x]))
+#     def extend(self):
+#         sol = list(islice(self.sols.iter_sets(Slo=self.psol),1))
+#         if len(sol) == 1:
+#             return sol[0][0]
+#         def prunef(psol):
+#             return not any(True for _ in self.infeas.iter_sets(Shi=psol.items())) and self.prunef(psol)
+#         if not self.use_infeas:
+#             prunef = self.prunef
+#         res = list(islice(lp_integer_points(self.lp,self.xs,fullsol=True,prunef=prunef),1))
+#         from sage.numerical.mip import MIPSolverException
+#         try:
+#             self.lp.solve()
+#             sol = self.lp.get_values(self.lp.default_variable())
+#             sol = [(x,int(round(v))) for x,v in sol.items() if abs(v-round(v)) < 1e-10]
+#             self.sols.add_set(sol)
+#             return sol
+#         except MIPSolverException:
+#             if self.use_infeas:
+#                 rem = list(self.infeas.iter_sets(Slo=self.psol))
+#                 for r,_ in rem:
+#                     self.infeas.remove_set(r)
+#                 self.infeas.add_set(self.psol)
                    
 class BinaryPrograms:
     def __init__(self,lp,xss,xsshi,use_infeas=True):
