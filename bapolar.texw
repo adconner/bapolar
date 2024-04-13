@@ -569,7 +569,7 @@ def lp_look_strict_by_deg(ba,deg_bound=2,Jxi=None,mode='individual'):
 
 def lp_look_strict(ba,deg_bound=2,tm_max_bound=oo,Jxi=None,mode='individual'):
     tmss = [[tuple(tm) for tm in IntegerVectors(k,len(ba.dims)) if max(tm) == tmm] for k in range(1,deg_bound+1)
-            for tmm in range( (k-1)//len(ba.dims)+1, k+1 ) ]
+            for tmm in range( (k-1)//len(ba.dims)+1, min(tm_max_bound,k)+1 ) ]
     # tmss = [[tm for tm in tms if all( e<=f for e,f in zip(tm,(3,1,1)))] for tms in tmss]
     # tmss = [tms for tms in tmss if len(tms) > 0]
     print(tmss)
