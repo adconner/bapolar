@@ -1190,7 +1190,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 
             if all(num_in[tm] == len(mod.get_vs(tm)) - self.tm_target_out(tm) and \
                            num_out[tm] == self.tm_target_out(tm) for tm in tms) and \
-                       (len(tms) > 0 or all(no_add_codim_lower_bound[tm] >= self.tm_target_out(tm) for tm in tmcs)):
+                       (not complete or all(no_add_codim_lower_bound[tm] >= self.tm_target_out(tm) for tm in tmcs)):
                 yield (J,S,xi)
                 return
 
