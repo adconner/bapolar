@@ -550,9 +550,12 @@ def search_by_sequence(ba,tmss,Jxi=None,mode='togetherlp'):
                     xs = [v.lm() for v in mod.get_vs(tm)]
                     lp = mod.get_linear_program((tm,),tmscur,interval_length_bound=10)
                     solgen = (tuple(m for m,v in sol.items() if v == 0) for sol in lp_integer_points(lp,xs=xs,fullsol=False))
-                    return (get_positive_constraints(pts,xs) for pts in batched(solgen,3000))
+                    return (get_positive_constraints(pts,xs) for pts in batched(solgen,1000))
                 constrss = [constrs_gen(tm,tmscur) for tm,tmscur in zip(tms,tmcss)]
-                for constrsscur in lproduct(*constrss):
+                for constrsscur in lproduct(*map(enumerate,constrss)):
+                    constrsscurix = [i for i,_ in constrsscur]
+                    constrsscur = [constrs for _,constrs in constrsscur]
+                    print('lp constraint group',constrsscurix)
                     def modify_lp(lp):
                         for tm, constrs in zip(tms,constrsscur):
                             add_positive_constraints(lp, [v.lm() for v in mod.get_vs(tm)], constrs)
