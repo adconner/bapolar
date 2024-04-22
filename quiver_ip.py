@@ -64,3 +64,38 @@ def get_flag_inequalities(ms,interval_length_bound=oo):
             for full_cols in dfs(Ms):
                 yield (list(range(a,b)), full_cols)
                 
+def ip_to_z3(ip):
+    import z3
+    s = z3.Solver()
+    # s.set("sat.pb.solver", "solver")
+    for lo,(xis,alphas),hi in ip.constraints():
+        xs = [(z3.Bool('p%d'%xi),int(alpha)) for xi,alpha in zip(xis,alphas)]
+        if lo is not None and hi is not None and lo == hi:
+            s.add( z3.PbEq(xs, int(hi)) )
+        else:
+            if lo is not None:
+                s.add( z3.PbGe(xs, int(lo)) )
+            if hi is not None:
+                s.add( z3.PbLe(xs, int(hi)) )
+    return s
+
+def ip_to_scipy(ip):
+    import scipy
+    import numpy as np
+    I = []
+    J = []
+    V = []
+    lb = []
+    ub = []
+    for ci,(lo,(xis,alphas),hi) in enumerate(ip.constraints()):
+        I.extend([ci]*len(xis))
+        J.extend(xis)
+        V.extend(alphas)
+        lb.append(-np.inf if lo is None else lo)
+        ub.append(np.inf if hi is None else hi)
+    A = scipy.sparse.coo_matrix((V,(I,J)))
+    constraints = scipy.optimize.LinearConstraint(A,lb=lb,ub=ub)
+    bounds = scipy.optimize.Bounds(lb=[0]*A.shape[1],ub=[1]*A.shape[1])
+    integrality = [1]*A.shape[1]
+    return scipy.optimize.milp([0]*A.shape[1],
+        integrality = integrality, bounds = bounds, constraints = constraints, options = {'disp' : True})

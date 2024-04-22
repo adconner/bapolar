@@ -6,6 +6,9 @@ in
       sage
       python3Packages.pweave
       
+      z3
+      python3Packages.z3
+      
       (stdenv.mkDerivation (final: {
         pname = "frobby";
         version = "0.9.5";
