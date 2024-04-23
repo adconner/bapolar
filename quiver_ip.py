@@ -67,16 +67,25 @@ def get_flag_inequalities(ms,interval_length_bound=oo):
 def ip_to_z3(ip):
     import z3
     s = z3.Solver()
-    # s.set("sat.pb.solver", "solver")
+    s.set("sat.pb.solver", "circuit")
     for lo,(xis,alphas),hi in ip.constraints():
-        xs = [(z3.Bool('p%d'%xi),int(alpha)) for xi,alpha in zip(xis,alphas)]
-        if lo is not None and hi is not None and lo == hi:
-            s.add( z3.PbEq(xs, int(hi)) )
-        else:
+        if all(alpha == 1 for alpha in alphas) or all(alpha == -1 for alpha in alphas):
+            xs = [z3.Bool('p%d'%xi) for xi in xis]
+            if alphas[0] == -1:
+                lo,hi = None if hi is None else -hi,None if lo is None else -lo
             if lo is not None:
-                s.add( z3.PbGe(xs, int(lo)) )
+                s.add( z3.AtLeast(*xs+ [int(lo)]) )
             if hi is not None:
-                s.add( z3.PbLe(xs, int(hi)) )
+                s.add( z3.AtMost(*xs+ [int(hi)]) )
+        else:
+            xs = [(z3.Bool('p%d'%xi),int(alpha)) for xi,alpha in zip(xis,alphas)]
+            if lo is not None and hi is not None and lo == hi:
+                s.add( z3.PbEq(xs, int(hi)) )
+            else:
+                if lo is not None:
+                    s.add( z3.PbGe(xs, int(lo)) )
+                if hi is not None:
+                    s.add( z3.PbLe(xs, int(hi)) )
     return s
 
 def ip_to_scipy(ip):
@@ -93,9 +102,14 @@ def ip_to_scipy(ip):
         V.extend(alphas)
         lb.append(-np.inf if lo is None else lo)
         ub.append(np.inf if hi is None else hi)
-    A = scipy.sparse.coo_matrix((V,(I,J)))
+    A = scipy.sparse.coo_matrix((V,(I,J)), (ip.number_of_constraints(), ip.number_of_variables()) )
     constraints = scipy.optimize.LinearConstraint(A,lb=lb,ub=ub)
-    bounds = scipy.optimize.Bounds(lb=[0]*A.shape[1],ub=[1]*A.shape[1])
+    lb = np.zeros(ip.number_of_variables())
+    ub = np.zeros(ip.number_of_variables())
+    for x in ip.default_variable().keys():
+        lb[ next(iter(ip[x].dict().keys())) ] = ip.get_min(ip[x])
+        ub[ next(iter(ip[x].dict().keys())) ] = ip.get_max(ip[x])
+    bounds = scipy.optimize.Bounds(lb=lb,ub=ub)
     integrality = [1]*A.shape[1]
     return scipy.optimize.milp([0]*A.shape[1],
         integrality = integrality, bounds = bounds, constraints = constraints, options = {'disp' : True})
