@@ -1870,18 +1870,18 @@ class JDat:
         Q = self.get_quiver_representation(tms,tmcs)
         for (tmr,wtr) in Q:
             es = [(beta,m) for beta,_,m in Q.incoming_edges((tmr,wtr))]
-            queue = [(e,1) for e in es]
-            while len(queue) > 0:
-                (alpha,m),rem = queue.pop()
-                tt = [max(c.nonzero_positions()) for c in m.columns() if not c.is_zero()]
-                if tt == sorted(tt) and len(set(tt)) == len(tt):
-                    print('skipping 1')
-                    continue
-                escur = [(beta,m*m2) for beta,_,m2 in Q.incoming_edges(alpha)]
-                es.extend(deepcopy(escur))
-                if rem > 1:
-                    for (beta,m2) in escur:
-                        queue.append(((beta,m2),rem-1))
+            # queue = [(e,1) for e in es]
+            # while len(queue) > 0:
+            #     (alpha,m),rem = queue.pop()
+            #     tt = [max(c.nonzero_positions()) for c in m.columns() if not c.is_zero()]
+            #     if tt == sorted(tt) and len(set(tt)) == len(tt):
+            #         print('skipping 1')
+            #         continue
+            #     escur = [(beta,m*m2) for beta,_,m2 in Q.incoming_edges(alpha)]
+            #     es.extend(deepcopy(escur))
+            #     if rem > 1:
+            #         for (beta,m2) in escur:
+            #             queue.append(((beta,m2),rem-1))
             deduplp = MixedIntegerLinearProgram(solver='GLPK',maximization=False)
             # deduplp = None
             for rows,cols in get_flag_inequalities([m for _,m in es],interval_length_bound=interval_length_bound):
@@ -1890,24 +1890,24 @@ class JDat:
                 add_constraint(rowvks,colvks,0,deduplp)
                 
             es = [(beta,m) for _,beta,m in Q.outgoing_edges((tmr,wtr))]
-            queue = [(e,1) for e in es]
-            while len(queue) > 0:
-                (alpha,m),rem = queue.pop()
-                tt = [max(c.nonzero_positions()) for c in m.T[::-1,::-1].columns() if not c.is_zero()]
-                if tt == sorted(tt) and len(set(tt)) == len(tt):
-                    print('skipping 2')
-                    continue
-                escur = [(beta,m2*m) for _,beta,m2 in Q.outgoing_edges(alpha)]
-                es.extend(deepcopy(escur))
-                if rem > 1:
-                    for (beta,m2) in escur:
-                        queue.append(((beta,m2),rem-1))
+            # queue = [(e,1) for e in es]
+            # while len(queue) > 0:
+            #     (alpha,m),rem = queue.pop()
+            #     tt = [max(c.nonzero_positions()) for c in m.T[::-1,::-1].columns() if not c.is_zero()]
+            #     if tt == sorted(tt) and len(set(tt)) == len(tt):
+            #         print('skipping 2')
+            #         continue
+            #     escur = [(beta,m2*m) for _,beta,m2 in Q.outgoing_edges(alpha)]
+            #     es.extend(deepcopy(escur))
+            #     if rem > 1:
+            #         for (beta,m2) in escur:
+            #             queue.append(((beta,m2),rem-1))
             deduplp = MixedIntegerLinearProgram(solver='GLPK',maximization=False)
             # deduplp = None
             for rows,cols in get_flag_inequalities([m.T[::-1,::-1] for _,m in es],interval_length_bound=interval_length_bound):
-                colvks = [(tmr,wtr,len(self.get_vss(tmr)[wtr])-1-i) for i in rows]
-                rowvks = [(tmu,wtu,len(self.get_vss(tmu)[wtu])-1-j) for i,j in cols for (tmu,wtu) in [es[i][0]] ]
-                add_constraint(rowvks,colvks,len(colvks)-len(rowvks),deduplp)
+                rowvks = [(tmr,wtr,len(self.get_vss(tmr)[wtr])-1-i) for i in rows]
+                colvks = [(tmu,wtu,len(self.get_vss(tmu)[wtu])-1-j) for i,j in cols for (tmu,wtu) in [es[i][0]] ]
+                add_constraint(colvks,rowvks,len(rowvks)-len(colvks),deduplp)
                 
         print(tms,tmcs,lp.number_of_constraints(),'constraints')
         if precise:
