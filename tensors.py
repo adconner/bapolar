@@ -80,6 +80,14 @@ def tensor_sum(Sdat,Tdat):
         curd += d1 + d2
     return S(Sxs) + T(Txs),tuple(d1+d2 for d1,d2 in zip(Sdim,Tdim))
 
+def tensor_random_permute_coordinates(T):
+    dims = T[1]
+    sigmas = [SymmetricGroup(d).random_element() for d in dims]
+    R = PolynomialRing(QQ,['%s%d'%(x,i) for x,d in zip('abcdefghijklmnopqrstuvwxyz',dims) for i in range(d)])
+    subs = [R.gen(sum(dims[:i]) + sigmas[i](j+1)-1) for i in range(len(dims)) for j in range(dims[i])]
+    return (T[0](subs), T[1])
+    
+
 unextendible_supports_333_dat = [
     [(1,1,3), (1,2,2), (2,1,2), (3,3,1)],
     [(1,1,3), (1,3,2), (2,3,1), (3,2,2)],

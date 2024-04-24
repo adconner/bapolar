@@ -258,7 +258,9 @@ class BinaryProgram:
             return not any(True for _ in self.infeas.iter_sets(Shi=psol.items())) and self.prunef(psol)
         if not self.use_infeas:
             prunef = self.prunef
-        res = list(islice(lp_integer_points(self.lp,self.xs,fullsol=True,prunef=prunef),1))
+        res = ip_to_scipy(self.lp)
+        res = [{x: res.x[next(iter(self.lp[x].dict().keys()))] for x in self.lp.default_variable().keys()}] if res.success else []
+        # res = list(islice(lp_integer_points(self.lp,self.xs,fullsol=True,prunef=prunef),1))
         if len(res) == 0:
             if self.use_infeas:
                 rem = list(self.infeas.iter_sets(Slo=self.psol))
