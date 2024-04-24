@@ -559,9 +559,13 @@ def search_by_sequence(ba,tmss,Jxi=None,mode='togetherlp'):
                     def modify_lp(lp):
                         for tm, constrs in zip(tms,constrsscur):
                             add_positive_constraints(lp, [v.lm() for v in mod.get_vs(tm)], constrs)
-                    for Jxiup in ba.get_ideals_for_tm(tms,tmcs,Jxi,mod=mod,modify_lp=modify_lp):
-                        for res in dfs(Jxiup,tmsi+1):
-                            yield res
+                    # for Jxiup in ba.get_ideals_for_tm(tms,tmcs,Jxi,mod=mod,modify_lp=modify_lp):
+                    #     for res in dfs(Jxiup,tmsi+1):
+                    #         yield res
+                    for Jxiup in ba.get_ideals_for_tm(tms,tmcs_last_check,Jxi,mod=mod,modify_lp=modify_lp):
+                        for Jxiup2 in ba.get_ideals_for_tm((),tms+tmcs,Jxiup,mod=mod):
+                            for res in dfs(Jxiup2,tmsi+1):
+                                yield res
             else:
                 raise ValueError('mode invalid')
     return dfs((ba.R0.ideal(side='twosided'),[ba.R0.one()], 0) if Jxi is None else Jxi,0)
@@ -575,11 +579,13 @@ def lp_look_strict(ba,deg_bound=2,tm_max_bound=oo,Jxi=None,mode='individual'):
             for tmm in range( (k-1)//len(ba.dims)+1, min(tm_max_bound,k)+1 ) ]
     # tmss = [[tm for tm in tms if all( e<=f for e,f in zip(tm,(3,1,1)))] for tms in tmss]
     # tmss = [tms for tms in tmss if len(tms) > 0]
-    print(tmss)
     # tmss = [[(1,1,0),(1,0,1)]] + tmss
     # tmss = [[(1,1,0)],[(1,0,1)]] + tmss
     # tmss = [[(1,1,0)],[(1,0,1)]] + tmss
     # tmss = [[(1,1,0)],[(1,0,1),(0,1,1)]] + tmss
+    # tmss = [[(1,1,0),(1,0,1),(0,1,1),(2,0,0)]] + tmss
+    # tmss = [[(1,1,0),(1,0,1),(0,1,1)],[(2,0,0)]] + tmss
+    print(tmss)
     return search_by_sequence(ba,tmss,Jxi,mode=mode)
 
 def three_place_ideals_up_to(ba,d=1,Jxi=None):
@@ -1180,8 +1186,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         vkbelowcnt = deepcopy(vkbelowcnt)
         
         processed = [0]
-        height = [0]
         vstr_width = [0]
+        chosen_vks = []
         def dfs(J,S,xi):
 
             tss = self.leading_term_coefficients((J,S,xi))
@@ -1249,7 +1255,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             
             set_stack.append(vk)
             vkremove(vk)
-            height[0] += 1
+            chosen_vks.append(vk)
             try:
                 tm,wt,vi = vk
                 vs = mod.get_vss(tm)[wt]
@@ -1271,7 +1277,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     vstr_width[0] = max(vstr_width[0],len(vstr))
                     print ('%s%s %s xi=%d %.3f %s%d %d %s' % ('complete ' if complete else '',
                                str(tm),vstr.rjust(vstr_width[0]),xi,var_lp_val,
-                                  ' '*height[0],remhi,remlo,extra))
+                                  ' '*len(chosen_vks),remhi,remlo,extra))
                 # printstep('all')
                 
                 ts = [t for _,t in tss.iter_sets(Shi=emultiset(mod.get_vss(tm)[wt][vi]))]
@@ -1389,7 +1395,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         yield JSxi
                         
             finally:
-                height[0] -= 1
+                chosen_vks.pop()
                 while len(set_stack) > 0:
                     vk = set_stack.pop()
                     vkadd(vk)
