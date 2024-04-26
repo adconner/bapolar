@@ -1133,8 +1133,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         lp = copy(mod.get_linear_program(tms,tmcs,
              interval_length_bound=lp_interval_length_bound,precise=precise_lp))
         modify_lp(lp)
-        bp = BinaryProgram(lp, xs = [p.lm() for tm in tms for p in mod.get_vs(tm)],
-                            use_infeas=False)
+        bp = BinaryProgram(lp)
         unset = set()
         tmsvks = set((tm,wt,i) for tm in tms for wt,vs in mod.get_vss(tm).items() 
                      for i in range(len(vs)))
@@ -1815,12 +1814,9 @@ class JDat:
         return Q
     
     def get_linear_program(self, tms, tmcs=(), interval_length_bound=3, precise=False):
-        lp = MixedIntegerLinearProgram(solver='GLPK')
-        # lp.set_binary(lp.default_variable())
-        # # if set_real, be sure to change exact comparisons to within machine precision
-        lp.set_real(lp.default_variable())
-        lp.set_min(lp.default_variable(),0)
-        lp.set_max(lp.default_variable(),1)
+        lp = MixedIntegerLinearProgram(solver='SCIP')
+        # lp.get_backend()._get_model().enableReoptimization()
+        lp.set_binary(lp.default_variable())
 
         for tm in tms:
             lp.add_constraint(lp.sum(1-lp[v.lm()] 

@@ -204,32 +204,13 @@ def add_positive_constraints(lp,xs,constraints):
     for not_all_missing in constraints.gens():
         if not not_all_missing.is_zero():
             lp.add_constraint(lp.sum(lp[xs[i]] for i,_ in not_all_missing.exponents()[0].sparse_iter()) <= not_all_missing.degree()-1)
-            
-    # Rfull = PolynomialRing(QQ,'x',2*n)
-    # bad_condition_full = Rfull.ideal(1)
-    # triv = Rfull.ideal([Rfull.gen(2*i)*Rfull.gen(2*i+1) for i in range(n)])
-    # for pt in points:
-    #     bad_condition = bad_condition.intersection(R.ideal([
-    #         R.gen(xsix[m]) for m in sol if m in xsix]))
-    #     bad_condition = R.ideal([m for m in bad_condition.gens() if m.degree() <= 20])
-    #     print (Counter( map(lambda p: p.degree(), bad_condition.gens()) ))
-    #     # bad_condition_full = bad_condition_full.intersection(Rfull.ideal([
-    #     #     Rfull.gen(2*xsix[m]) if v==0 else Rfull.gen(2*xsix[m]+1) for m,v in solall.items() if m in xsix]))
-    #     # bad_condition_full = Rfull.ideal([triv.reduce(m) for m in bad_condition_full.gens()])
-    #     # print (Counter( map(lambda p: p.degree(), bad_condition_full.gens()) ))
-    # for bad in bad_condition_full.gens():
-    #     lp.add_constraint(lp.sum(lp[xs[i//2]] if i % 2 == 0 else 1-lp[xs[i//2]] 
-    #                              for i,_ in bad.exponents()[0].sparse_iter()) <= bad.degree()-1)
 
 class BinaryProgram:
-    def __init__(self,lp,xs=None,use_infeas=True,prunef=lambda psol: True):
+    def __init__(self,lp):
         self.lp = lp
-        self.xs = list(self.lp.default_variable().keys()) if xs is None else xs
-        self.use_infeas = use_infeas
         self.infeas = SetSystem()
         self.sols = SetSystem()
         self.psol = set()
-        self.prunef = prunef
     def set_min(self, x, v):
         v = int(v)
         self.lp.set_min(self.lp[x], v)
@@ -251,186 +232,31 @@ class BinaryProgram:
     def get_max(self, x):
         return int(self.lp.get_max(self.lp[x]))
     def extend(self):
+        contr = list(islice(self.infeas.iter_sets(Shi=self.psol),1))
+        if len(contr) == 1:
+            return None
         sol = list(islice(self.sols.iter_sets(Slo=self.psol),1))
         if len(sol) == 1:
             return sol[0][0]
-        def prunef(psol):
-            return not any(True for _ in self.infeas.iter_sets(Shi=psol.items())) and self.prunef(psol)
-        if not self.use_infeas:
-            prunef = self.prunef
-        res = ip_to_scipy(self.lp)
-        res = [{x: res.x[next(iter(self.lp[x].dict().keys()))] for x in self.lp.default_variable().keys()}] if res.success else []
-        # res = list(islice(lp_integer_points(self.lp,self.xs,fullsol=True,prunef=prunef),1))
+        #res = ip_to_scipy(self.lp)
+        #res = [{x: res.x[next(iter(self.lp[x].dict().keys()))] for x in self.lp.default_variable().keys()}] if res.success else []
+        #res = list(islice(lp_integer_points(self.lp,fullsol=True),1))
+        from sage.numerical.mip import MIPSolverException
+        try:
+            self.lp.solve()
+            res = [self.lp.get_values(self.lp.default_variable())]
+            self.lp.get_backend()._get_model().freeTransform()
+        except MIPSolverException:
+            res = []
+            self.lp.get_backend()._get_model().freeTransform()
         if len(res) == 0:
-            if self.use_infeas:
-                rem = list(self.infeas.iter_sets(Slo=self.psol))
-                for r,_ in rem:
-                    self.infeas.remove_set(r)
-                self.infeas.add_set(self.psol)
+            rem = list(self.infeas.iter_sets(Slo=self.psol))
+            for r,_ in rem:
+                self.infeas.remove_set(r)
+            self.infeas.add_set(self.psol)
         else:
-            sol = [(x,int(round(v))) for x,v in res[0].items() if abs(v-round(v)) < 1e-10]
+            sol = [(x,int(round(v))) for x,v in res[0].items()]
             self.sols.add_set(sol)
             return sol
         
-# class BinaryProgram:
-#     def __init__(self,lp,xs=None,use_infeas=True,prunef=lambda psol: True):
-#         self.lp = deepcopy(lp)
-#         self.lp.set_binary(self.lp.default_variable())
-#         self.xs = list(self.lp.default_variable().keys()) if xs is None else xs
-#         self.use_infeas = use_infeas
-#         self.infeas = SetSystem()
-#         self.sols = SetSystem()
-#         self.psol = set()
-#         self.prunef = prunef
-#     def set_min(self, x, v):
-#         v = int(v)
-#         self.lp.set_min(self.lp[x], v)
-#         if v == 1:
-#             assert (x,1) not in self.psol
-#             self.psol.add((x,1))
-#         else:
-#             self.psol.remove((x,1))
-#     def set_max(self, x, v):
-#         v = int(v)
-#         self.lp.set_max(self.lp[x], v)
-#         if v == 0:
-#             assert (x,0) not in self.psol
-#             self.psol.add((x,0))
-#         else:
-#             self.psol.remove((x,0))
-#     def get_min(self, x):
-#         return int(self.lp.get_min(self.lp[x]))
-#     def get_max(self, x):
-#         return int(self.lp.get_max(self.lp[x]))
-#     def extend(self):
-#         sol = list(islice(self.sols.iter_sets(Slo=self.psol),1))
-#         if len(sol) == 1:
-#             return sol[0][0]
-#         def prunef(psol):
-#             return not any(True for _ in self.infeas.iter_sets(Shi=psol.items())) and self.prunef(psol)
-#         if not self.use_infeas:
-#             prunef = self.prunef
-#         res = list(islice(lp_integer_points(self.lp,self.xs,fullsol=True,prunef=prunef),1))
-#         from sage.numerical.mip import MIPSolverException
-#         try:
-#             self.lp.solve()
-#             sol = self.lp.get_values(self.lp.default_variable())
-#             sol = [(x,int(round(v))) for x,v in sol.items() if abs(v-round(v)) < 1e-10]
-#             self.sols.add_set(sol)
-#             return sol
-#         except MIPSolverException:
-#             if self.use_infeas:
-#                 rem = list(self.infeas.iter_sets(Slo=self.psol))
-#                 for r,_ in rem:
-#                     self.infeas.remove_set(r)
-#                 self.infeas.add_set(self.psol)
                    
-class BinaryPrograms:
-    def __init__(self,lp,xss,xsshi,use_infeas=True):
-        ms = dict([(next(iter(v.dict().keys())),m) for m,v in lp.default_variable().items()])
-        msix = dict([(m,next(iter(v.dict().keys()))) for m,v in lp.default_variable().items()])
-        xssi = {}
-        for i,xs in enumerate(xss):
-            for x in xs:
-                xssi.setdefault(x,[]).append(i)
-        xsbpis = [set(xs) for xs in xss]
-        xsbp = set(x for xs in xss for x in xs)
-        for _,(xis,_),_ in lp.constraints():
-            curxs = set([ms[xi] for xi in xis])
-            curbpis = reduce(lambda a,b : a|b, 
-                             (set(xssi.get(x,[])) for x in curxs), set())
-            print(curxs,curbpis)
-            for bpi in curbpis:
-                xsbpis[bpi] |= curxs
-            if len(curbpis) >= 2:
-                xsbp |= curxs
-        # xssalli = deepcopy(xssi)
-        # for i,xs in enumerate(xsshi):
-        #     for x in xs:
-        #         xssalli.setdefault(x,[]).append(len(xs)+i)
-        # for bpi,xs in enumerate(xsbpis):
-        #     xsbpis[bpi] = reduce(lambda a,b: a|b, (set(xss[i])|set([x]) if i < len(xss) else set(xsshi[i-len(xss)])|set([x]) 
-        #          for x in xs for xsi in xssalli[x]), set())
-        # xsbp = reduce(lambda a,b: a|b, (set(xss[i])|set([x]) if i < len(xss) else set(xsshi[i-len(xss)])|set([x]) 
-        #      for x in xsbp for xsi in xssalli[x]), set())
-        
-        self.bps = []
-        for xs,ys in zip(xss,xsbpis):
-            curxis = set(msix[x] for x in ys)
-            lpcur = MixedIntegerLinearProgram(solver='GLPK')
-            lpcur.set_min(lpcur.default_variable(),0)
-            lpcur.set_max(lpcur.default_variable(),1)
-            for lo,(xis,cs),hi in lp.constraints():
-                if all(xi in curxis for xi in xis):
-                    lpcur.add_constraint(lpcur.sum(c*lpcur[ms[xi]] for xi,c in zip(xis,cs)),min=lo,max=hi)
-            self.bps.append(BinaryProgram(lpcur,xs,use_infeas))
-        def prunef(psol):
-            revert = []
-            for x,v in psol.items():
-                for i in xssi.get(x,[]):
-                    if v == 0:
-                        assert self.bps[i].get_min(x) == 0
-                        if self.bps[i].get_max(x) == 1:
-                            revert.append((i,x,v))
-                            self.bps[i].set_max(x,0)
-                    else:
-                        assert self.bps[i].get_max(x) == 1
-                        if self.bps[i].get_min(x) == 0:
-                            revert.append((i,x,v))
-                            self.bps[i].set_min(x,1)
-            res = all(bp.extend() is not None for bp in self.bps)
-            for i,x,v in revert:
-                if v == 0:
-                    self.bps[i].set_max(x,1)
-                else:
-                    self.bps[i].set_min(x,0)
-            return res
-        
-        lpcur = MixedIntegerLinearProgram(solver='GLPK')
-        lpcur.set_min(lpcur.default_variable(),0)
-        lpcur.set_max(lpcur.default_variable(),1)
-        curxis = set(msix[x] for x in xsbp)
-        for lo,(xis,cs),hi in lp.constraints():
-            if all(xi in curxis for xi in xis):
-                lpcur.add_constraint(lpcur.sum(c*lpcur[ms[xi]] for xi,c in zip(xis,cs)),min=lo,max=hi)
-        from operator import concat
-        self.bp = BinaryProgram(lpcur,reduce(concat,xss),use_infeas=False,prunef=prunef)
-        self.ysbis = {}
-        for y in self.bp.lp.default_variable().keys():
-            self.ysbis.setdefault(y,[]).append(-1)
-        for bpi, bp in enumerate(self.bps):
-            for y in bp.lp.default_variable().keys():
-                self.ysbis.setdefault(y,[]).append(bpi)
-        self.psol = set()
-    def set_min(self, x, v):
-        v = int(v)
-        if v == 1:
-            assert (x,1) not in self.psol
-            self.psol.add((x,1))
-        else:
-            self.psol.remove((x,1))
-        for bi in self.ysbis[x]:
-            if bi == -1:
-                self.bp.set_min(x,v)
-            else:
-                self.bps[bi].set_min(x,v)
-    def set_max(self, x, v):
-        v = int(v)
-        if v == 0:
-            assert (x,0) not in self.psol
-            self.psol.add((x,0))
-        else:
-            self.psol.remove((x,0))
-        for bi in self.ysbis[x]:
-            if bi == -1:
-                self.bp.set_max(x,v)
-            else:
-                self.bps[bi].set_max(x,v)
-    def get_min(self, x):
-        bi = self.ysbis[x][0]
-        return self.bp.get_min(x) if bi == -1 else self.bps[bi].get_min(x)
-    def get_max(self, x):
-        bi = self.ysbis[x][0]
-        return self.bp.get_max(x) if bi == -1 else self.bps[bi].get_max(x)
-    def extend(self):
-        return self.bp.extend()
