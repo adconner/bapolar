@@ -524,7 +524,8 @@ def search_by_sequence(ba,tmss,Jxi=None,mode='togetherlp'):
         tmcs = tuple(sorted(set([tuple(map(add,tm,tma)) for tm in tms for k in range(1,maxdincrease+1)
                              for tma in IntegerVectors(k,len(ba.dims)) ])))
         if together:
-            for Jxiup in ba.get_ideals_for_tm(tms, tmcs, Jxi, mod=mod):
+            for Jxiup in ba.get_ideals_for_tm(tms, tmcs, Jxi, mod=mod, 
+                                              lp_interval_length_bound=10 if len(J.gens()) == 0 else 4):
                 for res in dfs(Jxiup,tmsi+1):
                     yield res
         else:
