@@ -1790,18 +1790,20 @@ class JDat:
             B = matrix(ba.F,len(ms),len(qs),B)
             return B.solve_right(A)
             
-        P = Poset((tms+tmcs,lambda a,b: all(i<=j for i,j in zip(a,b))))
         Q = DiGraph(multiedges=True)
-        for tm,tmr in P.cover_relations():
-            for wt,vs in self.get_vss(tm).items():
-                for m in ba.all_monomials(tuple(map(sub,tmr,tm))):
-                    vms = [liftR(self.J.reduce(liftR(v*m,self.R)),ba.R0)
-                            for v in vs]
-                    if all(vm.is_zero() for vm in vms):
-                        continue
-                    wtup = ba.polynomial_weight(next(vm for vm in vms if not vm.is_zero()))
-                    ws = self.get_vss(tmr)[wtup]
-                    Q.add_edge((tm,wt),(tmr,wtup),get_matrix(ws,vms))
+        for tm in tms:
+            for tmr in tms+tmcs:
+                if tm == tmr or not all(i<=j for i,j in zip(tm,tmr)):
+                    continue
+                for wt,vs in self.get_vss(tm).items():
+                    for m in ba.all_monomials(tuple(map(sub,tmr,tm))):
+                        vms = [liftR(self.J.reduce(liftR(v*m,self.R)),ba.R0)
+                                for v in vs]
+                        if all(vm.is_zero() for vm in vms):
+                            continue
+                        wtup = ba.polynomial_weight(next(vm for vm in vms if not vm.is_zero()))
+                        ws = self.get_vss(tmr)[wtup]
+                        Q.add_edge((tm,wt),(tmr,wtup),get_matrix(ws,vms))
         for tm in tms:
             for wt,vs in self.get_vss(tm).items():
                 for x in ba.R0.gens()[ba.nvars:]:
@@ -1884,7 +1886,7 @@ class JDat:
             #     if rem > 1:
             #         for (beta,m2) in escur:
             #             queue.append(((beta,m2),rem-1))
-            deduplp = MixedIntegerLinearProgram(solver='GLPK',maximization=False)
+            deduplp = MixedIntegerLinearProgram(solver='SCIP',maximization=False)
             # deduplp = None
             for rows,cols in get_flag_inequalities([m for _,m in es],interval_length_bound=interval_length_bound):
                 rowvks = [(tmr,wtr,i) for i in rows]
@@ -1904,7 +1906,7 @@ class JDat:
             #     if rem > 1:
             #         for (beta,m2) in escur:
             #             queue.append(((beta,m2),rem-1))
-            deduplp = MixedIntegerLinearProgram(solver='GLPK',maximization=False)
+            deduplp = MixedIntegerLinearProgram(solver='SCIP',maximization=False)
             # deduplp = None
             for rows,cols in get_flag_inequalities([m.T[::-1,::-1] for _,m in es],interval_length_bound=interval_length_bound):
                 rowvks = [(tmr,wtr,len(self.get_vss(tmr)[wtr])-1-i) for i in rows]
@@ -1920,7 +1922,7 @@ class JDat:
                 if len(xs) == 0 or len(xs) == self.ba.tm_dim(tm):
                     continue
                 curxis = set(msix[m.lm()] for tmcur in (tm,)+tmcs for m in self.get_vs(tmcur))
-                lpcur = MixedIntegerLinearProgram(solver='GLPK')
+                lpcur = MixedIntegerLinearProgram(solver='SCIP')
                 for lo,(xis,cs),hi in lp.constraints():
                     if all(xi in curxis for xi in xis):
                         lpcur.add_constraint(lpcur.sum(c*lpcur[ms[xi]] for xi,c in zip(xis,cs)),min=lo,max=hi)
