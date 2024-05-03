@@ -1143,6 +1143,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     if p.is_zero():
                         continue
                     m = self.lm(p,True)
+                    if liftR(m,mod.R) in mod.ltJ:
+                        continue
                     if bp.get_min(m) == 0:
                         t = p.coefficient(self.lm(p))
                         if t.is_constant():
@@ -1150,16 +1152,21 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                             bp_restore.append((m,1))
                             newrel = True
                         else:
-                            bp_set_min(m,1)
-                            if bp.extend() is None:
-                                bp_set_min(m,0)
-                                bp_set_max(m,0)
-                                bp_restore.append((m,0))
+                            if bp.get_max(m) == 0:
                                 J += t
                                 newrel = True
                                 gb_needed = True
                             else:
-                                bp_set_min(m,0)
+                                bp_set_min(m,1)
+                                if bp.extend() is None:
+                                    bp_set_min(m,0)
+                                    bp_set_max(m,0)
+                                    bp_restore.append((m,0))
+                                    J += t
+                                    newrel = True
+                                    gb_needed = True
+                                else:
+                                    bp_set_min(m,0)
             if not ((len(J.gens()) == 1 and J.gens()[0] == J.ring().one()) or (bp.extend() is None)):
                 J,_,yi = self.quick_simplify((J,[J.ring().one()],yi),0 if simplify_existing else xiorig)
                 yield (J,yi)
@@ -1412,7 +1419,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         return (J,S,len(tis))
 
     def containing_leading_term_ideal(self,Jxi):
-        J,S,xi = Jxi
+        J,xi = Jxi
         R = PolynomialRing(self.F,self.R0.gens()[:self.nvars])
         ltIub = []
         for p in J.gens():
@@ -1422,37 +1429,35 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         return R.ideal(ltIub)
             
     def contained_leading_term_ideal(self,Jxi):
-        J,S,xi = Jxi
+        J,xi = Jxi
         if xi == 0:
             return self.containing_leading_term_ideal(Jxi)
         I,coerce = self.get_param_ideal(J)
-        SI = [coerce(s) for s in S]
         R = PolynomialRing(self.F,self.R0.gens()[:self.nvars])
         ltIlb = []
         for p in J.gens():
             m = self.lm(p)
             if not m.is_constant():
                 t = p.coefficient(m)
-                It = I + coerce(t)
-                if any(s in It for s in S):
+                if 1 in I + coerce(t):
                     ltIlb.append(m(R.gens()+(R.zero(),)*(p.parent().ngens()-R.ngens())))
         return R.ideal(ltIlb)
     
     def trivially_contained_leading_term_ideal(self,Jxi):
-        J,S,xi = Jxi
+        J,xi = Jxi
         R = PolynomialRing(self.F,self.R0.gens()[:self.nvars])
         ltIlb = []
         for p in J.gens():
             m = self.lm(p)
             if not m.is_constant():
                 t = p.coefficient(m)
-                if t in S or -t in S:
+                if t.is_constant():
                     ltIlb.append(m(R.gens()+(R.zero(),)*(p.parent().ngens()-R.ngens())))
         return R.ideal(ltIlb)
 
     def codimension_bounds(self,Jxi,total_degree):
         J,xi = Jxi
-        Jxi = (self.bounded_gb(J,total_degree), S, xi)
+        Jxi = (self.bounded_gb(J,total_degree), xi)
         ltIlb = self.contained_leading_term_ideal(Jxi)
         ltIub = self.containing_leading_term_ideal(Jxi)
         res = {}
