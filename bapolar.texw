@@ -1044,7 +1044,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
 <<complete=False>>=
 
     def leading_term_coefficients(self,Jxi):
-        J,S,xi = Jxi
+        J,xi = Jxi
         tss = SetSystem()
         for p in J.gens():
             m = self.lm(p)
@@ -1082,18 +1082,21 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             mod = self.zero
         if Jxi is None:
             Jxi = (self.R0.ideal(side='twosided'), 0)
-        tms = set(tms)
-        tmcs = set(tmcs)
-        for p in Jxi[0].gens():
-            tm = self.polynomial_tm(p)
-            if tm not in tms:
-                tmcs.add(tm)
-        tms = tuple(sorted(tms))
-        tmcs = tuple(sorted(tmcs))
+        tms = tuple(tms)
+        tmcs = tuple(tmcs)
+        # tms = set(tms)
+        # tmcs = set(tmcs)
+        # for p in Jxi[0].gens():
+        #     tm = self.polynomial_tm(p)
+        #     if tm not in tms:
+        #         tmcs.add(tm)
+        # tms = tuple(sorted(tms))
+        # tmcs = tuple(sorted(tmcs))
 
         gbbound = max([sum(tm) for tm in tms+tmcs])
         def gb(J):
-            return self.bounded_gb(J,gbbound)
+            return J.twostd()
+            # return self.bounded_gb(J,gbbound)
         
         xiorig = Jxi[1]
 
@@ -1130,6 +1133,12 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             m = vktolm(vk)
             return bp.get_min(m) == 0 and bp.get_max(m) == 1
         
+        tss = self.leading_term_coefficients(Jxi)
+        for tm in tms+tmcs:
+            for v in mod.get_vs(tm):
+                if any(t.is_constant() for _,t in tss.iter_sets(Shi=emultiset(v.lm()))):
+                    bp_set_min(v.lm(),1)
+        
         def fixed_point(Jxi,gb_needed=True):
             J,yi = Jxi
             bp_restore = []
@@ -1143,7 +1152,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     if p.is_zero():
                         continue
                     m = self.lm(p,True)
-                    if m.is_one() or liftR(m,mod.R) in mod.ltJ:
+                    if m.is_one() or liftR(m,mod.R) in mod.ltJ or self.polynomial_tm(m) not in num_in:
                         continue
                     if bp.get_min(m) == 0:
                         t = p.coefficient(self.lm(p))
@@ -1172,9 +1181,9 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 yield (J,yi)
             for m,hi in bp_restore:
                 if hi == 1:
-                    bp.set_min(m,0)
+                    bp_set_min(m,0)
                 else:
-                    bp.set_max(m,1)
+                    bp_set_max(m,1)
 
 
         from copy import deepcopy
@@ -1282,7 +1291,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         
                 if preset_choices.get(v.lm(),False) == False:
                     bp_set_max(v.lm(),0)
-                    for Jxip in fixed_point(Jxi):
+                    for Jxip in fixed_point(Jxi,False):
                         for res in dfs(Jxip):
                             yield res
                     bp_set_max(v.lm(),1)
