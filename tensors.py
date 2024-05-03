@@ -27,7 +27,7 @@ def skewcw(q=2):
              for sigma in SymmetricGroup(3) for rho in range(q//2)])
     return T,dims
 
-def cw2(q=2):
+def cw(q=2):
     assert q % 2 == 0
     dims=(q+1,q+1,q+1)
     R = PolynomialRing(QQ,['%s%d'%(x,i) for x,d in zip('abc',dims) for i in range(d)])
