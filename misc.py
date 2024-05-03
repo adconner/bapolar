@@ -208,7 +208,7 @@ class BinaryProgramSCIPReopt:
         self.M.freeReoptSolve()
         self.M.chgReoptObjective(quicksum( getVar(x) if v == 1 else -getVar(x) for x,v in self.psol),"maximize")
         target = len([_ for _,v in self.psol if v==1])
-        self.M.hideOutput(False)
+        # self.M.hideOutput(False)
         self.M.optimize()
         if self.M.getStatus() != 'optimal' or int(self.M.getObjVal()) < target:
             return
