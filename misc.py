@@ -108,8 +108,67 @@ class SetSystem:
                     for e in s:
                         Shi[e] += 1
             prev = nextprev
-                
-
+            
+class BinaryProgram:
+    def __init__(self,lp):
+        self.lp = lp
+        self.infeas = SetSystem()
+        self.sols = SetSystem()
+        self.psol = set()
+    def set_min(self, x, v):
+        assert x in self.lp.default_variable().keys()
+        v = int(v)
+        self.lp.set_min(self.lp[x], v)
+        if v == 1:
+            assert (x,1) not in self.psol
+            assert (x,0) not in self.psol
+            self.psol.add((x,1))
+        else:
+            self.psol.remove((x,1))
+    def set_max(self, x, v):
+        assert x in self.lp.default_variable().keys()
+        v = int(v)
+        self.lp.set_max(self.lp[x], v)
+        if v == 0:
+            assert (x,0) not in self.psol
+            assert (x,1) not in self.psol
+            self.psol.add((x,0))
+        else:
+            self.psol.remove((x,0))
+    def get_min(self, x):
+        assert x in self.lp.default_variable().keys()
+        return int(self.lp.get_min(self.lp[x]))
+    def get_max(self, x):
+        assert x in self.lp.default_variable().keys()
+        return int(self.lp.get_max(self.lp[x]))
+    def extend(self):
+        contr = list(islice(self.infeas.iter_sets(Shi=self.psol),1))
+        if len(contr) == 1:
+            return None
+        sol = list(islice(self.sols.iter_sets(Slo=self.psol),1))
+        if len(sol) == 1:
+            return sol[0][0]
+        #res = ip_to_scipy(self.lp)
+        #res = [{x: res.x[next(iter(self.lp[x].dict().keys()))] for x in self.lp.default_variable().keys()}] if res.success else []
+        #res = list(islice(lp_integer_points(self.lp,fullsol=True),1))
+        from sage.numerical.mip import MIPSolverException
+        try:
+            self.lp.solve()
+            res = [self.lp.get_values(self.lp.default_variable())]
+            self.lp.get_backend()._get_model().freeTransform()
+        except MIPSolverException:
+            res = []
+            self.lp.get_backend()._get_model().freeTransform()
+        if len(res) == 0:
+            rem = list(self.infeas.iter_sets(Slo=self.psol))
+            for r,_ in rem:
+                self.infeas.remove_set(r)
+            self.infeas.add_set(self.psol)
+        else:
+            sol = [(x,int(round(v))) for x,v in res[0].items()]
+            self.sols.add_set(sol)
+            return sol
+        
 # function to enumerate integer points of a polytope defined by input linear program
 # (sage MixedIntegerLinearProgram). If xs, a subset of variables, is provided,
 # this problem is solved for the projection of the polytope away from the
@@ -205,64 +264,3 @@ def add_positive_constraints(lp,xs,constraints):
         if not not_all_missing.is_zero():
             lp.add_constraint(lp.sum(lp[xs[i]] for i,_ in not_all_missing.exponents()[0].sparse_iter()) <= not_all_missing.degree()-1)
 
-class BinaryProgram:
-    def __init__(self,lp):
-        self.lp = lp
-        self.infeas = SetSystem()
-        self.sols = SetSystem()
-        self.psol = set()
-    def set_min(self, x, v):
-        assert x in self.lp.default_variable().keys()
-        v = int(v)
-        self.lp.set_min(self.lp[x], v)
-        if v == 1:
-            assert (x,1) not in self.psol
-            assert (x,0) not in self.psol
-            self.psol.add((x,1))
-        else:
-            self.psol.remove((x,1))
-    def set_max(self, x, v):
-        assert x in self.lp.default_variable().keys()
-        v = int(v)
-        self.lp.set_max(self.lp[x], v)
-        if v == 0:
-            assert (x,0) not in self.psol
-            assert (x,1) not in self.psol
-            self.psol.add((x,0))
-        else:
-            self.psol.remove((x,0))
-    def get_min(self, x):
-        assert x in self.lp.default_variable().keys()
-        return int(self.lp.get_min(self.lp[x]))
-    def get_max(self, x):
-        assert x in self.lp.default_variable().keys()
-        return int(self.lp.get_max(self.lp[x]))
-    def extend(self):
-        contr = list(islice(self.infeas.iter_sets(Shi=self.psol),1))
-        if len(contr) == 1:
-            return None
-        sol = list(islice(self.sols.iter_sets(Slo=self.psol),1))
-        if len(sol) == 1:
-            return sol[0][0]
-        #res = ip_to_scipy(self.lp)
-        #res = [{x: res.x[next(iter(self.lp[x].dict().keys()))] for x in self.lp.default_variable().keys()}] if res.success else []
-        #res = list(islice(lp_integer_points(self.lp,fullsol=True),1))
-        from sage.numerical.mip import MIPSolverException
-        try:
-            self.lp.solve()
-            res = [self.lp.get_values(self.lp.default_variable())]
-            self.lp.get_backend()._get_model().freeTransform()
-        except MIPSolverException:
-            res = []
-            self.lp.get_backend()._get_model().freeTransform()
-        if len(res) == 0:
-            rem = list(self.infeas.iter_sets(Slo=self.psol))
-            for r,_ in rem:
-                self.infeas.remove_set(r)
-            self.infeas.add_set(self.psol)
-        else:
-            sol = [(x,int(round(v))) for x,v in res[0].items()]
-            self.sols.add_set(sol)
-            return sol
-        
-                   
