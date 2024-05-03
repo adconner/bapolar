@@ -509,7 +509,7 @@ def search_by_sequence(ba,tmss,Jxi=None,mode='togetherlp'):
                 ltIub.hilbert_series() == ba.target_hilbert_series_td():
             yield Jxi
             return
-        J,S,xi = Jxi
+        J,xi = Jxi
         core = ba.ideal_constant_generators(J)
         mod = ba.zero if core.is_zero() else JDat(ba,core) 
         tms = tuple(sorted([tm for tm in tms if 
@@ -569,7 +569,7 @@ def search_by_sequence(ba,tmss,Jxi=None,mode='togetherlp'):
                                 yield res
             else:
                 raise ValueError('mode invalid')
-    return dfs((ba.R0.ideal(side='twosided'),[ba.R0.one()], 0) if Jxi is None else Jxi,0)
+    return dfs((ba.R0.ideal(side='twosided'),0) if Jxi is None else Jxi,0)
 
 def lp_look_strict_by_deg(ba,deg_bound=2,Jxi=None,mode='individual'):
     tmss = [list(map(tuple,IntegerVectors(k,len(ba.dims)))) for k in range(1,deg_bound+1)]
@@ -1080,178 +1080,157 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                           preset_choices = {}, mod=None, simplify_existing=True, modify_lp = lambda lp: None):
         if mod is None:
             mod = self.zero
-        tms = tuple(tms)
-        tmcs = tuple(tmcs)
+        if Jxi is None:
+            Jxi = (self.R0.ideal(side='twosided'), 0)
+        tms = set(tms)
+        tmcs = set(tmcs)
+        for p in Jxi[0].gens():
+            tm = self.polynomial_tm(p)
+            if tm not in tms:
+                tmcs.add(tm)
+        tms = tuple(sorted(tms))
+        tmcs = tuple(sorted(tmcs))
 
-        complete = len(tms) == 0
-        
         gbbound = max([sum(tm) for tm in tms+tmcs])
         def gb(J):
             return self.bounded_gb(J,gbbound)
         
-        if Jxi is None:
-            Jxi = (self.R0.ideal(side='twosided'), [self.R0.one()], 0)
-        J,S,xi = Jxi
-            
-        def trivially_guaranteed_lms(Jxi):
-            # J,S,xi = Jxi
-            # lts = SetSystem()
-            # for p in J.gens():
-            #     if not p.is_zero() and p.coefficient(self.lm(p)).is_constant():
-            #         lts.add_set([xi for xi,e in self.lm(p,True).
-            #                  exponents()[0].sparse_iter() for _ in range(e)],None)
-                    
-            # ltI = self.contained_leading_term_ideal(Jxi)
-            ltI = self.trivially_contained_leading_term_ideal(Jxi)
-            lts = SetSystem()
-            for m in ltI.gens():
-                if not m.is_zero():
-                    lts.add_set([xi for xi,e in m.exponents()[0].sparse_iter() for _ in range(e)],None)
-                    
-            # if J.ring().ngens() == self.nvarsx:
-            #     for p in J.gens():
-            #         if not p.is_zero():
-            #             lts.add_set([xi for xi,e in p.lm().
-            #                      exponents()[0].sparse_iter() for _ in range(e)],None)
-            # else:
-            #     I,coerce = self.get_param_ideal(J)
-            #     print (I)
-            #     SI = [coerce(s) for s in S]
-            #     lms = []
-            #     for p in J.gens():
-            #         if p.is_zero():
-            #             continue
-            #         It = I + coerce(p.coefficient(self.lm(p)))
-            #         if any(s in It for s in SI):
-            #             lts.add_set([xi for xi,e in self.lm(p,True).
-            #                      exponents()[0].sparse_iter() for _ in range(e)],None)
-            def in_lti(m):
-                return any(True for _ in lts.iter_sets([],[xi 
-                       for xi,e in m.exponents()[0].sparse_iter() for _ in range(e)]))
-            return in_lti
+        xiorig = Jxi[1]
 
+        # opts: 
+        # check lp before gb
+
+        def vktolm(vk):
+            return mod.get_vss(vk[0])[vk[1]][vk[2]].lm()
                         
         lp = copy(mod.get_linear_program(tms,tmcs,
              interval_length_bound=lp_interval_length_bound,precise=precise_lp))
         modify_lp(lp)
         bp = BinaryProgram(lp)
-        unset = set()
-        tmsvks = set((tm,wt,i) for tm in tms for wt,vs in mod.get_vss(tm).items() 
-                     for i in range(len(vs)))
-        params_needed = {vks : vks[2] for vks in tmsvks}
-        num_in = {tm:0 for tm in tms+tmcs}
-        num_out = {tm:0 for tm in tms+tmcs}
-        in_lti = trivially_guaranteed_lms((J,S,xi))
-        for tm in tms+tmcs:
-            for wt,vs in mod.get_vss(tm).items():
-                for i,p in enumerate(vs):
-                    if in_lti(p.lm()):
-                        bp.set_min(p.lm(),1)
-                        num_in[tm] += 1
-                        if tm in tms:
-                            for j in range(i+1,len(vs)):
-                                params_needed[(tm,wt,j)] -= 1
-                    else:
-                        unset.add((tm,wt,i))
-                        
-        if bp.extend() is None:
-            print ("get_ideals_for_tm: no solution to start")
-            return
+        num_in = {tm : 0 for tm in tms+tmcs}
+        num_out = {tm : 0 for tm in tms+tmcs}
         
-        J = gb(J)
-        in_lti = trivially_guaranteed_lms((J,S,xi))
-        sav = []
-        for vk in unset:
-            tm,wt,i = vk
-            vs = mod.get_vss(tm)[wt]
-            p = vs[i].lm()
-            if in_lti(p):
-                sav.append(vk)
-                bp.set_min(p.lm(),1)
-                num_in[tm] += 1
-                if tm in tms:
-                    for j in range(i+1,len(vs)):
-                        params_needed[(tm,wt,j)] -= 1
-        for vk in sav:
-            unset.remove(vk)
-                        
-        if bp.extend() is None:
-            print ("get_ideals_for_tm: no solution to start needed gb")
-            return
-            
+        def bp_set_min(m,v):
+            assert bp.get_min(m) == 1-v
+            bp.set_min(m,v)
+            mtm = self.polynomial_tm(m)
+            if mtm in num_in:
+                if v == 1:
+                    num_in[mtm] += 1
+                else:
+                    num_in[mtm] -= 1
+        def bp_set_max(m,v):
+            assert bp.get_max(m) == 1-v
+            bp.set_max(m,v)
+            mtm = self.polynomial_tm(m)
+            if mtm in num_out:
+                if v == 0:
+                    num_out[mtm] += 1
+                else:
+                    num_out[mtm] -= 1
+        def is_unset(vk):
+            m = vktolm(vk)
+            return bp.get_min(m) == 0 and bp.get_max(m) == 1
+        
+        def fixed_point(Jxi,gb_needed=True):
+            J,yi = Jxi
+            bp_restore = []
+            newrel = True
+            while newrel:
+                newrel = False
+                if gb_needed:
+                    J = gb(J)
+                    gb_needed = False
+                for p in J.gens():
+                    if p.is_zero():
+                        continue
+                    m = self.lm(p,True)
+                    if bp.get_min(m) == 0:
+                        t = p.coefficient(self.lm(p))
+                        if t.is_constant():
+                            bp_set_min(m,1)
+                            bp_restore.append((m,1))
+                            newrel = True
+                        else:
+                            bp_set_min(m,1)
+                            if bp.extend() is None:
+                                bp_set_min(m,0)
+                                bp_set_max(m,0)
+                                bp_restore.append((m,0))
+                                J += t
+                                newrel = True
+                                gb_needed = True
+                            else:
+                                bp_set_min(m,0)
+            if not ((len(J.gens()) == 1 and J.gens()[0] == J.ring().one()) or (bp.extend() is None)):
+                J,_,yi = self.quick_simplify((J,[J.ring().one()],yi),0 if simplify_existing else xiorig)
+                yield (J,yi)
+            for m,hi in bp_restore:
+                if hi == 1:
+                    bp.set_min(m,0)
+                else:
+                    bp.set_max(m,1)
+
+
         from copy import deepcopy
-        vkstart,vkbelowcnt,wkabove = mod.get_poset_info_for_search(
-                tms, tmcs if len(tms) == 0 else ())
+        vkstart,vkbelowcnt,wkabove = mod.get_poset_info_for_search((), (), tms)
         vkstart = deepcopy(vkstart)
         vkbelowcnt = deepcopy(vkbelowcnt)
-        
         processed = [0]
         vstr_width = [0]
         chosen_vks = []
-        def dfs(J,S,xi):
-
-            tss = self.leading_term_coefficients((J,S,xi))
-            no_add_codim_lower_bound = copy(num_out)
-            for vk in unset:
-                v = mod.get_vss(vk[0])[vk[1]][vk[2]]
-                if len(list(islice(tss.iter_sets(emultiset(v)),1))) == 0:
-                    no_add_codim_lower_bound[vk[0]] += 1
-                
-            if all(num_in[tm] == len(mod.get_vs(tm)) - self.tm_target_out(tm) and \
-                           num_out[tm] == self.tm_target_out(tm) for tm in tms) and \
-                       (not complete or all(no_add_codim_lower_bound[tm] >= self.tm_target_out(tm) for tm in tmcs)):
-                yield (J,S,xi)
-                return
-
+        def dfs(Jxi):
             def vkremove(vk,added=None):
-                # print '%sremove1'%(' '*processed[0]),vk
+                # print ('%sremove1'%(' '*processed[0]),vk)
                 vkstart.remove(vk)
                 for wk in wkabove[vk]:
                     vkbelowcnt[wk] -= 1
                     if vkbelowcnt[wk] == 0:
-                        # print '%sadd2'%(' '*processed[0]),wk
+                        # print ('%sadd2'%(' '*processed[0]),wk)
                         vkstart.add(wk)
                         if added is not None:
                             added.append(wk)
                 processed[0] += 1
                 return added
             def vkadd(vk,removed=None):
-                # print '%sadd3'%(' '*processed[0]),vk
+                # print ('%sadd3'%(' '*processed[0]),vk)
                 for wk in wkabove[vk]:
                     if vkbelowcnt[wk] == 0:
-                        # print '%sremove2'%(' '*processed[0]),wk
+                        # print ('%sremove2'%(' '*processed[0]),wk)
                         vkstart.remove(wk)
                         if removed is not None:
                             removed.append(wk)
                     vkbelowcnt[wk] += 1
-                # print '%sadd1'%(' '*processed[0]),vk
+                # print ('%sadd1'%(' '*processed[0]),vk)
                 vkstart.add(vk)
                 processed[0] -= 1
                 return removed
                     
             set_stack = []
-            set_to_process = [vk for vk in vkstart if vk not in unset]
+            set_to_process = [vk for vk in vkstart if not is_unset(vk)]
             while len(set_to_process) > 0:
                 vk = set_to_process.pop()
                 set_stack.append(vk)
                 added = vkremove(vk,[])
                 for wk in added:
-                    if wk not in unset:
+                    if not is_unset(wk):
                         set_to_process.append(wk)
                         
             def heuristic(vk):
                 tm, wt, vi = vk
-                if complete:
-                    return (1 if no_add_codim_lower_bound[vk[0]] >= self.tm_target_out(vk[0]) else 0,
-                            sum(tm), max(tm), 
-                            -len(list(tss.iter_sets(Shi=emultiset(mod.get_vss(tm)[wt][vi])))),
-                            self.tm_dim_tperp(tm)-num_in[tm]-num_out[tm])
-                else:
-                    return (sum(tm), max(tm), self.tm_dim_tperp(tm)-num_in[tm]-num_out[tm],
-                            0 if complete else params_needed.get(vk,0),
-                            -len(list(tss.iter_sets(Shi=emultiset(mod.get_vss(tm)[wt][vi])))))
+                tmlast, wtlast, vilast = chosen_vks[-1] if len(chosen_vks) > 0 else (None, None, None)
+                # return (0 if tm == tmlast else 1, sum(tm), max(tm)
+                return (sum(tm), max(tm), self.tm_dim_tperp(tm)-num_in[tm]-num_out[tm], 
+                        0 if tm == tmlast and wt == wtlast else 1, sum(wt))
                 
-            vk = min(vkstart,key=heuristic)
+            try:
+                vk = min(vkstart,key=heuristic)
+            except ValueError:
+                while len(set_stack) > 0:
+                    vk = set_stack.pop()
+                    vkadd(vk)
+                yield Jxi
+                return
             
             set_stack.append(vk)
             vkremove(vk)
@@ -1266,155 +1245,63 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 except StopIteration:
                     var_lp_val = 0.5
                 
-                assert vk in unset
-                assert bp.get_min(v.lm()) == 0
-                assert bp.get_max(v.lm()) == 1
+                assert is_unset(vk)
                 
                 def printstep(extra=''):
                     remhi = len(mod.get_vs(tm)) - self.tm_target_out(tm) - num_in[tm]
+                    if remhi < 0:
+                        cur = [v  for v in mod.get_vs(tm) if bp.get_min(v.lm()) == 1]
+                        embed()
+                        raise ValueError()
                     remlo = self.tm_target_out(tm) - num_out[tm]
                     vstr = str(v.lm())
                     vstr_width[0] = max(vstr_width[0],len(vstr))
-                    print ('%s%s %s xi=%d %.3f %s%d %d %s' % ('complete ' if complete else '',
-                               str(tm),vstr.rjust(vstr_width[0]),xi,var_lp_val,
-                                  ' '*len(chosen_vks),remhi,remlo,extra))
-                # printstep('all')
-                
-                ts = [t for _,t in tss.iter_sets(Shi=emultiset(mod.get_vss(tm)[wt][vi]))]
-                if len(ts) > 0:
-                    print ('ts',ts)
-                    
-                def getJs(J,S,ts,leave_in):
-                    def dfscur(I,S,ts):
-                        if len(ts) == 0:
-                            yield (I,S,False)
-                            return
-                        t = ts[0]
-                        if t in I:
-                            for IS in dfscur(I,S,ts[1:]):
-                                yield IS
-                            return
-                        for Icur in (I+[t]).minimal_associated_primes():
-                            if any(s in Icur for s in S):
-                                continue
-                            for IS in dfscur(Icur,S,ts[1:]):
-                                yield IS
-                        yield (I,S+[t],True)
-                    if J.ring().ngens() == self.nvarsx:
-                        # no parameters
-                        yield (J,S,len(ts) > 0)
-                        return
-                    I,coerce = self.get_param_ideal(J)
-                    S = list(map(coerce,S))
-                    ts = list(map(coerce,ts))
-                    ts.sort(key=lambda t: t.degree())
-                    for I,S,curfull in dfscur(I,S,ts) if leave_in else \
-                            ((Ic,S,False) for Ic in (I+ts).minimal_associated_primes() 
-                             if not any(s in Ic for s in S)):
-                        JI = gb(J+[self.lift_param(J.ring(),t) for t in I.gens()])
-                        yield (JI, [self.lift_param(J.ring(),s) for s in S], curfull)
-                        
-                def rec(J,S,xi,curfull):
-                    in_lti = trivially_guaranteed_lms((J,S,xi))
-                    if not complete: 
-                        if not curfull and in_lti(v.lm()):
-                            # If killing ts causes a more leading term of
-                            # another generator to zero out leaving an
-                            # intermediate term to lead, which is us. This
-                            # doesn't catch the case where it remains
-                            # generically present, but still may only over
-                            # approximate the resulting ideals
-                            return
-                        if any(in_lti(w.lm()) for w in vs[:vi] if bp.get_max(w.lm()) == 0):
-                            # Check similarly as above for smaller monomials of
-                            # this same weight we have previously excluded (common case)
-                            return
-                    sav = set()
-                    for wk in unset:
-                        ws = mod.get_vss(wk[0])[wk[1]]
-                        p = ws[wk[2]].lm()
-                        if in_lti(p) or (curfull and p == v.lm()):
-                        # if in_lti(p):
-                            bp.set_min(p,1)
-                            sav.add(wk)
-                            num_in[wk[0]] += 1
-                            if wk[0] in tms:
-                                for j in range(wk[2]+1,len(ws)):
-                                    params_needed[(wk[0],wk[1],j)] -= 1
-                                    assert params_needed[(wk[0],wk[1],j)] >= 0
-                    for wk in sav:
-                        unset.remove(wk)
-                    if not curfull:
-                        bp.set_max(v.lm(),0)
-                        unset.remove(vk)
-                        num_out[tm] += 1
-                    assert bp.get_min(v.lm()) == (1 if curfull else 0)
-                    assert bp.get_max(v.lm()) == (1 if curfull else 0)
-                    if bp.extend() is not None:
-                        # if vk in tmsvks:
-                        printstep()
-                        for JSxi in dfs(J,S,xi):
-                            yield JSxi
-                    if not curfull:
-                        bp.set_max(v.lm(),1)
-                        unset.add(vk)
-                        num_out[tm] -= 1
-                    for wk in sav:
-                        ws = mod.get_vss(wk[0])[wk[1]]
-                        bp.set_min(ws[wk[2]].lm(),0)
-                        unset.add(wk)
-                        num_in[wk[0]] -= 1
-                        if wk[0] in tms:
-                            for j in range(wk[2]+1,len(ws)):
-                                params_needed[(wk[0],wk[1],j)] += 1
-                                    
-                def addcur(J,S,xi):
+                    print ('%s %s xi=%d %.2f %s%d %d %s' % (str(tm),vstr.rjust(vstr_width[0]),
+                                                Jxi[1],var_lp_val,' '*len(chosen_vks),remhi,remlo,extra))
+                printstep()
+
+                def plus_cur(Jxi):
+                    J,xi = Jxi
                     cur_params = J.ring().ngens() - self.nvarsx
-                    yi = xi + params_needed[vk]
+                    yi = xi + len([w for w in vs[:vi] if bp.get_min(w.lm()) == 0])
                     if yi > cur_params:
                         R = self.get_ring(yi)
                         J = R.ideal([liftR(p,R) for p in J.gens()])
-                        S = [liftR(s,R) for s in S]
                     R = J.ring()
                     p = liftR(v,R) + R.sum([liftR(w,R)*R.gen(self.nvarsx+xi+wi)
-                                for wi,w in enumerate(w for w in mod.get_vss(tm)[wt][:vi] if bp.get_min(w.lm()) == 0)])
-                    for JSxi in rec(gb(J+p),S,yi,True):
-                        yield JSxi
-                
-                if var_lp_val > 0.5 and vk in tmsvks and preset_choices.get(v.lm(),True):
-                    for JSxi in addcur(J,S,xi):
-                        yield JSxi
+                                for wi,w in enumerate(w for w in vs[:vi] if bp.get_min(w.lm()) == 0)])
+                    return (J+p,yi)
+                                    
+                if var_lp_val > 0.5 and preset_choices.get(v.lm(),True):
+                    bp_set_min(v.lm(),1)
+                    for Jxip in fixed_point(plus_cur(Jxi)):
+                        for res in dfs(Jxip):
+                            yield res
+                    bp_set_min(v.lm(),0)
                         
-                for Jt,St,curfull in getJs(J,S,ts,leave_in=vk not in tmsvks):
-                    if vk not in tmsvks or preset_choices.get(v.lm(),curfull) == curfull:
-                        for JSxi in rec(Jt,St,xi,curfull):
-                            yield JSxi
+                if preset_choices.get(v.lm(),False) == False:
+                    bp_set_max(v.lm(),0)
+                    for Jxip in fixed_point(Jxi):
+                        for res in dfs(Jxip):
+                            yield res
+                    bp_set_max(v.lm(),1)
                         
-                if var_lp_val <= 0.5 and vk in tmsvks and preset_choices.get(v.lm(),True):
-                    for JSxi in addcur(J,S,xi):
-                        yield JSxi
+                if var_lp_val <= 0.5 and preset_choices.get(v.lm(),True):
+                    bp_set_min(v.lm(),1)
+                    for Jxip in fixed_point(plus_cur(Jxi)):
+                        for res in dfs(Jxip):
+                            yield res
+                    bp_set_min(v.lm(),0)
                         
             finally:
                 chosen_vks.pop()
                 while len(set_stack) > 0:
                     vk = set_stack.pop()
                     vkadd(vk)
-                        
-        num = 0
-        for Jxi in dfs(J,S,xi):
-            if Jxi[-1] == 0 or complete:
-                yield self.quick_simplify(Jxi,0 if simplify_existing else xi)
-            else:
-                for Kxi in self.get_ideals_for_tm((),tms+tmcs,Jxi,lp_interval_length_bound=lp_interval_length_bound,
-                                                  precise_lp=precise_lp,simplify_existing=simplify_existing,mod=mod):
-                    yield Kxi
-            num += 1
-        if num == 0:
-            print ("get_ideals_for_tm: no solution found")
-            # ttt.append((J,S,xi,tms,1))
-#            if len(tms) > 0:
-#                write_JS(J,S,'bapolarsols/mmult2nosol/nosol%d_%s.txt'% (cnt[0],str(tms[0])))
-#                cnt[0] += 1
+
+        for Jxif in fixed_point(Jxi):
+            for res in dfs(Jxif):
+                yield res
 
     def tm_dim(self, tm):
         return prod(binomial(d+t-1,t) for t,d in zip(tm,self.dims))
@@ -1570,7 +1457,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         return R.ideal(ltIlb)
 
     def codimension_bounds(self,Jxi,total_degree):
-        J,S,xi = Jxi
+        J,xi = Jxi
         Jxi = (self.bounded_gb(J,total_degree), S, xi)
         ltIlb = self.contained_leading_term_ideal(Jxi)
         ltIub = self.containing_leading_term_ideal(Jxi)
@@ -1708,10 +1595,10 @@ class JDat:
         P = self.get_poset((),(tm,))
         return [vss[wt][i] for _,wt,i in P.linear_extension()]
     
-    def get_poset(self, tms, tms_high_to_low):
+    def get_poset(self, tms=(), tms_high_to_low=(), tms_low_to_high=()):
         vsix = {}
         lmtov = {}
-        tms = tms + tms_high_to_low
+        tms = tms + tms_high_to_low + tms_low_to_high
         g = DiGraph()
         for tm in tms:
             for wt,vs in self.get_vss(tm).items():
@@ -1738,6 +1625,10 @@ class JDat:
             for vs in self.get_vss(tm).values():
                 for v,w in zip(vs,vs[1:]):
                     g.add_edge(vsix[w],vsix[v])
+        for tm in tms_low_to_high:
+            for vs in self.get_vss(tm).values():
+                for v,w in zip(vs,vs[1:]):
+                    g.add_edge(vsix[v],vsix[w])
                             
         tmposet = Poset((tms,lambda a,b: all(i<=j for i,j in zip(a,b))))
         for tm,tmr in tmposet.cover_relations():
@@ -1754,8 +1645,8 @@ class JDat:
                     
         return Poset(g)
     
-    def get_poset_info_for_search(self, tms, tms_high_to_low):
-        P = self.get_poset(tms,tms_high_to_low)
+    def get_poset_info_for_search(self, tms, tms_high_to_low = (), tms_low_to_high = ()):
+        P = self.get_poset(tms,tms_high_to_low,tms_low_to_high)
         wkabove = {wk : [] for wk in P}
         vkbelowcnt = {wk : 0 for wk in P}
         for vk,wk in P.cover_relations():
@@ -1792,19 +1683,18 @@ class JDat:
             return B.solve_right(A)
             
         Q = DiGraph(multiedges=True)
-        for tm in tms:
-            for tmr in tms+tmcs:
-                if tm == tmr or not all(i<=j for i,j in zip(tm,tmr)):
-                    continue
-                for wt,vs in self.get_vss(tm).items():
-                    for m in ba.all_monomials(tuple(map(sub,tmr,tm))):
-                        vms = [liftR(self.J.reduce(liftR(v*m,self.R)),ba.R0)
-                                for v in vs]
-                        if all(vm.is_zero() for vm in vms):
-                            continue
-                        wtup = ba.polynomial_weight(next(vm for vm in vms if not vm.is_zero()))
-                        ws = self.get_vss(tmr)[wtup]
-                        Q.add_edge((tm,wt),(tmr,wtup),get_matrix(ws,vms))
+        for tm,tmr in product(tms+tmcs,tms+tmcs):
+            if tm == tmr or not all(i<=j for i,j in zip(tm,tmr)) or (tm not in tms and tmr not in tms):
+                continue
+            for wt,vs in self.get_vss(tm).items():
+                for m in ba.all_monomials(tuple(map(sub,tmr,tm))):
+                    vms = [liftR(self.J.reduce(liftR(v*m,self.R)),ba.R0)
+                            for v in vs]
+                    if all(vm.is_zero() for vm in vms):
+                        continue
+                    wtup = ba.polynomial_weight(next(vm for vm in vms if not vm.is_zero()))
+                    ws = self.get_vss(tmr)[wtup]
+                    Q.add_edge((tm,wt),(tmr,wtup),get_matrix(ws,vms))
         for tm in tms:
             for wt,vs in self.get_vss(tm).items():
                 for x in ba.R0.gens()[ba.nvars:]:
