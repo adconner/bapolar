@@ -169,6 +169,52 @@ class BinaryProgram:
             self.sols.add_set(sol)
             return sol
         
+class BinaryProgramSCIPReopt:
+    def __init__(self,lp):
+        self.vars = { x : next(iter(lp[x].dict().keys())) for x in lp.default_variable().keys() }
+        self.M = copy(lp).get_backend()._get_model()
+        self.M.enableReoptimization()
+        self.psol = set()
+    def set_min(self, x, v):
+        assert x in self.vars
+        if v == 1:
+            assert (x,1) not in self.psol
+            assert (x,0) not in self.psol
+            self.psol.add((x,1))
+        elif v == 0:
+            self.psol.remove((x,1))
+        else:
+            raise ValueError("set_min: v needs to be 0 or 1")
+    def set_max(self, x, v):
+        assert x in self.vars
+        if v == 0:
+            assert (x,0) not in self.psol
+            assert (x,1) not in self.psol
+            self.psol.add((x,0))
+        elif v == 1:
+            self.psol.remove((x,0))
+        else:
+            raise ValueError("set_max: v needs to be 0 or 1")
+    def get_min(self, x):
+        assert x in self.vars
+        return 1 if (x,1) in self.psol else 0
+    def get_max(self, x):
+        assert x in self.vars
+        return 0 if (x,0) in self.psol else 1
+    def extend(self):
+        from pyscipopt import quicksum
+        def getVar(x):
+            return self.M.getVars()[self.vars[x]]
+        self.M.freeReoptSolve()
+        self.M.chgReoptObjective(quicksum( getVar(x) if v == 1 else -getVar(x) for x,v in self.psol),"maximize")
+        target = len([_ for _,v in self.psol if v==1])
+        self.M.hideOutput(False)
+        self.M.optimize()
+        if self.M.getStatus() != 'optimal' or int(self.M.getObjVal()) < target:
+            return
+        else:
+            return { x : int(self.M.getVal(self.M.getVars()[xi])) for x, xi in self.vars.items() }
+        
 # function to enumerate integer points of a polytope defined by input linear program
 # (sage MixedIntegerLinearProgram). If xs, a subset of variables, is provided,
 # this problem is solved for the projection of the polytope away from the

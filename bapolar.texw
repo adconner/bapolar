@@ -1100,7 +1100,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         lp = copy(mod.get_linear_program(tms,tmcs,
              interval_length_bound=lp_interval_length_bound,precise=precise_lp))
         modify_lp(lp)
-        bp = BinaryProgram(lp)
+        bp = BinaryProgramSCIPReopt(lp)
+        # bp = BinaryProgram(lp)
         num_in = {tm : 0 for tm in tms+tmcs}
         num_out = {tm : 0 for tm in tms+tmcs}
             
@@ -1246,7 +1247,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 v = vs[vi]
                 
                 try:
-                    var_lp_val = next(v for x,v in bp.extend() if x == mod.get_vss(tm)[wt][vi].lm())
+                    var_lp_val = next(v for x,v in bp.extend().items() if x == mod.get_vss(tm)[wt][vi].lm())
                 except StopIteration:
                     var_lp_val = 0.5
                 
