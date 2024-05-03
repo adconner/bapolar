@@ -212,6 +212,7 @@ class BinaryProgram:
         self.sols = SetSystem()
         self.psol = set()
     def set_min(self, x, v):
+        assert x in self.lp.default_variable().keys()
         v = int(v)
         self.lp.set_min(self.lp[x], v)
         if v == 1:
@@ -220,6 +221,7 @@ class BinaryProgram:
         else:
             self.psol.remove((x,1))
     def set_max(self, x, v):
+        assert x in self.lp.default_variable().keys()
         v = int(v)
         self.lp.set_max(self.lp[x], v)
         if v == 0:
@@ -228,8 +230,10 @@ class BinaryProgram:
         else:
             self.psol.remove((x,0))
     def get_min(self, x):
+        assert x in self.lp.default_variable().keys()
         return int(self.lp.get_min(self.lp[x]))
     def get_max(self, x):
+        assert x in self.lp.default_variable().keys()
         return int(self.lp.get_max(self.lp[x]))
     def extend(self):
         contr = list(islice(self.infeas.iter_sets(Shi=self.psol),1))

@@ -1109,9 +1109,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         bp = BinaryProgram(lp)
         num_in = {tm : 0 for tm in tms+tmcs}
         num_out = {tm : 0 for tm in tms+tmcs}
-        
+            
         def bp_set_min(m,v):
-            assert bp.get_min(m) == 1-v
             bp.set_min(m,v)
             mtm = self.polynomial_tm(m)
             if mtm in num_in:
@@ -1120,7 +1119,6 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 else:
                     num_in[mtm] -= 1
         def bp_set_max(m,v):
-            assert bp.get_max(m) == 1-v
             bp.set_max(m,v)
             mtm = self.polynomial_tm(m)
             if mtm in num_out:
@@ -1249,10 +1247,6 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 
                 def printstep(extra=''):
                     remhi = len(mod.get_vs(tm)) - self.tm_target_out(tm) - num_in[tm]
-                    if remhi < 0:
-                        cur = [v  for v in mod.get_vs(tm) if bp.get_min(v.lm()) == 1]
-                        embed()
-                        raise ValueError()
                     remlo = self.tm_target_out(tm) - num_out[tm]
                     vstr = str(v.lm())
                     vstr_width[0] = max(vstr_width[0],len(vstr))

@@ -55,7 +55,7 @@ def get_flag_inequalities(ms,interval_length_bound=oo):
                     col = M.column(jx)
                     pivot_row = next(i for i,e in enumerate(col) if e != 0)
                     col /= col[pivot_row]
-                    Ms_next = deepcopy(Ms)
+                    Ms_next = [copy(M) for M in Ms]
                     for mi,M in enumerate(Ms_next):
                         Ms_next[mi] -= col.column() * M.row(pivot_row).row()
                     for full_cols in dfs(Ms_next):
