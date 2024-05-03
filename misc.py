@@ -175,6 +175,8 @@ class BinaryProgramSCIPReopt:
         self.M = copy(lp).get_backend()._get_model()
         self.M.enableReoptimization()
         self.psol = set()
+        self.infeas = SetSystem()
+        self.sols = SetSystem()
     def set_min(self, x, v):
         assert x in self.vars
         if v == 1:
@@ -202,6 +204,12 @@ class BinaryProgramSCIPReopt:
         assert x in self.vars
         return 0 if (x,0) in self.psol else 1
     def extend(self):
+        contr = list(islice(self.infeas.iter_sets(Shi=self.psol),1))
+        if len(contr) == 1:
+            return None
+        sol = list(islice(self.sols.iter_sets(Slo=self.psol),1))
+        if len(sol) == 1:
+            return sol[0][0]
         from pyscipopt import quicksum
         def getVar(x):
             return self.M.getVars()[self.vars[x]]
@@ -211,9 +219,15 @@ class BinaryProgramSCIPReopt:
         # self.M.hideOutput(False)
         self.M.optimize()
         if self.M.getStatus() != 'optimal' or int(self.M.getObjVal()) < target:
+            rem = list(self.infeas.iter_sets(Slo=self.psol))
+            for r,_ in rem:
+                self.infeas.remove_set(r)
+            self.infeas.add_set(self.psol)
             return
         else:
-            return { x : int(self.M.getVal(self.M.getVars()[xi])) for x, xi in self.vars.items() }
+            sol = [ (x, int(self.M.getVal(self.M.getVars()[xi]))) for x, xi in self.vars.items() ]
+            self.sols.add_set(sol)
+            return sol
         
 # function to enumerate integer points of a polytope defined by input linear program
 # (sage MixedIntegerLinearProgram). If xs, a subset of variables, is provided,
