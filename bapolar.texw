@@ -1081,22 +1081,13 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         if mod is None:
             mod = self.zero
         if Jxi is None:
-            Jxi = (self.R0.ideal(side='twosided'), 0)
+            Jxi = (self.R0.ideal([liftR(p,self.R0) for p in mod.J.gens()],side='twosided'), 0)
         tms = tuple(tms)
         tmcs = tuple(tmcs)
-        # tms = set(tms)
-        # tmcs = set(tmcs)
-        # for p in Jxi[0].gens():
-        #     tm = self.polynomial_tm(p)
-        #     if tm not in tms:
-        #         tmcs.add(tm)
-        # tms = tuple(sorted(tms))
-        # tmcs = tuple(sorted(tmcs))
 
         gbbound = max([sum(tm) for tm in tms+tmcs])
         def gb(J):
-            return J.twostd()
-            # return self.bounded_gb(J,gbbound)
+            return self.bounded_gb(J,gbbound)
         
         xiorig = Jxi[1]
 
@@ -1350,17 +1341,12 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     zip((k for e in y for k in e),R.gens()) if k>0)
 
     def bounded_gb(self, J, d):
-        from sage.libs.singular.option import opt
+        # return J.twostd()
+        from sage.libs.singular.option import opt,opt_ctx
         sav = [p for p in J.gens() if p.degree() >= 100*(d+1)]
-        opt['deg_bound'] = 100*(d+1)-1
-        while True:
-            try:
-                res = J.ring().ideal(J.twostd().gens()+tuple(sav),side='twosided')
-                break
-            except SignalError:
-                print("!!!!!!!!!!!!!!!!!!!  SINGULAR SEG FAULT, retrying...")
-                pass
-        opt['deg_bound'] = 0
+        with opt_ctx:
+            opt['deg_bound'] = 100*(d+1)-1
+            return J.ring().ideal(J.twostd().gens()+tuple(sav),side='twosided')
         return res
                 
     def sum_ideals(self,Jxis,xi_common=0):
