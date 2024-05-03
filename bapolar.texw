@@ -1133,6 +1133,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         
         def fixed_point(Jxi,gb_needed=True):
             J,yi = Jxi
+            if ((len(J.gens()) == 1 and J.gens()[0] == J.ring().one()) or (bp.extend() is None)):
+                return
             bp_restore = []
             newrel = True
             while newrel:
