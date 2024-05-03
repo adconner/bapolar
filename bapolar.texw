@@ -1143,7 +1143,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     if p.is_zero():
                         continue
                     m = self.lm(p,True)
-                    if liftR(m,mod.R) in mod.ltJ:
+                    if m.is_one() or liftR(m,mod.R) in mod.ltJ:
                         continue
                     if bp.get_min(m) == 0:
                         t = p.coefficient(self.lm(p))
