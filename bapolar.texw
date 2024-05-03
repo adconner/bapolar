@@ -1678,9 +1678,11 @@ class JDat:
             return B.solve_right(A)
             
         Q = DiGraph(multiedges=True)
-        for tm,tmr in product(tms+tmcs,tms+tmcs):
-            if tm == tmr or not all(i<=j for i,j in zip(tm,tmr)) or (tm not in tms and tmr not in tms):
-                continue
+        P = Poset((tms+tmcs,lambda a,b: all(i<=j for i,j in zip(a,b))))
+        for tm,tmr in P.cover_relations():
+        # for tm,tmr in product(tms+tmcs,tms+tmcs):
+            # if tm == tmr or not all(i<=j for i,j in zip(tm,tmr)) or (tm not in tms and tmr not in tms):
+            #     continue
             for wt,vs in self.get_vss(tm).items():
                 for m in ba.all_monomials(tuple(map(sub,tmr,tm))):
                     vms = [liftR(self.J.reduce(liftR(v*m,self.R)),ba.R0)
