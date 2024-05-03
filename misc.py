@@ -217,6 +217,7 @@ class BinaryProgram:
         self.lp.set_min(self.lp[x], v)
         if v == 1:
             assert (x,1) not in self.psol
+            assert (x,0) not in self.psol
             self.psol.add((x,1))
         else:
             self.psol.remove((x,1))
@@ -226,6 +227,7 @@ class BinaryProgram:
         self.lp.set_max(self.lp[x], v)
         if v == 0:
             assert (x,0) not in self.psol
+            assert (x,1) not in self.psol
             self.psol.add((x,0))
         else:
             self.psol.remove((x,0))
