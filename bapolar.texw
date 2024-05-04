@@ -525,7 +525,7 @@ def search_by_sequence(ba,tmss,Jxi=None,mode='togetherlp'):
                              for tma in IntegerVectors(k,len(ba.dims)) ])))
         if together:
             for Jxiup in ba.get_ideals_for_tm(tms, tmcs, Jxi, mod=mod, 
-                                              lp_interval_length_bound=10 if len(J.gens()) == 0 else 4):
+                                              lp_interval_length_bound=4 if len(J.gens()) == 0 else 4):
                 for res in dfs(Jxiup,tmsi+1):
                     yield res
         else:
@@ -1084,6 +1084,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             Jxi = (self.R0.ideal([liftR(p,self.R0) for p in mod.J.gens()],side='twosided'), 0)
         tms = tuple(tms)
         tmcs = tuple(tmcs)
+        tmsall = set(tms+tmcs)
 
         gbbound = max([sum(tm) for tm in tms+tmcs])
         def gb(J):
@@ -1102,25 +1103,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         modify_lp(lp)
         bp = BinaryProgramSCIPReopt(lp)
         # bp = BinaryProgram(lp)
-        num_in = {tm : 0 for tm in tms+tmcs}
-        num_out = {tm : 0 for tm in tms+tmcs}
             
-        def bp_set_min(m,v):
-            bp.set_min(m,v)
-            mtm = self.polynomial_tm(m)
-            if mtm in num_in:
-                if v == 1:
-                    num_in[mtm] += 1
-                else:
-                    num_in[mtm] -= 1
-        def bp_set_max(m,v):
-            bp.set_max(m,v)
-            mtm = self.polynomial_tm(m)
-            if mtm in num_out:
-                if v == 0:
-                    num_out[mtm] += 1
-                else:
-                    num_out[mtm] -= 1
         def is_unset(vk):
             m = vktolm(vk)
             return bp.get_min(m) == 0 and bp.get_max(m) == 1
@@ -1129,7 +1112,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         for tm in tms+tmcs:
             for v in mod.get_vs(tm):
                 if any(t.is_constant() for _,t in tss.iter_sets(Shi=emultiset(v.lm()))):
-                    bp_set_min(v.lm(),1)
+                    bp.set_min(v.lm(),1)
         
         def fixed_point(Jxi,gb_needed=True):
             J,yi = Jxi
@@ -1155,28 +1138,28 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                             newrel = True
                             gb_needed = True
                         elif t.is_constant():
-                            bp_set_min(m,1)
+                            bp.set_min(m,1)
                             bp_restore.append((m,1))
                             newrel = True
                         else:
-                            bp_set_min(m,1)
+                            bp.set_min(m,1)
                             if bp.extend() is None:
-                                bp_set_min(m,0)
-                                bp_set_max(m,0)
+                                bp.set_min(m,0)
+                                bp.set_max(m,0)
                                 bp_restore.append((m,0))
                                 J += t
                                 newrel = True
                                 gb_needed = True
                             else:
-                                bp_set_min(m,0)
+                                bp.set_min(m,0)
             if not ((len(J.gens()) == 1 and J.gens()[0] == J.ring().one()) or (bp.extend() is None)):
                 J,_,yi = self.quick_simplify((J,[J.ring().one()],yi),0 if simplify_existing else xiorig)
                 yield (J,yi)
             for m,hi in bp_restore:
                 if hi == 1:
-                    bp_set_min(m,0)
+                    bp.set_min(m,0)
                 else:
-                    bp_set_max(m,1)
+                    bp.set_max(m,1)
 
 
         from copy import deepcopy
@@ -1222,6 +1205,9 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 for wk in added:
                     if not is_unset(wk):
                         set_to_process.append(wk)
+                        
+            num_in = { tm : len([None for v in mod.get_vs(tm) if bp.get_min(v.lm()) == 1 ]) for tm in tmsall}
+            num_out = { tm : len([None for v in mod.get_vs(tm) if bp.get_max(v.lm()) == 0 ]) for tm in tmsall}
                         
             def heuristic(vk):
                 tm, wt, vi = vk
@@ -1276,25 +1262,25 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     return (J+p,yi)
                                     
                 if var_lp_val > 0.5 and preset_choices.get(v.lm(),True):
-                    bp_set_min(v.lm(),1)
+                    bp.set_min(v.lm(),1)
                     for Jxip in fixed_point(plus_cur(Jxi)):
                         for res in dfs(Jxip):
                             yield res
-                    bp_set_min(v.lm(),0)
+                    bp.set_min(v.lm(),0)
                         
                 if preset_choices.get(v.lm(),False) == False:
-                    bp_set_max(v.lm(),0)
+                    bp.set_max(v.lm(),0)
                     for Jxip in fixed_point(Jxi,False):
                         for res in dfs(Jxip):
                             yield res
-                    bp_set_max(v.lm(),1)
+                    bp.set_max(v.lm(),1)
                         
                 if var_lp_val <= 0.5 and preset_choices.get(v.lm(),True):
-                    bp_set_min(v.lm(),1)
+                    bp.set_min(v.lm(),1)
                     for Jxip in fixed_point(plus_cur(Jxi)):
                         for res in dfs(Jxip):
                             yield res
-                    bp_set_min(v.lm(),0)
+                    bp.set_min(v.lm(),0)
                         
             finally:
                 chosen_vks.pop()
