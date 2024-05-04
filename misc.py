@@ -164,8 +164,8 @@ class BinaryProgram:
             for r,_ in rem:
                 self.infeas.remove_set(r)
             self.infeas.add_set(self.psol)
-            self.lp.add_constraint( self.lp.sum(self.lp[x] if v==1 else 1-self.lp[x] for x,v in self.psol) 
-                                   <= len(self.psol) - 1 )
+            # self.lp.add_constraint( self.lp.sum(self.lp[x] if v==1 else 1-self.lp[x] for x,v in self.psol) 
+            #                        <= len(self.psol) - 1 )
         else:
             sol = [(x,int(round(v))) for x,v in res[0].items()]
             self.sols.add_set(sol)
