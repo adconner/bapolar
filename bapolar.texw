@@ -1146,30 +1146,29 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     if p.is_zero():
                         continue
                     m = self.lm(p,True)
-                    if m.is_one() or liftR(m,mod.R) in mod.ltJ or self.polynomial_tm(m) not in num_in:
+                    if m.is_one() or liftR(m,mod.R) in mod.ltJ or self.polynomial_tm(m) not in tmsall:
                         continue
                     if bp.get_min(m) == 0:
                         t = p.coefficient(self.lm(p))
-                        if t.is_constant():
+                        if bp.get_max(m) == 0:
+                            J += t
+                            newrel = True
+                            gb_needed = True
+                        elif t.is_constant():
                             bp_set_min(m,1)
                             bp_restore.append((m,1))
                             newrel = True
                         else:
-                            if bp.get_max(m) == 0:
+                            bp_set_min(m,1)
+                            if bp.extend() is None:
+                                bp_set_min(m,0)
+                                bp_set_max(m,0)
+                                bp_restore.append((m,0))
                                 J += t
                                 newrel = True
                                 gb_needed = True
                             else:
-                                bp_set_min(m,1)
-                                if bp.extend() is None:
-                                    bp_set_min(m,0)
-                                    bp_set_max(m,0)
-                                    bp_restore.append((m,0))
-                                    J += t
-                                    newrel = True
-                                    gb_needed = True
-                                else:
-                                    bp_set_min(m,0)
+                                bp_set_min(m,0)
             if not ((len(J.gens()) == 1 and J.gens()[0] == J.ring().one()) or (bp.extend() is None)):
                 J,_,yi = self.quick_simplify((J,[J.ring().one()],yi),0 if simplify_existing else xiorig)
                 yield (J,yi)
