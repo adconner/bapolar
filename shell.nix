@@ -122,6 +122,66 @@ let
         ];
       };
 
+  roundingsat = pkgs.stdenv.mkDerivation {
+    pname = "RoundingSat";
+    version = "c548e1098a81d1f57dfc31560208034253d174c1";
+    src = pkgs.fetchFromGitLab {
+      owner = "MIAOresearch";
+      repo = "software/roundingsat";
+      rev = "c548e1098a81d1f57dfc31560208034253d174c1";
+      hash = "sha256-UMbUtizvoly/nYdNgDUuoOlkqvSpDHQzbT7Np+jiEKs=";
+    };
+    #cmakeFlags = [ "-Dsoplex=ON -Dsoplex_pkg=${pkgs.fetchFromGitHub {
+    #  owner = "scipopt";
+    #  repo = "soplex";
+    #  rev = "release-700";
+    #  hash = "sha256-biy69IjqVncvdPhYP83odiDb+1AO0NOMxe/dDEetuJE=";
+    #}}" ];
+    postPatch = let soplex_tarball = pkgs.fetchurl {
+      url = "https://soplex.zib.de/download/release/soplex-5.0.1.tgz";
+      hash = "sha256-ksCEmxp6HyfKPm9KYgbcFDX+pfqKgrfS8hrZb3xiwQw=";
+    }; in "cp ${soplex_tarball} soplex-5.0.1.tgz";
+    cmakeFlags = [ "-Dsoplex=ON" ];
+    nativeBuildInputs = with pkgs; [ 
+      cmake 
+    ];
+    buildInputs = with pkgs; [
+      boost
+      blas
+      lapack
+    ];
+  };
+  
+  exact = pkgs.stdenv.mkDerivation {
+  pname = "Exact";
+  version = "v1.2.1";
+  src = pkgs.fetchFromGitLab {
+    owner = "JoD";
+    repo = "exact";
+    rev = "v1.2.1";
+    hash = "sha256-g+npAvQFl4dQ/yEwXBP3nRxnCh41Tarh6LdnhgaFlF8=";
+  };
+  postPatch = "echo \"target_link_libraries(Exact gmp mpfr)\" >> CMakeLists.txt";
+  cmakeFlags = [ "-Dcoinutils=ON" "-Dsoplex=ON" "-Dsoplex_build=${soplex}" ];
+  nativeBuildInputs = with pkgs; [ 
+    cmake 
+  ];
+  buildInputs = with pkgs; [
+    boost
+    coin-utils
+    soplex
+    gmp
+    #tbb
+    blas
+    lapack
+    ##papilo
+    zlib
+    bzip2
+    mpfr
+  ];
+};
+
+
 in 
   pkgs.mkShell {
     buildInputs = with pkgs; [
@@ -134,6 +194,8 @@ in
       frobby
       scip
       pyscipopt
+      roundingsat
+      exact
     ];
 }
 		
