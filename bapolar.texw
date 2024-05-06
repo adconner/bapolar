@@ -2009,6 +2009,85 @@ class JDat:
         #             lp.add_constraint(lp.sum(lp[xs[i].lm()] for i,_ in bad.exponents()[0].sparse_iter()) <= bad.degree()-1)
                     
         return lp
+    
+    def get_quiver_representation_with_preserved_subspaces(self,tms,tmcs=()):
+        queue = []
+        Q = DiGraph()
+        def queue_add(v,M):
+            print(M)
+            assert M.degree() == len(self.get_vss(v[0])[v[1]])
+            if M not in Q.get_vertex(v):
+                queue.append((v,M))
+        for v in self.get_quiver_representation(tms,tmcs).vertices(sort=False):
+            Q.add_vertex(v)
+            Q.set_vertex(v, set())
+            dim = len(self.get_vss(v[0])[v[1]])
+            queue_add(v,VectorSpace(self.ba.F,dim).subspace(identity_matrix(self.ba.F,dim)))
+            queue_add(v,VectorSpace(self.ba.F,dim).zero_subspace())
+        for v,w,f in self.get_quiver_representation(tms,tmcs).edges(sort=False):
+            Q.add_edge(v,w,linear_transformation(f,side="right"))
+        while queue:
+            v,M = queue.pop()
+            for N in Q.get_vertex(v):
+                queue_add(v,M.intersection(N))
+                queue_add(v,M + N)
+            Q.get_vertex(v).add(M)
+            for _,w,f in Q.outgoing_edges(v):
+                queue_add(w,f(M))
+            for w,_,f in Q.incoming_edges(v):
+                queue_add(w,f.inverse_image(M))
+        return Q
+    
+    def get_linear_program_preserved_subspaces(self,tms,tmcs=()):
+        Q = self.get_quiver_representation_with_preserved_subspaces(tms,tmcs)
+        lp = MixedIntegerLinearProgram(solver='SCIP')
+        lp.set_integer(lp.default_variable())
+        lp.set_min(lp.default_variable(),0)
+        def get_var(v,s):
+            if s.dimension() > 0:
+                if (v,s) not in lp.default_variable().keys():
+                    lp.set_max(lp[(v,s)],s.dimension())
+                return lp[(v,s)]
+            else:
+                return 0
+        for v in Q.vertices(sort=False):
+            print(v)
+            P = Poset((Q.get_vertex(v),lambda a,b: a.is_subspace(b)))
+            for s1,s2 in P.cover_relations():
+                if s1.dimension() > 0:
+                    lp.add_constraint( get_var(v,s1) <= get_var(v,s2) )
+            # for s in P:
+            #     Plow = P.subposet(set(P.principal_order_ideal(s)) - set([s]))
+            #     if len(Plow) == 0:
+            #         continue
+            #     # for rs in Plow.maximal_antichains():
+            #     rs = Plow.maximal_elements()
+            #     term = 0
+            #     queue = [(s,())]
+            #     while queue:
+            #         rcur,ris = queue.pop()
+            #         if rcur.dimension() == 0:
+            #             continue
+            #         term += (-1)**len(ris) * get_var(v,rcur)
+            #         starti = ris[-1]+1 if len(ris) > 0 else 0
+            #         for ri,r in enumerate(rs[starti:]):
+            #             queue.append((rcur.intersection(r),ris+(starti+ri,)))
+            #     print(term)
+            #     lp.add_constraint(term >= 0)
+            for s1,s2,_ in P.incomparability_graph().edges(sort=False):
+                lp.add_constraint( get_var(v,s1) + get_var(v,s2) - get_var(v,s1.intersection(s2)) <= get_var(v,P.join(s1,s2)) )
+        for v,w,f in Q.edges(sort=False):
+            print(v,w)
+            im = f.image()
+            ker = f.kernel()
+            for s in Q.get_vertex(v):
+                if ker.is_subspace(s) and s != ker:
+                    lp.add_constraint(get_var(v,s) - get_var(v,ker) <= get_var(w,f(s)))
+        for tm in tms+tmcs:
+            lp.add_constraint(lp.sum( len(vs) - get_var((tm,wt),VectorSpace(self.ba.F,len(vs)).subspace(identity_matrix(self.ba.F,len(vs))))
+                for wt,vs in self.get_vss(tm).items()) == self.ba.tm_target_out(tm))
+        return lp
+                    
 
 def liftR(p,R):
     if p.parent() is R:
