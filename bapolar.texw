@@ -1450,6 +1450,25 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             res.setdefault(self.polynomial_tm(m),[0,0])[1] += 1
         return res,ltIlb,ltIub
     
+    def apolar_to(self,Jxi,tm):
+        J,xi = Jxi
+        R = PolynomialRing(self.F,self.T.parent().gens()+tuple('t%d' % i for i in range(xi)))
+        def liftR(p):
+            return p(R.gens()[:self.nvars] + (R.zero(),)*(self.nvarsx - self.nvars) + R.gens()[self.nvars:])
+        ps = {}
+        for m in self.all_monomials(tm,J.ring()):
+            mr = J.reduce(m)
+            if m == mr:
+                ps[m] = ps.get(m,R.zero()) + liftR(m)
+            else:
+                while not mr.is_zero():
+                    n = ba.lm(mr)
+                    t = mr.coefficient(n)
+                    ps[n] = ps.get(n, R.zero()) + liftR(t) * liftR(m) * prod(factorial(k) for _,k in n.exponents()[0].sparse_iter()) /\
+                                prod(factorial(k) for _,k in m.exponents()[0].sparse_iter())
+                    mr -= n*t
+        return list(ps.values())
+    
     def ideal_constant_generators(self,J):
         return self.R0.ideal([liftR(p,self.R0) for p in J.gens() if 
               all(e[self.nvars:].is_constant() for e in p.exponents())],side='twosided')
