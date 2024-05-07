@@ -12,6 +12,51 @@ def matrixmult(m,n,l):
     T = sum(u[i*n+j]*v[j*l+k]*w[k*m+i] for i,j,k in product(range(m),range(n),range(l)))
     return (T,dims)
 
+def matrixmult_ti(m,n,l):
+    T,dims = matrixmult(m,n,l)
+    vwts = matrix(ZZ,n+l+m-1,T.parent().ngens())
+    for i in range(n):
+        for j in range(m):
+            vwts[i,j*n+i] = 1
+        for k in range(l):
+            vwts[i,m*n+i*l+k] = -1
+    for i in range(l):
+        for j in range(n):
+            vwts[n+i,m*n+j*l+i] = 1
+        for k in range(m):
+            vwts[n+i,m*n+n*l+i*m+k] = -1
+    for i in range(m-1):
+        for j in range(l):
+            vwts[n+l+i,m*n+n*l+j*m+i] = 1
+        for k in range(n):
+            vwts[n+l+i,i*n+k] = -1
+    xs = []
+    for i in range(m):
+        for j in range(i+1,m):
+            x = matrix(QQ,m*n+n*l+l*m,m*n+n*l+l*m,sparse=True)
+            for k in range(l):
+                x[m*n+n*l+k*m+i, m*n+n*l+k*m+j] = 1
+            for k in range(n):
+                x[j*n+k, i*n+k] = -1
+            xs.append(x)
+    for i in range(n):
+        for j in range(i+1,n):
+            x = matrix(QQ,m*n+n*l+l*m,m*n+n*l+l*m,sparse=True)
+            for k in range(m):
+                x[k*n+i, k*n+j] = 1
+            for k in range(l):
+                x[m*n+j*l+k, m*n+i*l+k] = -1
+            xs.append(x)
+    for i in range(l):
+        for j in range(i+1,l):
+            x = matrix(QQ,m*n+n*l+l*m,m*n+n*l+l*m,sparse=True)
+            for k in range(n):
+                x[m*n+k*l+i, m*n+k*l+j] = 1
+            for k in range(m):
+                x[m*n+n*l+j*m+k, m*n+n*l+i*m+k] = -1
+            xs.append(x)
+    return (T,dims,vwts,xs)
+
 def tensor_W():
     dims = (2,2,2)
     R = PolynomialRing(QQ,['%s%d'%(x,i) for x,d in zip('abc',dims) for i in range(d)])
