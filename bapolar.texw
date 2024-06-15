@@ -1450,7 +1450,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             res.setdefault(self.polynomial_tm(m),[0,0])[1] += 1
         return res,ltIlb,ltIub
     
-    def apolar_to(self,Jxi,tm):
+    def apolar_to(self,Jxi,tm,action = 'partial_derivative'):
         J,xi = Jxi
         R = PolynomialRing(self.F,self.T.parent().gens()+tuple('t%d' % i for i in range(xi)))
         def liftR(p):
@@ -1464,8 +1464,13 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 while not mr.is_zero():
                     n = ba.lm(mr)
                     t = mr.coefficient(n)
-                    ps[n] = ps.get(n, R.zero()) + liftR(t) * liftR(m) * prod(factorial(k) for _,k in n.exponents()[0].sparse_iter()) /\
-                                prod(factorial(k) for _,k in m.exponents()[0].sparse_iter())
+                    if action == 'partial_derivative':
+                        ps[n] = ps.get(n, R.zero()) + liftR(t) * liftR(m) * prod(factorial(k) for _,k in n.exponents()[0].sparse_iter()) /\
+                                    prod(factorial(k) for _,k in m.exponents()[0].sparse_iter())
+                    elif action == 'divided_power':
+                        ps[n] = ps.get(n, R.zero()) + liftR(t) * liftR(m)
+                    else:
+                        raise ValueError("action must be 'partial_derivative' or 'divided_power'")
                     mr -= n*t
         return list(ps.values())
     
