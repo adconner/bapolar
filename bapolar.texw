@@ -1506,6 +1506,41 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         return self.R0.ideal([v for tm in tms for vs in 
                         self.get_vss(tm).values() for v in vs]).twostd()
         
+    def bounded_tangent_space_equations(self, Jxi, tms):
+        J,xi = Jxi
+        J = J.ring().ideal([p for p in J.gens() if self.polynomial_tm(p) in tms],side='twosided')
+        Jxi = JxiDat(self,(J,xi))
+        deg = max(sum(tm) for tm in tms)
+        from sage.libs.singular.option import opt,opt_ctx
+        with opt_ctx:
+            opt['deg_bound'] = 100*(deg+1)-1
+            syz = ff.syz(J)
+            if syz[0].is_zero():
+                syz = []
+        degsyz = lambda s: next(tuple(map(lambda a,b: a+b, self.polynomial_tm(p), self.polynomial_tm(e)))
+                      for p,e in zip(J.gens(),s) if not e.is_zero())
+        syz = [(degsyz(s),s) for s in syz if degsyz(s) in tms]
+        # eqs := (syz, nb(deg s)), vars = (gi, nb(tm))
+        vari = {(gi,m) : i for i,(gi,m) in enumerate((gi,m) for gi,g in enumerate(J.gens()) 
+                                                     for m in Jxi.normal_basis_tm(self.polynomial_tm(g)) ) }
+        eqsi = {(si, m) : i for (i,(si,m)) in enumerate((si,m) for si,(tm,_) in enumerate(syz) 
+                                                             for m in Jxi.normal_basis_tm(tm)) }
+        R = self.F if xi == 0 else PolynomialRing(self.F,'t',xi,implementation='singular')
+        Rsubs = (R.zero(),)*self.nvarsx+(R.gens() if R is not self.F else ())+\
+                (R.zero(),)*(J.ring().ngens()-self.nvarsx-xi)
+        eqs = {}
+        from sage.libs.singular.groebner_strategy import NCGroebnerStrategy
+        Jn = NCGroebnerStrategy(J)
+        for si,(tm,s) in enumerate(syz):
+            for gi, e in s.dict().items():
+                for m in Jxi.normal_basis_tm(self.polynomial_tm(J.gen(gi))):
+                    me = Jn.normal_form(liftR(m,J.ring())*e)
+                    while not me.is_zero():
+                        lm = self.lm(me)
+                        t = me.coefficient(lm)
+                        eqs[(eqsi[(si,lm)], vari[(gi,m)])] = t(Rsubs)
+                        me -= t*lm
+        return matrix(R,len(eqsi),len(vari),eqs)
         
     # For testing purposes
     # This gives the monomials not in the leading term ideal for a generic point
@@ -2111,6 +2146,121 @@ class JDat:
             lp.add_constraint(lp.sum( len(vs) - get_var((tm,wt),VectorSpace(self.ba.F,len(vs)).subspace(identity_matrix(self.ba.F,len(vs))))
                 for wt,vs in self.get_vss(tm).items()) == self.ba.tm_target_out(tm))
         return lp
+
+class JxiDat:
+    def __init__(self, ba, Jxi):
+        self.J, self.xi = Jxi
+        self.ba = ba
+        self.ltI = cache(self.ltI)
+        self.normal_basis = cache(self.normal_basis)
+        self.normal_basis_tm = cache(self.normal_basis_tm)
+
+    def ltI(self):
+        return self.ba.trivially_contained_leading_term_ideal((self.J,self.xi))
+    
+    def normal_basis(self, deg):
+        return [liftR(m,self.ba.R0) for m in self.ltI().normal_basis(deg)]
+    
+    def normal_basis_tm(self, tm):
+        return [m for m in self.normal_basis(sum(tm)) if self.ba.polynomial_tm(m) == tm]
+    
+    def forget_xs(self):
+        order = TermOrder('degrevlex',sum(self.ba.dims))
+        if self.xi > 0:
+            order = order + TermOrder('degrevlex',self.xi)
+        R = PolynomialRing(self.ba.F,self.J.ring().gens()[:self.ba.nvars]+self.J.ring().gens()[self.ba.nvarsx:self.ba.nvarsx+self.xi],order=order)
+        subs = R.gens()[:self.ba.nvars] + (R.zero(),)*(self.ba.nvarsx-self.ba.nvars) + R.gens()[self.ba.nvars:]
+        return R.ideal([p(subs) for p in self.J.gens()])
+    
+    # def __init__(self, ba, Jxi):
+    #     J,xi = Jxi
+    #     self.ba = ba
+    #     self.R0 = PolynomialRing(ba.F,J.ring().gens()[:ba.nvars])
+    #     order = TermOrder('degrevlex',sum(ba.dims))
+    #     if xi > 0:
+    #         order = order + TermOrder('degrevlex',xi)
+    #     self.R = PolynomialRing(ba.F,J.ring().gens()[:ba.nvars]+J.ring().gens()[ba.nvarsx:ba.nvarsx+xi],order=order)
+    #     subs = self.R.gens()[:ba.nvars] + (self.R.zero(),)*(ba.nvarsx-ba.nvars) + self.R.gens()[ba.nvars:]
+    #     self.J = self.R.ideal([p(subs) for p in J.gens()])
+    #     self.ltI = ba.trivially_contained_leading_term_ideal(Jxi)
+    #     self.polynomial_tm = ba.polynomial_tm
+    #     self.normal_basis = cache(self.normal_basis)
+    #     self.normal_basis_tm = cache(self.normal_basis_tm)
+    #     # self.bounded_syz = cache(self.bounded_syz)
+    #     # self.syz_tm = cache(self.syz_tm)
+        
+    # def lm(self, p, toR0 = False):
+    #     R = self.R0 if toR0 else p.parent()
+    #     if p.is_zero():
+    #         return R.zero()
+    #     return R.prod(R.gen(x)**k for x,k in 
+    #             p.lm().exponents()[0][:self.ba.nvars].sparse_iter())
+    
+    # def bounded_syz(self, deg):
+    #     # ltI = self.trivially_contained_leading_term_ideal(Jxi)
+    #     # codims = {}
+    #     # for d in degs:
+    #     #     for m in ltI.normal_basis(d):
+    #     #         if self.polynomial_tm(m) in tms:
+    #     #             codims[self.polynomial_tm(m)] = codims.get(self.polynomial_tm(m),0) + 1
+    #     # if any(r != ba.r for r in codims.values()):
+    #     #     print("warn: Jxi has wrong codimensions in some tms")
+    #     #     print(codims)
+    #     # return ltI
+    #     from sage.libs.singular.option import opt,opt_ctx
+    #     with opt_ctx:
+    #         opt['deg_bound'] = 100*(deg+1)-1
+    #         return ff.syz(self.J)
+    #     return res
+    
+    # def syz_tm(self, tm):
+    #     res = []
+    #     for s in self.bounded_syz(sum(tm)):
+    #         tmcur = next(tuple(map(lambda a,b: a+b, self.polynomial_tm(p), self.polynomial_tm(e)))
+    #                   for p,e in zip(self.J.gens(),s) if not e.is_zero())
+    #         if tmcur == tm:
+    #             res.append(s)
+    #     return res
+
+    # def bounded_tangent_space_equations(self, tms):
+    #     # eqs = (syz, nb(deg s)), vars = (gi, nb(tm))
+    #     J = self.J.ring().ideal([p for p in self.J.gens() if self.polynomial_tm(p) in tms],side='twosided')
+    #     deg = max(sum(tm) for tm in tms)
+    #     from sage.libs.singular.option import opt,opt_ctx
+    #     with opt_ctx:
+    #         opt['deg_bound'] = 100*(deg+1)-1
+    #         syz = ff.syz(J)
+    #     degsyz = lambda s: next(tuple(map(lambda a,b: a+b, self.polynomial_tm(p), self.polynomial_tm(e)))
+    #                   for p,e in zip(J.gens(),s) if not e.is_zero())
+    #     syz = [(degsyz(s),s) for s in syz if degsyz(s) in tms]
+    #     vari = {(gi,m) : i for i,(gi,m) in enumerate((gi,m) for gi,g in enumerate(self.J.gens()) 
+    #                                                  for m in self.normal_basis_tm(self.polynomial_tm(g)) ) }
+    #     eqsi = {(si, m) : i for (i,(si,m)) in enumerate((si,m) for si,(tm,_) in enumerate(syz) 
+    #                                                          for m in self.normal_basis_tm(tm)) }
+    #     R = ba.F if self.ba.nvars == self.R.ngens() else \
+    #         PolynomialRing(self.ba.F,self.R.gens()[self.ba.nvars:],implementation='singular')
+    #     Rsubs = (R.zero(),)*self.ba.nvars+R.gens()
+    #     eqs = {}
+    #     for si,(tm,s) in enumerate(syz):
+    #         for gi, e in s.dict().items():
+    #             for m in self.normal_basis_tm(self.polynomial_tm(self.J.gen(gi))):
+    #                 me = ff.reduce(m*e,self.J)
+    #                 while not me.is_zero():
+    #                     lm = self.lm(me)
+    #                     t = me.coefficient(lm)
+    #                     eqs[(eqsi[(si,lm)], vari[(gi,m)])] = ba.F(t) if R is ba.F else t(Rsubs)
+    #                     me -= t*lm
+    #     return matrix(R,len(eqsi),len(vari),eqs)
+    #     # ltI = self.trivially_contained_leading_term_ideal(Jxi)
+    #     # SmodJ = {}
+    #     # for d in degs:
+    #     #     for m in ltI.normal_basis(d):
+    #     #         SmodJ.set_default(self.polynomial_tm(m),[]).append(liftR(m,ba.R0))
+    #     # if any(len(SmodJ[tm]) != ba.r for tm in tms):
+    #     #     print("warn: Jxi has wrong codimensions in some tms")
+    #     #     print(codims)
+    #     # return ltI
+        
                     
 
 def liftR(p,R):
