@@ -2330,6 +2330,8 @@ def read_JS(ba,f):
             J.append(R(sage_eval(l,locals=locals)))
     return R.ideal(J,side='twosided'),S,tmax
 
+def square(J):
+    return J.ring().ideal([e*f for e,f in combinations_with_replacement(J.gens(),2)],side='twosided')
 
 # remove when added to itertools
 def batched(iterable, n):
