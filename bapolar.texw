@@ -1088,7 +1088,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
 
         gbbound = max([sum(tm) for tm in tms+tmcs])
         def gb(J):
-            return self.bounded_gb(J,gbbound)
+            return bounded_gb(J,gbbound)
         
         xiorig = Jxi[1]
 
@@ -1328,15 +1328,6 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             yield R.prod(x**k for k,x in 
                     zip((k for e in y for k in e),R.gens()) if k>0)
 
-    def bounded_gb(self, J, d):
-        # return J.twostd()
-        from sage.libs.singular.option import opt,opt_ctx
-        sav = [p for p in J.gens() if p.degree() >= 100*(d+1)]
-        with opt_ctx:
-            opt['deg_bound'] = 100*(d+1)-1
-            return J.ring().ideal(J.twostd().gens()+tuple(sav),side='twosided')
-        return res
-                
     def sum_ideals(self,Jxis,xi_common=0):
         assert xi_common == 0 or all(xi >= xi_common for J,S,xi in Jxis)
         sxis = xi_common + sum(xi-xi_common for J,S,xi in Jxis)
@@ -1440,7 +1431,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
 
     def codimension_bounds(self,Jxi,total_degree):
         J,xi = Jxi
-        Jxi = (self.bounded_gb(J,total_degree), xi)
+        Jxi = (bounded_gb(J,total_degree), xi)
         ltIlb = self.contained_leading_term_ideal(Jxi)
         ltIub = self.containing_leading_term_ideal(Jxi)
         res = {}
@@ -2273,6 +2264,15 @@ def liftR(p,R):
 def emultiset(p):
     return [xi for xi,e in p.exponents()[0].sparse_iter() for _ in range(e)]
 
+def bounded_gb(J, d):
+    # return J.twostd()
+    from sage.libs.singular.option import opt,opt_ctx
+    sav = [p for p in J.gens() if p.degree() >= 100*(d+1)]
+    with opt_ctx:
+        opt['deg_bound'] = 100*(d+1)-1
+        return J.ring().ideal(J.twostd().gens()+tuple(sav),side='twosided')
+    return res
+
 def basis_of_lie_algebra(xs):
     n = xs[0].dimensions()[0]
     F = xs[0].base_ring()
@@ -2330,8 +2330,10 @@ def read_JS(ba,f):
             J.append(R(sage_eval(l,locals=locals)))
     return R.ideal(J,side='twosided'),S,tmax
 
-def square(J):
-    return J.ring().ideal([e*f for e,f in combinations_with_replacement(J.gens(),2)],side='twosided')
+def square(Jxi,degbound=0):
+    J,xi = Jxi
+    J = J.ring().ideal([e*f for e,f in combinations_with_replacement(J.gens(),2)],side='twosided')
+    return (J ,xi) if degbound == 0 else (bounded_gb(J,degbound), xi)
 
 # remove when added to itertools
 def batched(iterable, n):
