@@ -525,7 +525,8 @@ def search_by_sequence(ba,tmss,Jxi=None,mode='togetherlp'):
                              for tma in IntegerVectors(k,len(ba.dims)) ])))
         if together:
             for Jxiup in ba.get_ideals_for_tm(tms, tmcs, Jxi, mod=mod, 
-                                              lp_interval_length_bound=4 if len(J.gens()) == 0 else 4):
+                                              lp_interval_length_bound=4):
+                                              # lp_interval_length_bound=4 if len(J.gens()) == 0 else 4):
                 for res in dfs(Jxiup,tmsi+1):
                     yield res
         else:
@@ -2161,7 +2162,10 @@ class JxiDat:
             order = order + TermOrder('degrevlex',self.xi)
         R = PolynomialRing(self.ba.F,self.J.ring().gens()[:self.ba.nvars]+self.J.ring().gens()[self.ba.nvarsx:self.ba.nvarsx+self.xi],order=order)
         subs = R.gens()[:self.ba.nvars] + (R.zero(),)*(self.ba.nvarsx-self.ba.nvars) + R.gens()[self.ba.nvars:]
-        return R.ideal([p(subs) for p in self.J.gens()])
+        subsr = self.J.ring().gens()[:self.ba.nvars] + self.J.ring().gens()[self.ba.nvarsx:]
+        def goback(I):
+            return (self.J.ring().ideal([p(subsr) for p in I.gens()],side='twosided'),self.xi)
+        return R.ideal([p(subs) for p in self.J.gens()]),goback
     
     # def __init__(self, ba, Jxi):
     #     J,xi = Jxi
@@ -2330,10 +2334,11 @@ def read_JS(ba,f):
             J.append(R(sage_eval(l,locals=locals)))
     return R.ideal(J,side='twosided'),S,tmax
 
-def square(Jxi,degbound=0):
+def square(ba,Jxi):
     J,xi = Jxi
     J = J.ring().ideal([e*f for e,f in combinations_with_replacement(J.gens(),2)],side='twosided')
-    return (J ,xi) if degbound == 0 else (bounded_gb(J,degbound), xi)
+    I,goback = JxiDat(ba,(J,xi)).forget_xs()
+    return goback(ideal(I.interreduced_basis()))
 
 # remove when added to itertools
 def batched(iterable, n):
