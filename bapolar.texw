@@ -1078,7 +1078,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         return R(t(R.gens()[self.nvarsx:self.nvarsx+tg]+(R.zero(),)*(tg-Rg)))
     
     def get_ideals_for_tm(self, tms=[], tmcs=[], Jxi = None, lp_interval_length_bound=3, precise_lp=False,
-                          preset_choices = {}, mod=None, simplify_existing=True, modify_lp = lambda lp: None):
+                          preset_choices = {}, mod=None, simplify_existing=True, modify_lp = lambda lp: None, 
+                          square_tests=[]):
         if mod is None:
             mod = self.zero
         if Jxi is None:
@@ -1115,7 +1116,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 if any(t.is_constant() for _,t in tss.iter_sets(Shi=emultiset(v.lm()))):
                     bp.set_min(v.lm(),1)
         
-        def fixed_point(Jxi,gb_needed=True):
+        def fixed_point(Jxi,gb_needed=True,do_square_tests=False):
+            squarerel = False
             J,yi = Jxi
             if ((len(J.gens()) == 1 and J.gens()[0] == J.ring().one()) or (bp.extend() is None)):
                 return
@@ -1126,6 +1128,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 if gb_needed:
                     J = gb(J)
                     gb_needed = False
+                leading_coefficient_by_monomial = {}
                 for p in J.gens():
                     if p.is_zero():
                         continue
@@ -1153,14 +1156,73 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                                 gb_needed = True
                             else:
                                 bp.set_min(m,0)
-            if not ((len(J.gens()) == 1 and J.gens()[0] == J.ring().one()) or (bp.extend() is None)):
+                                t /= t.monomial_coefficient(t.lm())
+                                leading_coefficient_by_monomial.setdefault(t,[]).append(m)
+                for t, ms in leading_coefficient_by_monomial.items():
+                    if len(ms) > 1:
+                        for m in ms:
+                            bp.set_min(m,1)
+                        if bp.extend() is None:
+                            J += t
+                            newrel = True
+                            gb_needed = True
+                        for m in ms:
+                            bp.set_min(m,0)
+                if gb_needed:
+                    J = gb(J)
+                    J,_,yi = self.quick_simplify((J,[J.ring().one()],yi),0 if simplify_existing else xiorig)
+                    gb_needed = False
+                if do_square_tests and len(square_tests) > 0:
+                    print("SQUARE TESTS")
+                    JJ,_ = square(self,(J,yi),square_tests)
+                    have = {}
+                    leading_coefficient_count = {}
+                    for p in JJ.gens():
+                        if p.is_zero():
+                            continue
+                        m = self.lm(p,True)
+                        tm = self.polynomial_tm(m)
+                        if m.is_one() or tm not in square_tests:
+                            continue
+                        t = p.coefficient(self.lm(p))
+                        if t.is_constant():
+                            have[tm] = have.get(tm,0) + 1
+                        else:
+                            t /= t.monomial_coefficient(t.lm())
+                            leading_coefficient_count.setdefault(tm,{}).setdefault(t,set()).add(m)
+                    if any(self.tm_dim(tm) - have.get(tm,0) < ba.r*ba.r for tm in square_tests):
+                        return
+                    for tm in square_tests:
+                        for t,c in leading_coefficient_count.get(tm,{}).items():
+                            if self.tm_dim(tm) - (len(c) + have.get(tm,0)) < ba.r*ba.r:
+                                # squarerel=True
+                                # global sav
+                                # sav.append(J)
+                                print(t)
+                                J += t
+                                newrel = True
+                                gb_needed = True
+            try:
+                if len(J.gens()) == 1 and J.gens()[0] == J.ring().one():
+                    # if squarerel:
+                    #     print(1)
+                    #     embed()
+                    #     assert False
+                    return
+                if bp.extend() is None:
+                    # if squarerel:
+                    #     print(2)
+                    #     embed()
+                    #     assert False
+                    return
                 J,_,yi = self.quick_simplify((J,[J.ring().one()],yi),0 if simplify_existing else xiorig)
                 yield (J,yi)
-            for m,hi in bp_restore:
-                if hi == 1:
-                    bp.set_min(m,0)
-                else:
-                    bp.set_max(m,1)
+            finally:
+                for m,hi in bp_restore:
+                    if hi == 1:
+                        bp.set_min(m,0)
+                    else:
+                        bp.set_max(m,1)
 
 
         from copy import deepcopy
@@ -1233,6 +1295,10 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 tm,wt,vi = vk
                 vs = mod.get_vss(tm)[wt]
                 v = vs[vi]
+
+                if len(chosen_vks) == 1 or chosen_vks[-2][0] != tm:
+                    if len(list(fixed_point(Jxi,gb_needed=False,do_square_tests=True))) == 0:
+                        return
                 
                 try:
                     var_lp_val = next(v for x,v in bp.extend() if x == mod.get_vss(tm)[wt][vi].lm())
@@ -1261,10 +1327,14 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     p = liftR(v,R) + R.sum([liftR(w,R)*R.gen(self.nvarsx+xi+wi)
                                 for wi,w in enumerate(w for w in vs[:vi] if bp.get_min(w.lm()) == 0)])
                     return (J+p,yi)
+                
+                # rem = self.tm_dim_tperp(tm)-num_in[tm]-num_out[tm]
+                # assert rem > 0
                                     
                 if var_lp_val > 0.5 and preset_choices.get(v.lm(),True):
                     bp.set_min(v.lm(),1)
                     for Jxip in fixed_point(plus_cur(Jxi)):
+                    # for Jxip in fixed_point(plus_cur(Jxi),do_square_tests = rem==1):
                         for res in dfs(Jxip):
                             yield res
                     bp.set_min(v.lm(),0)
@@ -1279,6 +1349,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 if var_lp_val <= 0.5 and preset_choices.get(v.lm(),True):
                     bp.set_min(v.lm(),1)
                     for Jxip in fixed_point(plus_cur(Jxi)):
+                    # for Jxip in fixed_point(plus_cur(Jxi),do_square_tests = rem==1):
                         for res in dfs(Jxip):
                             yield res
                     bp.set_min(v.lm(),0)
@@ -1290,8 +1361,10 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     vkadd(vk)
 
         for Jxif in fixed_point(Jxi):
-            for res in dfs(Jxif):
-                yield res
+            for Jxi in dfs(Jxif):
+                if len(list(fixed_point(Jxi,gb_needed=False,do_square_tests=True))) == 0:
+                    continue
+                yield Jxi
 
     def tm_dim(self, tm):
         return prod(binomial(d+t-1,t) for t,d in zip(tm,self.dims))
@@ -2159,13 +2232,17 @@ class JxiDat:
     def forget_xs(self):
         order = TermOrder('degrevlex',sum(self.ba.dims))
         if self.xi > 0:
-            order = order + TermOrder('degrevlex',self.xi)
-        R = PolynomialRing(self.ba.F,self.J.ring().gens()[:self.ba.nvars]+self.J.ring().gens()[self.ba.nvarsx:self.ba.nvarsx+self.xi],order=order)
+            order = order + TermOrder('degrevlex',self.J.ring().ngens()-self.ba.nvarsx)
+        R = PolynomialRing(self.ba.F,self.J.ring().gens()[:self.ba.nvars]+self.J.ring().gens()[self.ba.nvarsx:],order=order)
         subs = R.gens()[:self.ba.nvars] + (R.zero(),)*(self.ba.nvarsx-self.ba.nvars) + R.gens()[self.ba.nvars:]
         subsr = self.J.ring().gens()[:self.ba.nvars] + self.J.ring().gens()[self.ba.nvarsx:]
         def goback(I):
             return (self.J.ring().ideal([p(subsr) for p in I.gens()],side='twosided'),self.xi)
-        return R.ideal([p(subs) for p in self.J.gens()]),goback
+        try:
+            return R.ideal([p(subs) for p in self.J.gens()]),goback
+        except ValueError:
+            embed()
+            raise
     
     # def __init__(self, ba, Jxi):
     #     J,xi = Jxi
@@ -2250,7 +2327,7 @@ class JxiDat:
     #     # SmodJ = {}
     #     # for d in degs:
     #     #     for m in ltI.normal_basis(d):
-    #     #         SmodJ.set_default(self.polynomial_tm(m),[]).append(liftR(m,ba.R0))
+    #     #         SmodJ.setdefault(self.polynomial_tm(m),[]).append(liftR(m,ba.R0))
     #     # if any(len(SmodJ[tm]) != ba.r for tm in tms):
     #     #     print("warn: Jxi has wrong codimensions in some tms")
     #     #     print(codims)
@@ -2334,9 +2411,11 @@ def read_JS(ba,f):
             J.append(R(sage_eval(l,locals=locals)))
     return R.ideal(J,side='twosided'),S,tmax
 
-def square(ba,Jxi):
+def square(ba,Jxi,tms=None):
     J,xi = Jxi
-    J = J.ring().ideal([e*f for e,f in combinations_with_replacement(J.gens(),2)],side='twosided')
+    gs = [p for p in J.gens() if not ba.lm(p).is_constant()]
+    J = J.ring().ideal([p for p in J.gens() if ba.lm(p).is_constant()] + [e*f for e,f in combinations_with_replacement(gs,2) if 
+                        tms is None or tuple(map(lambda e,f: e+f, ba.polynomial_tm(e), ba.polynomial_tm(f))) in tms],side='twosided')
     I,goback = JxiDat(ba,(J,xi)).forget_xs()
     return goback(ideal(I.interreduced_basis()))
 
