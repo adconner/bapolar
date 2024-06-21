@@ -1189,11 +1189,13 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                             else:
                                 t /= t.monomial_coefficient(t.lm())
                                 leading_coefficient_count.setdefault(tm,{}).setdefault(t,set()).add(m)
-                        if any(self.tm_dim(tm) - have.get(tm,0) < ba.r*ba.r for tm in square_tests):
+                        def tm_bound(tm):
+                            return (1+sum(d-1 for d,k in zip(ba.dims,tm) if k>0))*ba.r
+                        if any(self.tm_dim(tm) - have.get(tm,0) < tm_bound(tm) for tm in square_tests):
                             return
                         for tm in square_tests:
                             for t,c in leading_coefficient_count.get(tm,{}).items():
-                                if self.tm_dim(tm) - (len(c) + have.get(tm,0)) < ba.r*ba.r:
+                                if self.tm_dim(tm) - (len(c) + have.get(tm,0)) < tm_bound(tm):
                                     J += t
                                     newrel = True
                                     gb_needed = True
@@ -1555,7 +1557,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
              for i,e in enumerate(self.Tdeg)]
         tms.extend(product(*[range(e+1) for e in self.Tdeg]))
         return self.R0.ideal([v for tm in tms for vs in 
-                        self.get_vss(tm).values() for v in vs]).twostd()
+                        self.zero.get_vss(tm).values() for v in vs]).twostd()
         
     def bounded_tangent_space_equations(self, Jxi, tms):
         J,xi = Jxi
