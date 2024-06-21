@@ -2399,11 +2399,11 @@ def read_JS(ba,f):
             J.append(R(sage_eval(l,locals=locals)))
     return R.ideal(J,side='twosided'),S,tmax
 
-def square(ba,Jxi,tms=None):
+def square(ba,Jxi,tms=None,k=2):
     J,xi = Jxi
     gs = [p for p in J.gens() if not ba.lm(p).is_constant()]
-    J = J.ring().ideal([p for p in J.gens() if ba.lm(p).is_constant()] + [e*f for e,f in combinations_with_replacement(gs,2) if 
-                        tms is None or tuple(map(lambda e,f: e+f, ba.polynomial_tm(e), ba.polynomial_tm(f))) in tms],side='twosided')
+    J = J.ring().ideal([p for p in J.gens() if ba.lm(p).is_constant()] + [prod(es) for es in combinations_with_replacement(gs,k) if 
+                      tms is None or reduce(lambda e,f: tuple(map(lambda e,f: e+f, e, ba.polynomial_tm(f))),es,(0,)*len(ba.dims)) in tms],side='twosided')
     I,goback = JxiDat(ba,(J,xi)).forget_xs()
     return goback(ideal(I.interreduced_basis()))
 
