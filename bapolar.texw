@@ -1118,16 +1118,18 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         
         def fixed_point(Jxi,gb_needed=True,do_square_tests=False):
             J,yi = Jxi
-            if ((len(J.gens()) == 1 and J.gens()[0] == J.ring().one()) or (bp.extend() is None)):
-                return
             bp_restore = []
             try:
                 newrel = True
                 while newrel:
                     newrel = False
+                    if bp.extend() is None:
+                        return
                     if gb_needed:
                         J = gb(J)
                         gb_needed = False
+                    if len(J.gens()) == 1 and J.gens()[0] == J.ring().one():
+                        return
                     leading_coefficient_by_monomial = {}
                     for p in J.gens():
                         if p.is_zero():
@@ -1156,7 +1158,6 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                                     gb_needed = True
                                 else:
                                     bp.set_min(m,0)
-                                    t /= t.monomial_coefficient(t.lm())
                                     leading_coefficient_by_monomial.setdefault(t,[]).append(m)
                     for t, ms in leading_coefficient_by_monomial.items():
                         if len(ms) > 1:
@@ -1187,7 +1188,6 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                             if t.is_constant():
                                 have[tm] = have.get(tm,0) + 1
                             else:
-                                t /= t.monomial_coefficient(t.lm())
                                 leading_coefficient_count.setdefault(tm,{}).setdefault(t,set()).add(m)
                         def tm_bound(tm):
                             return (1+sum(d-1 for d,k in zip(ba.dims,tm) if k>0))*ba.r
@@ -1199,10 +1199,6 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                                     J += t
                                     newrel = True
                                     gb_needed = True
-                    if len(J.gens()) == 1 and J.gens()[0] == J.ring().one():
-                        return
-                    if bp.extend() is None:
-                        return
                 J,_,yi = self.quick_simplify((J,[J.ring().one()],yi),0 if simplify_existing else xiorig)
                 yield (J,yi)
             finally:
@@ -1246,6 +1242,9 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 vkstart.add(vk)
                 processed[0] -= 1
                 return removed
+            
+            num_in = { tm : len([None for v in mod.get_vs(tm) if bp.get_min(v.lm()) == 1 ]) for tm in tmsall}
+            num_out = { tm : len([None for v in mod.get_vs(tm) if bp.get_max(v.lm()) == 0 ]) for tm in tmsall}
                     
             set_stack = []
             set_to_process = [vk for vk in vkstart if not is_unset(vk)]
@@ -1256,9 +1255,6 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 for wk in added:
                     if not is_unset(wk):
                         set_to_process.append(wk)
-                        
-            num_in = { tm : len([None for v in mod.get_vs(tm) if bp.get_min(v.lm()) == 1 ]) for tm in tmsall}
-            num_out = { tm : len([None for v in mod.get_vs(tm) if bp.get_max(v.lm()) == 0 ]) for tm in tmsall}
                         
             def heuristic(vk):
                 tm, wt, vi = vk
@@ -2309,11 +2305,7 @@ class JxiDat:
         subsr = self.J.ring().gens()[:self.ba.nvars] + self.J.ring().gens()[self.ba.nvarsx:]
         def goback(I):
             return (self.J.ring().ideal([p(subsr) for p in I.gens()],side='twosided'),self.xi)
-        try:
-            return R.ideal([p(subs) for p in self.J.gens()]),goback
-        except ValueError:
-            embed()
-            raise
+        return R.ideal([p(subs) for p in self.J.gens()]),goback
     
     # def __init__(self, ba, Jxi):
     #     J,xi = Jxi
