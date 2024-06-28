@@ -1,4 +1,61 @@
 
+def get_flag_inequalities2(m,g):
+    g = g.transitive_reduction()
+    below_cnts = [0 for _ in range(m.ncols())]
+    for i,j,_ in g.edges():
+        below_cnts[j] += 1
+    minelts = set([j for j,cnt in enumerate(below_cnts) if cnt == 0])
+    def ideal_push(j):
+        minelts.remove(j)
+        try:
+            for _,k,_ in g.outgoing_edges(j):
+                below_cnts[k] -= 1
+                if below_cnts[k] == 0:
+                    minelts.add(k)
+        except:
+            embed()
+            raise
+    def ideal_pop(j):
+        for _,k,_ in g.outgoing_edges(j):
+            if below_cnts[k] == 0:
+                minelts.remove(k)
+            below_cnts[k] += 1
+        minelts.add(j)
+    while any(m[:,kx := k].is_zero() for k in minelts):
+        ideal_push(kx)
+    rowcols = []
+    rowcols_sets_seen = set()
+    def dfs():
+        nonlocal m
+        for j in list(minelts):
+            col = m.column(j)
+            i = next(i for i in range(m.nrows()-1,-1,-1) if col[i] != 0)
+            rowcols.append((i,j))
+            frozen_rowcols = frozenset(rowcols)
+            if frozen_rowcols in rowcols_sets_seen:
+                # can check for alternatitve permutations of the rows
+                rowcols.pop()
+                continue
+            rowcols_sets_seen.add(frozen_rowcols)
+            yield sorted(rowcols)
+            row = m.row(i)
+            col /= col[i]
+            ideal_push(j)
+            m -= col.column() * row.row()
+            zeroed = []
+            while any(m[:,kx := k].is_zero() for k in minelts):
+                ideal_push(kx)
+                zeroed.append(kx)
+            for res in dfs():
+                yield res
+            while zeroed:
+                ideal_pop(zeroed.pop())
+            m += col.column() * row.row()
+            ideal_pop(j)
+            rowcols.pop()
+    return dfs()
+    
+                
 def get_flag_inequalities(ms,interval_length_bound=oo):
     if len(ms) == 0:
         return

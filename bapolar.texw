@@ -1815,20 +1815,21 @@ class JDat:
 
         constraints = SetSystem()
         nconstraints = 0
+        from operator import concat
         def add_constraint(rowvks,colvks,kerdim,deduplp=None):
             assert kerdim <= len(colvks)
             if len(colvks) == kerdim:
                 return False
             S = [('r',vk) for vk in rowvks]+[('c',vk) for vk in colvks]
-            for S2,(ci,kerdim1) in constraints.iter_sets([],S):
+            for Ss,ciks in constraints.iter_unions(S):
                 rowvks1 = []
                 colvks1 = []
-                for tag,vk in S2:
+                for tag,vk in reduce(concat,Ss):
                     if tag == 'r':
                         rowvks1.append(vk)
                     else:
                         colvks1.append(vk)
-                if kerdim-len(colvks) >= kerdim1-len(colvks1):
+                if kerdim-len(colvks) >= sum(kerdim1 for _,kerdim1 in ciks)-len(colvks1):
                     # this condition is one we have added plus conditions 
                     # x <= 1 or 0 <= x
                     return False
@@ -1856,79 +1857,161 @@ class JDat:
                              <= lp.sum(lp[self.get_vss(tm)[vk][i].lm()] 
                                          for tm,vk,i in rowvks) + kerdim)
             return True
-            
+        
         Q = self.get_quiver_representation(tms,tmcs)
-        for (tmr,wtr) in Q:
-            es = [(beta,m) for beta,_,m in Q.incoming_edges((tmr,wtr))]
-            # queue = [(e,1) for e in es]
-            # while len(queue) > 0:
-            #     (alpha,m),rem = queue.pop()
-            #     tt = [max(c.nonzero_positions()) for c in m.columns() if not c.is_zero()]
-            #     if tt == sorted(tt) and len(set(tt)) == len(tt):
-            #         print('skipping 1')
-            #         continue
-            #     escur = [(beta,m*m2) for beta,_,m2 in Q.incoming_edges(alpha)]
-            #     es.extend(deepcopy(escur))
-            #     if rem > 1:
-            #         for (beta,m2) in escur:
-            #             queue.append(((beta,m2),rem-1))
+        for alpha in Q:
+            es = [(beta,m) for beta,_,m in Q.incoming_edges(alpha)]
+            colvks = [(tm,wt,i) for (tm,wt),m in es for i in range(len(self.get_vss(tm)[wt]))]
+            rowvks = [alpha+(i,) for i in range(len(self.get_vss(alpha[0])[alpha[1]]))]
+            g = DiGraph([range(len(colvks)),[(i,i+1) for i,(a,b) in enumerate(zip(colvks,colvks[1:])) if a[:2] == b[:2] ]],
+                        format='vertices_and_edges')
+            M = block_matrix([[m for _,m in es]])
             deduplp = MixedIntegerLinearProgram(solver='SCIP',maximization=False)
             # deduplp = None
-            for rows,cols in get_flag_inequalities([m for _,m in es],interval_length_bound=interval_length_bound):
-                rowvks = [(tmr,wtr,i) for i in rows]
-                colvks = [es[i][0]+(j,) for i,j in cols]
-                add_constraint(rowvks,colvks,0,deduplp)
-                
-            es = [(beta,m) for _,beta,m in Q.outgoing_edges((tmr,wtr))]
-            # queue = [(e,1) for e in es]
-            # while len(queue) > 0:
-            #     (alpha,m),rem = queue.pop()
-            #     tt = [max(c.nonzero_positions()) for c in m.T[::-1,::-1].columns() if not c.is_zero()]
-            #     if tt == sorted(tt) and len(set(tt)) == len(tt):
-            #         print('skipping 2')
-            #         continue
-            #     escur = [(beta,m2*m) for _,beta,m2 in Q.outgoing_edges(alpha)]
-            #     es.extend(deepcopy(escur))
-            #     if rem > 1:
-            #         for (beta,m2) in escur:
-            #             queue.append(((beta,m2),rem-1))
+            for rowcols in sorted(get_flag_inequalities2(M,g),key=lambda f: len(f)):
+                rowvkscur = [rowvks[i] for i,j in rowcols]
+                colvkscur = [colvks[j] for i,j in rowcols]
+                # print('aoeu',[self.get_vss(tm)[wt][i] for tm,wt,i in rowvkscur], [self.get_vss(tm)[wt][i] for tm,wt,i in colvkscur])
+                for i in range(len(rowcols)-1,-1,-1):
+                    add_constraint(rowvkscur[i:], colvkscur[i:], 0, deduplp)
+            # print()
+            es = [(beta,m) for _,beta,m in Q.outgoing_edges(alpha)]
+            assert all(len(self.get_vss(beta[0])[beta[1]]) == m.nrows() for beta,m in es)
+            colvks = [(tm,wt,i) for (tm,wt),m in es for i in range(len(self.get_vss(tm)[wt])-1,-1,-1)]
+            rowvks = [alpha+(i,) for i in range(len(self.get_vss(alpha[0])[alpha[1]])-1,-1,-1)]
+            g = DiGraph([range(len(colvks)),[(i,i+1) for i,(a,b) in enumerate(zip(colvks,colvks[1:])) if a[:2] == b[:2] ]],
+                        format='vertices_and_edges')
+            M = block_matrix([[m.T[::-1,::-1] for _,m in es]])
             deduplp = MixedIntegerLinearProgram(solver='SCIP',maximization=False)
             # deduplp = None
-            for rows,cols in get_flag_inequalities([m.T[::-1,::-1] for _,m in es],interval_length_bound=interval_length_bound):
-                rowvks = [(tmr,wtr,len(self.get_vss(tmr)[wtr])-1-i) for i in rows]
-                colvks = [(tmu,wtu,len(self.get_vss(tmu)[wtu])-1-j) for i,j in cols for (tmu,wtu) in [es[i][0]] ]
-                add_constraint(colvks,rowvks,len(rowvks)-len(colvks),deduplp)
+            for rowcols in sorted(get_flag_inequalities2(M,g),key=lambda f: len(f)):
+                rowvkscur = [rowvks[i] for i,j in rowcols]
+                colvkscur = [colvks[j] for i,j in rowcols]
+                for i in range(len(rowcols)-1,-1,-1):
+                    add_constraint(colvkscur[i:], rowvkscur[i:], 0, deduplp)
+            
+        # subspace_pairs = {}
+        # for alpha in Q.topological_sort():
+        #     U = VectorSpace(self.ba.F, len(self.get_vss(alpha[0])[alpha[1]]))
+        #     Uflag = [U.subspace(U.basis()[:i]) for i in range(U.dimension()+1)]
+        #     def VWstats(V,W):
+        #         Wpos = [i for i in range(U.dimension()) if 
+        #                 Uflag[i].intersection(W).dimension() < Uflag[i+1].intersection(W).dimension()]
+        #         Vpos = [i for i in Wpos if
+        #                 Uflag[i].intersection(V).dimension() < Uflag[i+1].intersection(V).dimension()]
+        #         Wpos = sorted(set(Wpos) - set(Vpos))
+        #         return Wpos,Vpos
+        #     subspace_pairs[alpha] = []
+        #     for i in range(U.dimension()):
+        #         subspace_pairs[alpha].append(([alpha+(i,)],Uflag[i],Uflag[i+1]))
+        #     from_below = []
+        #     for beta,_,f in Q.incoming_edges(alpha):
+        #         for vks,V,W in subspace_pairs.get(beta,[]):
+        #             fV = f(V)
+        #             fW = f(W)
+        #             if fW.dimension() - fV.dimension() != W.dimension() - V.dimension():
+        #                 continue
+        #             from_below.append( (vks, fV, fW) )
+        #     queue = copy(from_below)
+        #     while queue:
+        #         vks, V, W = queue.pop(0)
+        #         Wpos,Vpos = VWstats(V,W)
+        #         target_vks = [alpha+(i,) for i in Wpos+Vpos if i >= Wpos[0]]
+        #         # if (len(vks) > 1):
+        #         # print(alpha,vks)
+        #         add_constraint(target_vks,vks,0)
+        #         # if Wpos[-1]+1 != W.dimension():
+        #         #     subspace_pairs[alpha].append((vks,V,W))
+        #         for vks2, V2, W2 in from_below:
+        #             # if W.is_subspace(V2):
+        #             # if W2.intersection(W).is_subspace(V2):
+        #                 # V3 = V + (W+V2).intersection(U.subspace([U.basis()[i] for i in set(range(U.dimension())) - set(Wpos)]))
+        #                 # W3 = W + W2
+        #             if V2.is_subspace(W) and not W2.is_subspace(W):
+        #                 W3 = W + W2
+        #                 V3 = V
+        #                 try:
+        #                     assert W3 != W and \
+        #                             W3.dimension() - V3.dimension() == W.dimension() - V.dimension() + W2.dimension() - V2.dimension()
+        #                 except:
+        #                     embed()
+        #                     raise
+        #                 queue.append((vks+vks2,V3,W3))
+        # # return lp
+        # print("STARTING SECOND\n"*50)
+        
+        
+        # Q = self.get_quiver_representation(tms,tmcs)
+        # for (tmr,wtr) in Q:
+        #     es = [(beta,m) for beta,_,m in Q.incoming_edges((tmr,wtr))]
+        #     # queue = [(e,1) for e in es]
+        #     # while len(queue) > 0:
+        #     #     (alpha,m),rem = queue.pop()
+        #     #     tt = [max(c.nonzero_positions()) for c in m.columns() if not c.is_zero()]
+        #     #     if tt == sorted(tt) and len(set(tt)) == len(tt):
+        #     #         print('skipping 1')
+        #     #         continue
+        #     #     escur = [(beta,m*m2) for beta,_,m2 in Q.incoming_edges(alpha)]
+        #     #     es.extend(deepcopy(escur))
+        #     #     if rem > 1:
+        #     #         for (beta,m2) in escur:
+        #     #             queue.append(((beta,m2),rem-1))
+        #     deduplp = MixedIntegerLinearProgram(solver='SCIP',maximization=False)
+        #     # deduplp = None
+        #     for rows,cols in get_flag_inequalities([m for _,m in es],interval_length_bound=interval_length_bound):
+        #         rowvks = [(tmr,wtr,i) for i in rows]
+        #         colvks = [es[i][0]+(j,) for i,j in cols]
+        #         add_constraint(rowvks,colvks,0,deduplp)
+        #     es = [(beta,m) for _,beta,m in Q.outgoing_edges((tmr,wtr))]
+        #     # queue = [(e,1) for e in es]
+        #     # while len(queue) > 0:
+        #     #     (alpha,m),rem = queue.pop()
+        #     #     tt = [max(c.nonzero_positions()) for c in m.T[::-1,::-1].columns() if not c.is_zero()]
+        #     #     if tt == sorted(tt) and len(set(tt)) == len(tt):
+        #     #         print('skipping 2')
+        #     #         continue
+        #     #     escur = [(beta,m2*m) for _,beta,m2 in Q.outgoing_edges(alpha)]
+        #     #     es.extend(deepcopy(escur))
+        #     #     if rem > 1:
+        #     #         for (beta,m2) in escur:
+        #     #             queue.append(((beta,m2),rem-1))
+        #     deduplp = MixedIntegerLinearProgram(solver='SCIP',maximization=False)
+        #     # deduplp = None
+        #     for rows,cols in get_flag_inequalities([m.T[::-1,::-1] for _,m in es],interval_length_bound=interval_length_bound):
+        #         rowvks = [(tmr,wtr,len(self.get_vss(tmr)[wtr])-1-i) for i in rows]
+        #         colvks = [(tmu,wtu,len(self.get_vss(tmu)[wtu])-1-j) for i,j in cols for (tmu,wtu) in [es[i][0]] ]
+        #         add_constraint(colvks,rowvks,len(rowvks)-len(colvks),deduplp)
                 
-        print(tms,tmcs,lp.number_of_constraints(),'constraints')
-        if precise:
-            ms = dict([(next(iter(v.dict().keys())),m) for m,v in lp.default_variable().items()])
-            msix = dict([(m,next(iter(v.dict().keys()))) for m,v in lp.default_variable().items()])
-            for tm in tms:
-                xs = [p.lm() for p in self.get_vs(tm)]
-                if len(xs) == 0 or len(xs) == self.ba.tm_dim(tm):
-                    continue
-                curxis = set(msix[m.lm()] for tmcur in (tm,)+tmcs for m in self.get_vs(tmcur))
-                lpcur = MixedIntegerLinearProgram(solver='SCIP')
-                for lo,(xis,cs),hi in lp.constraints():
-                    if all(xi in curxis for xi in xis):
-                        lpcur.add_constraint(lpcur.sum(c*lpcur[ms[xi]] for xi,c in zip(xis,cs)),min=lo,max=hi)
-                lpcur.set_real(lpcur.default_variable())
-                lpcur.set_min(lpcur.default_variable(),0)
-                lpcur.set_max(lpcur.default_variable(),1)
-                xs = [p.lm() for p in self.get_vs(tm)]
-                from sage.numerical.mip import MIPSolverException
+        # print(tms,tmcs,lp.number_of_constraints(),'constraints')
+        # if precise:
+            # ms = dict([(next(iter(v.dict().keys())),m) for m,v in lp.default_variable().items()])
+            # msix = dict([(m,next(iter(v.dict().keys()))) for m,v in lp.default_variable().items()])
+            # for tm in tms:
+                # xs = [p.lm() for p in self.get_vs(tm)]
+                # if len(xs) == 0 or len(xs) == self.ba.tm_dim(tm):
+                #     continue
+                # curxis = set(msix[m.lm()] for tmcur in (tm,)+tmcs for m in self.get_vs(tmcur))
+                # lpcur = MixedIntegerLinearProgram(solver='SCIP')
+                # for lo,(xis,cs),hi in lp.constraints():
+                #     if all(xi in curxis for xi in xis):
+                #         lpcur.add_constraint(lpcur.sum(c*lpcur[ms[xi]] for xi,c in zip(xis,cs)),min=lo,max=hi)
+                # lpcur.set_real(lpcur.default_variable())
+                # lpcur.set_min(lpcur.default_variable(),0)
+                # lpcur.set_max(lpcur.default_variable(),1)
+                # xs = [p.lm() for p in self.get_vs(tm)]
+                # from sage.numerical.mip import MIPSolverException
 
-                contains_at_least = SetSystem()
-                for size in range(1,3):
-                    for ys in combinations(xs,size):
-                        print(ys)
-                        lpcur.set_objective( lpcur.sum(-lpcur[x] for x in ys) )
-                        at_least = -floor(lpcur.solve() + 1e-10)
-                        if at_least > 0 and all(sum(at_least2) < at_least for _,at_least2 in contains_at_least.iter_unions(Shi=ys)):
-                            print('adding', ys, at_least)
-                            lpcur.add_constraint(lpcur.sum(lpcur[x] for x in ys) >= at_least)
-                            lp.add_constraint(lp.sum(lp[x] for x in ys) >= at_least)
-                            contains_at_least.add_set(ys,at_least)
+                # contains_at_least = SetSystem()
+                # for size in range(1,3):
+                #     for ys in combinations(xs,size):
+                #         print(ys)
+                #         lpcur.set_objective( lpcur.sum(-lpcur[x] for x in ys) )
+                #         at_least = -floor(lpcur.solve() + 1e-10)
+                #         if at_least > 0 and all(sum(at_least2) < at_least for _,at_least2 in contains_at_least.iter_unions(Shi=ys)):
+                #             print('adding', ys, at_least)
+                #             lpcur.add_constraint(lpcur.sum(lpcur[x] for x in ys) >= at_least)
+                #             lp.add_constraint(lp.sum(lp[x] for x in ys) >= at_least)
+                #             contains_at_least.add_set(ys,at_least)
                         
                 
                 # sols = SetSystem()
