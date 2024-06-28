@@ -1,5 +1,5 @@
 
-def get_flag_inequalities2(m,g):
+def get_flag_inequalities2(m,g,interval_length_bound=oo):
     g = g.transitive_reduction()
     below_cnts = [0 for _ in range(m.ncols())]
     for i,j,_ in g.edges():
@@ -21,39 +21,47 @@ def get_flag_inequalities2(m,g):
                 minelts.remove(k)
             below_cnts[k] += 1
         minelts.add(j)
-    while any(m[:,kx := k].is_zero() for k in minelts):
-        ideal_push(kx)
-    rowcols = []
-    rowcols_sets_seen = set()
-    def dfs():
-        nonlocal m
-        for j in list(minelts):
-            col = m.column(j)
-            i = next(i for i in range(m.nrows()-1,-1,-1) if col[i] != 0)
-            rowcols.append((i,j))
-            frozen_rowcols = frozenset(rowcols)
-            if frozen_rowcols in rowcols_sets_seen:
-                # can check for alternatitve permutations of the rows
+    for rowcutoff in range(max(m.nrows() - interval_length_bound + 1,1)):
+        mcur = m[rowcutoff:]
+        rowcols = []
+        rowcols_sets_seen = set()
+        def dfs():
+            nonlocal mcur
+            if len(rowcols) >= interval_length_bound:
+                return
+            for j in list(minelts):
+                col = mcur.column(j)
+                i = next(i for i in range(mcur.nrows()-1,-1,-1) if col[i] != 0)
+                rowcols.append((rowcutoff+i,j))
+                frozen_rowcols = frozenset(rowcols)
+                if frozen_rowcols in rowcols_sets_seen:
+                    rowcols.pop()
+                    continue
+                rowcols_sets_seen.add(frozen_rowcols)
+                yield sorted(rowcols)
+                row = mcur.row(i)
+                col /= col[i]
+                ideal_push(j)
+                mcur -= col.column() * row.row()
+                zeroed = []
+                while any(mcur[:,kx := k].is_zero() for k in minelts):
+                    ideal_push(kx)
+                    zeroed.append(kx)
+                for res in dfs():
+                    yield res
+                while zeroed:
+                    ideal_pop(zeroed.pop())
+                mcur += col.column() * row.row()
+                ideal_pop(j)
                 rowcols.pop()
-                continue
-            rowcols_sets_seen.add(frozen_rowcols)
-            yield sorted(rowcols)
-            row = m.row(i)
-            col /= col[i]
-            ideal_push(j)
-            m -= col.column() * row.row()
-            zeroed = []
-            while any(m[:,kx := k].is_zero() for k in minelts):
-                ideal_push(kx)
-                zeroed.append(kx)
-            for res in dfs():
-                yield res
-            while zeroed:
-                ideal_pop(zeroed.pop())
-            m += col.column() * row.row()
-            ideal_pop(j)
-            rowcols.pop()
-    return dfs()
+        zeroed = []
+        while any(mcur[:,kx := k].is_zero() for k in minelts):
+            ideal_push(kx)
+            zeroed.append(kx)
+        for res in dfs():
+            yield res
+        while zeroed:
+            ideal_pop(zeroed.pop())
     
                 
 def get_flag_inequalities(ms,interval_length_bound=oo):
