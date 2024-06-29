@@ -1855,34 +1855,31 @@ class JDat:
         Q = self.get_quiver_representation(tms,tmcs)
         for alpha in Q:
             es = [(beta,m) for beta,_,m in Q.incoming_edges(alpha)]
-            colvks = [(tm,wt,i) for (tm,wt),m in es for i in range(len(self.get_vss(tm)[wt]))]
-            rowvks = [alpha+(i,) for i in range(len(self.get_vss(alpha[0])[alpha[1]]))]
-            g = DiGraph([range(len(colvks)),[(i,i+1) for i,(a,b) in enumerate(zip(colvks,colvks[1:])) if a[:2] == b[:2] ]],
-                        format='vertices_and_edges')
-            M = block_matrix([[m for _,m in es]])
-            deduplp = MixedIntegerLinearProgram(solver='SCIP',maximization=False)
-            # deduplp = None
-            for rowcols in sorted(get_flag_inequalities2(M,g,interval_length_bound=interval_length_bound),key=lambda f: len(f)):
-                rowvkscur = [rowvks[i] for i,j in rowcols]
-                colvkscur = [colvks[j] for i,j in rowcols]
-                # print('aoeu',[self.get_vss(tm)[wt][i] for tm,wt,i in rowvkscur], [self.get_vss(tm)[wt][i] for tm,wt,i in colvkscur])
-                for i in range(len(rowcols)-1,-1,-1):
-                    add_constraint(rowvkscur[i:], colvkscur[i:], 0, deduplp)
-            # print()
+            if len(es) > 0:
+                colvks = [(tm,wt,i) for (tm,wt),m in es for i in range(len(self.get_vss(tm)[wt]))]
+                rowvks = [alpha+(i,) for i in range(len(self.get_vss(alpha[0])[alpha[1]]))]
+                g = DiGraph([range(len(colvks)),[(i,i+1) for i,(a,b) in enumerate(zip(colvks,colvks[1:])) if a[:2] == b[:2] ]],
+                            format='vertices_and_edges')
+                M = block_matrix([[m for _,m in es]])
+                deduplp = MixedIntegerLinearProgram(solver='SCIP',maximization=False)
+                # deduplp = None
+                for rows,cols in sorted(get_flag_inequalities2(M,g,interval_length_bound=interval_length_bound),key=lambda f: len(f[0])):
+                    rowvkscur = [rowvks[i] for i in rows]
+                    colvkscur = [colvks[j] for j in cols]
+                    add_constraint(rowvkscur, colvkscur, 0, deduplp)
             es = [(beta,m) for _,beta,m in Q.outgoing_edges(alpha)]
-            assert all(len(self.get_vss(beta[0])[beta[1]]) == m.nrows() for beta,m in es)
-            colvks = [(tm,wt,i) for (tm,wt),m in es for i in range(len(self.get_vss(tm)[wt])-1,-1,-1)]
-            rowvks = [alpha+(i,) for i in range(len(self.get_vss(alpha[0])[alpha[1]])-1,-1,-1)]
-            g = DiGraph([range(len(colvks)),[(i,i+1) for i,(a,b) in enumerate(zip(colvks,colvks[1:])) if a[:2] == b[:2] ]],
-                        format='vertices_and_edges')
-            M = block_matrix([[m.T[::-1,::-1] for _,m in es]])
-            deduplp = MixedIntegerLinearProgram(solver='SCIP',maximization=False)
-            # deduplp = None
-            for rowcols in sorted(get_flag_inequalities2(M,g,interval_length_bound=interval_length_bound),key=lambda f: len(f)):
-                rowvkscur = [rowvks[i] for i,j in rowcols]
-                colvkscur = [colvks[j] for i,j in rowcols]
-                for i in range(len(rowcols)-1,-1,-1):
-                    add_constraint(colvkscur[i:], rowvkscur[i:], 0, deduplp)
+            if len(es) > 0:
+                colvks = [(tm,wt,i) for (tm,wt),m in es for i in range(len(self.get_vss(tm)[wt])-1,-1,-1)]
+                rowvks = [alpha+(i,) for i in range(len(self.get_vss(alpha[0])[alpha[1]])-1,-1,-1)]
+                g = DiGraph([range(len(colvks)),[(i,i+1) for i,(a,b) in enumerate(zip(colvks,colvks[1:])) if a[:2] == b[:2] ]],
+                            format='vertices_and_edges')
+                M = block_matrix([[m.T[::-1,::-1] for _,m in es]])
+                deduplp = MixedIntegerLinearProgram(solver='SCIP',maximization=False)
+                # deduplp = None
+                for rows,cols in sorted(get_flag_inequalities2(M,g,interval_length_bound=interval_length_bound),key=lambda f: len(f[0])):
+                    rowvkscur = [rowvks[i] for i in rows]
+                    colvkscur = [colvks[j] for j in cols]
+                    add_constraint(colvkscur, rowvkscur, 0, deduplp)
             
         # subspace_pairs = {}
         # for alpha in Q.topological_sort():
