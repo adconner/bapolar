@@ -524,8 +524,7 @@ def search_by_sequence(ba,tmss,Jxi=None,mode='togetherlp'):
         tmcs = tuple(sorted(set([tuple(map(add,tm,tma)) for tm in tms for k in range(1,maxdincrease+1)
                              for tma in IntegerVectors(k,len(ba.dims)) ])))
         if together:
-            for Jxiup in ba.get_ideals_for_tm(tms, tmcs, Jxi, mod=mod, 
-                                              lp_interval_length_bound=4):
+            for Jxiup in ba.get_ideals_for_tm(tms, tmcs, Jxi, mod=mod):
                                               # lp_interval_length_bound=4 if len(J.gens()) == 0 else 4):
                 for res in dfs(Jxiup,tmsi+1):
                     yield res
@@ -538,9 +537,8 @@ def search_by_sequence(ba,tmss,Jxi=None,mode='togetherlp'):
             tmcs_last_check = tuple([tmc for tmc in tmcs
                           if len([tm for tm in tms if all(e <= f for e,f in zip(tm,tmc))]) > 1 ])
             if individual:
-                gens = [ba.get_ideals_for_tm((tm,),tmcscur,Jxi,mod=mod,simplify_existing=False
-                                             # lp_interval_length_bound=2 if tmsi > 0 else 100
-                                             ) for tm,tmcscur in zip(tms,tmcss)]
+                gens = [ba.get_ideals_for_tm((tm,),tmcscur,Jxi,mod=mod,simplify_existing=False) 
+                        for tm,tmcscur in zip(tms,tmcss)]
                 for Jxis in lproduct(*map(enumerate,gens)):
                     print ('index choice %d' % tmsi,[i for i,Ixi in Jxis])
                     Ixi = ba.sum_ideals([Ixi for i,Ixi in Jxis],xi)
@@ -550,7 +548,7 @@ def search_by_sequence(ba,tmss,Jxi=None,mode='togetherlp'):
             elif togetherlp:
                 def constrs_gen(tm,tmscur):
                     xs = [v.lm() for v in mod.get_vs(tm)]
-                    lp = mod.get_linear_program((tm,),tmscur,interval_length_bound=10)
+                    lp = mod.get_linear_program((tm,),tmscur)
                     solgen = (tuple(m for m,v in sol.items() if v == 0) for sol in lp_integer_points(lp,xs=xs,fullsol=False))
                     return (get_positive_constraints(pts,xs) for pts in batched(solgen,1000))
                 constrss = [constrs_gen(tm,tmscur) for tm,tmscur in zip(tms,tmcss)]
@@ -1077,7 +1075,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         assert Rg >= tg or all(next(tt.exponents()[0].sparse_iter())[0] < Rg for tt in t.variables())
         return R(t(R.gens()[self.nvarsx:self.nvarsx+tg]+(R.zero(),)*(tg-Rg)))
     
-    def get_ideals_for_tm(self, tms=[], tmcs=[], Jxi = None, lp_interval_length_bound=3, precise_lp=False,
+    def get_ideals_for_tm(self, tms=[], tmcs=[], Jxi = None, lp_interval_length_bound=oo, precise_lp=False,
                           preset_choices = {}, mod=None, simplify_existing=True, modify_lp = lambda lp: None, 
                           square_tests=[]):
         if mod is None:
@@ -1798,7 +1796,7 @@ class JDat:
                     Q.add_edge((tm,wt),(tm,wtup),get_matrix(self.get_vss(tm)[wtup],xvs))
         return Q
     
-    def get_linear_program(self, tms, tmcs=(), interval_length_bound=3, precise=False):
+    def get_linear_program(self, tms, tmcs=(), interval_length_bound=oo, precise=False):
         lp = MixedIntegerLinearProgram(solver='SCIP')
         lp.set_binary(lp.default_variable())
 
@@ -1864,7 +1862,7 @@ class JDat:
             M = block_matrix([[m for _,m in es]])
             deduplp = MixedIntegerLinearProgram(solver='SCIP',maximization=False)
             # deduplp = None
-            for rowcols in sorted(get_flag_inequalities2(M,g),key=lambda f: len(f)):
+            for rowcols in sorted(get_flag_inequalities2(M,g,interval_length_bound=interval_length_bound),key=lambda f: len(f)):
                 rowvkscur = [rowvks[i] for i,j in rowcols]
                 colvkscur = [colvks[j] for i,j in rowcols]
                 # print('aoeu',[self.get_vss(tm)[wt][i] for tm,wt,i in rowvkscur], [self.get_vss(tm)[wt][i] for tm,wt,i in colvkscur])
@@ -1880,7 +1878,7 @@ class JDat:
             M = block_matrix([[m.T[::-1,::-1] for _,m in es]])
             deduplp = MixedIntegerLinearProgram(solver='SCIP',maximization=False)
             # deduplp = None
-            for rowcols in sorted(get_flag_inequalities2(M,g),key=lambda f: len(f)):
+            for rowcols in sorted(get_flag_inequalities2(M,g,interval_length_bound=interval_length_bound),key=lambda f: len(f)):
                 rowvkscur = [rowvks[i] for i,j in rowcols]
                 colvkscur = [colvks[j] for i,j in rowcols]
                 for i in range(len(rowcols)-1,-1,-1):
