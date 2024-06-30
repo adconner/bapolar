@@ -105,38 +105,46 @@ def get_fillings(m,g,costs=None,cost_bound=0,prunef=lambda cols: True):
         ideal_push(kx)
     cols = []
     cols_sets_seen = set()
+    skip = set()
     def dfs(c):
         nonlocal m
         if not prunef(cols):
             return
         if len(minelts) == 0:
             yield list(cols)
-        for j in list(minelts):
-            if c + costs[j] > cost_bound:
-                continue
-            cols.append(j)
-            frozen_cols = frozenset(cols)
-            if frozen_cols in cols_sets_seen:
+        skiphere = []
+        for j in list(minelts-skip):
+            try:
+                if c + costs[j] > cost_bound:
+                    continue
+                cols.append(j)
+                frozen_cols = frozenset(cols)
+                if frozen_cols in cols_sets_seen:
+                    cols.pop()
+                    continue
+                cols_sets_seen.add(frozen_cols)
+                col = m.column(j)
+                i = next(i for i,e in enumerate(col) if e != 0)
+                row = m.row(i)
+                col /= col[i]
+                ideal_push(j)
+                m -= col.column() * row.row()
+                zeroed = []
+                while any(m[:,kx := k].is_zero() for k in minelts):
+                    ideal_push(kx)
+                    zeroed.append(kx)
+                for res in dfs(c+costs[j]):
+                    yield res
+                while zeroed:
+                    ideal_pop(zeroed.pop())
+                m += col.column() * row.row()
+                ideal_pop(j)
                 cols.pop()
-                continue
-            cols_sets_seen.add(frozen_cols)
-            col = m.column(j)
-            i = next(i for i,e in enumerate(col) if e != 0)
-            row = m.row(i)
-            col /= col[i]
-            ideal_push(j)
-            m -= col.column() * row.row()
-            zeroed = []
-            while any(m[:,kx := k].is_zero() for k in minelts):
-                ideal_push(kx)
-                zeroed.append(kx)
-            for res in dfs(c+costs[j]):
-                yield res
-            while zeroed:
-                ideal_pop(zeroed.pop())
-            m += col.column() * row.row()
-            ideal_pop(j)
-            cols.pop()
+            finally:
+                skip.add(j)
+                skiphere.append(j)
+        for j in skiphere:
+            skip.remove(j)
     return dfs(0)
     
                 
