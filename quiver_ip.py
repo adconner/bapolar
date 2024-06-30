@@ -50,7 +50,6 @@ def get_flag_inequalities2(m,g,interval_length_bound=oo):
     M.addCons(components_lower_bound <= 1)
     if interval_length_bound < oo:
         M.addCons(quicksum(v for v in vs.values()) <= interval_length_bound)
-    
     def extendible_to_irredundant(jxs):
         cols = []
         rows = []
@@ -64,7 +63,7 @@ def get_flag_inequalities2(m,g,interval_length_bound=oo):
         M.hideOutput(True)
         M.optimize()
         return M.getStatus() == 'optimal' and int(M.getObjVal()) == len(cols)
-                                 
+    
     m2 = block_matrix([[m,identity_matrix(m.base_ring(),m.nrows())]])
     g2 = copy(g)
     g2.add_vertex(m.ncols())
@@ -113,7 +112,7 @@ def get_fillings(m,g,costs=None,cost_bound=0,prunef=lambda cols: True):
         if len(minelts) == 0:
             yield list(cols)
         skiphere = []
-        for j in list(minelts-skip):
+        for j in sorted(minelts-skip):
             try:
                 if c + costs[j] > cost_bound:
                     continue
