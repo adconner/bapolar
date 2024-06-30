@@ -1,15 +1,76 @@
+def echelonize_graph(m,g):
+    m = copy(m)
+    below = {}
+    pivots = {}
+    for j in g.topological_sort():
+        if g.in_degree(j) > 0:
+            M = block_matrix([[below[j2]] for j2,_,_ in g.incoming_edges(j)] )
+            M.echelonize()
+            M = M[:M.rank()]
+            pivots[j] = M.pivots()
+        else:
+            M = matrix(m.base_ring(),0,m.nrows())
+            pivots[j] = ()
+        col = m.column(j)
+        col -= vector([col[i] for i in pivots[j]])*M
+        m[:,j] = col.column()
+        M = M.T.augment(col.column()).T
+        M.echelonize()
+        below[j] = M
+    pivots = [pivots[j] for j in range(m.ncols())]
+    return m,pivots
+
 def get_flag_inequalities2(m,g,interval_length_bound=oo):
+    m,pivots = echelonize_graph(m[::-1],g)
+    m = m[::-1]
+    pivots = [[m.nrows()-1-j for j in jxs] for jxs in pivots]
+        
+    bp = BipartiteGraph(m)
+    from pyscipopt import quicksum,Model
+    M = Model()
+    M.enableReoptimization()
+    vs = {}
+    for i,j in m.nonzero_positions():
+        vs[(i,j)] = M.addVar(str((i,j)),'B')
+    lprows = []
+    for i in range(m.nrows()):
+        lprows.append(quicksum(vs[(i,j)] for j in bp.neighbors(m.ncols() + i)))
+        M.addCons(lprows[-1] <= 1)
+    lpcols = []
+    for j in range(m.ncols()):
+        lpcols.append(quicksum(vs[(i-m.ncols(),j)] for i in bp.neighbors(j)))
+        M.addCons(lpcols[-1] <= 1)
+    components_lower_bound = 0
+    for j,c in enumerate(m.columns()):
+        for i1 in c.nonzero_positions():
+            implied = [i2 for i2 in c.nonzero_positions() + pivots[j] if i2 > i1]
+            components_lower_bound += (1 - len(implied)) * vs[(i1,j)]
+            for i2 in implied:
+                M.addCons(vs[(i1,j)] <= lprows[i2])
+    M.addCons(components_lower_bound <= 1)
+    if interval_length_bound < oo:
+        M.addCons(quicksum(v for v in vs.values()) <= interval_length_bound)
+    
+    def extendible_to_irredundant(jxs):
+        cols = []
+        rows = []
+        for j in jxs:
+            if j < m.ncols():
+                cols.append(j)
+            else:
+                rows.append(j - m.ncols())
+        M.freeReoptSolve()
+        M.chgReoptObjective(quicksum(lpcols[j] for j in cols)-quicksum(lprows[i] for i in rows),"maximize")
+        M.hideOutput(True)
+        M.optimize()
+        return M.getStatus() == 'optimal' and int(M.getObjVal()) == len(cols)
+                                 
     m2 = block_matrix([[m,identity_matrix(m.base_ring(),m.nrows())]])
     g2 = copy(g)
     g2.add_vertex(m.ncols())
     for j in range(m.ncols(),m2.ncols()-1):
         g2.add_edge(j,j+1)
-    try:
-        assert m2.ncols() == len(g2)
-    except:
-        embed()
-        raise
-    for jxs in get_fillings(m2,g2,[1]*m.ncols()+[0]*m.nrows(),interval_length_bound):
+    for jxs in get_fillings(m2,g2,[1]*m.ncols()+[0]*m.nrows(),interval_length_bound,extendible_to_irredundant):
         rows = set(range(m.nrows()))
         cols = []
         for j in jxs:
@@ -19,7 +80,7 @@ def get_flag_inequalities2(m,g,interval_length_bound=oo):
                 rows.remove(j - m.ncols())
         yield (list(rows),cols)
 
-def get_fillings(m,g,costs=None,cost_bound=0):
+def get_fillings(m,g,costs=None,cost_bound=0,prunef=lambda cols: True):
     assert(len(g) == m.ncols())
     if costs is None:
         costs = [0]*m.ncols()
@@ -46,6 +107,8 @@ def get_fillings(m,g,costs=None,cost_bound=0):
     cols_sets_seen = set()
     def dfs(c):
         nonlocal m
+        if not prunef(cols):
+            return
         if len(minelts) == 0:
             yield list(cols)
         for j in list(minelts):
