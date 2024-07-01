@@ -1886,7 +1886,7 @@ class JDat:
         def square_tm_bound(tm):
             return (1+sum(d-1 for d,k in zip(ba.dims,tm) if k>0))*ba.r
         for tm in square_tests:
-            lp.add_constraint(lp.sum(1-lp[v.lm()] 
+            lp.add_constraint(lp.sum(1-lp[(v.lm(),2)] 
                     for v in self.get_vs(tm)) >= square_tm_bound(tm))
             
         @cache
