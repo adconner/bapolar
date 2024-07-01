@@ -51,6 +51,7 @@ def get_flag_inequalities2(m,g,interval_length_bound=oo):
     if interval_length_bound < oo:
         M.addCons(quicksum(v for v in vs.values()) <= interval_length_bound)
     def extendible_to_irredundant(jxs):
+        return True
         cols = []
         rows = []
         for j in jxs:
