@@ -1147,17 +1147,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                                 bp_restore.append((m,1))
                                 newrel = True
                             else:
-                                bp.set_min(m,1)
-                                if not bp.feasible():
-                                    bp.set_min(m,0)
-                                    bp.set_max(m,0)
-                                    bp_restore.append((m,0))
-                                    J += t
-                                    newrel = True
-                                    gb_needed = True
-                                else:
-                                    bp.set_min(m,0)
-                                    leading_coefficient_by_monomial.setdefault(t,[]).append(m)
+                                leading_coefficient_by_monomial.setdefault(t,[]).append(m)
                     for t, ms in leading_coefficient_by_monomial.items():
                         if len(ms) > 1:
                             for m in ms:
@@ -1192,17 +1182,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                                     bp_restore.append(((m,2),1))
                                     newrel = True
                                 else:
-                                    bp.set_min((m,2),1)
-                                    if not bp.feasible():
-                                        bp.set_min((m,2),0)
-                                        bp.set_max((m,2),0)
-                                        bp_restore.append(((m,2),0))
-                                        J += t
-                                        newrel = True
-                                        gb_needed = True
-                                    else:
-                                        bp.set_min((m,2),0)
-                                        leading_coefficient_by_monomial.setdefault(t,[]).append(m)
+                                    leading_coefficient_by_monomial.setdefault(t,[]).append(m)
                         for t, ms in leading_coefficient_by_monomial.items():
                             if len(ms) > 1:
                                 for m in ms:
