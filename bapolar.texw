@@ -1751,25 +1751,26 @@ class JDat:
         # ps in span of qs, find matrix expressing each 
         # p as a linear combination of the qs
         def get_matrix(qs,ps):
-            ms = []
-            mdict = {}
-            A = {}
-            for pi,p in enumerate(ps):
-                for m in p.monomials():
-                    if m not in mdict:
-                        mdict[m] = len(ms)
-                        ms.append(m)
-                    A[(mdict[m],pi)] = p.monomial_coefficient(m)
-            B = {}
-            for pi,p in enumerate(qs):
-                for m in p.monomials():
-                    if m not in mdict:
-                        mdict[m] = len(ms)
-                        ms.append(m)
-                    B[(mdict[m],pi)] = p.monomial_coefficient(m)
-            A = matrix(ba.F,len(ms),len(ps),A)
-            B = matrix(ba.F,len(ms),len(qs),B)
-            return B.solve_right(A)
+            return ff.lift(self.ba.R0.ideal(qs), self.ba.R0.ideal(ps)).apply_map(lambda e: e.constant_coefficient())
+            # ms = []
+            # mdict = {}
+            # A = {}
+            # for pi,p in enumerate(ps):
+            #     for m in p.monomials():
+            #         if m not in mdict:
+            #             mdict[m] = len(ms)
+            #             ms.append(m)
+            #         A[(mdict[m],pi)] = p.monomial_coefficient(m)
+            # B = {}
+            # for pi,p in enumerate(qs):
+            #     for m in p.monomials():
+            #         if m not in mdict:
+            #             mdict[m] = len(ms)
+            #             ms.append(m)
+            #         B[(mdict[m],pi)] = p.monomial_coefficient(m)
+            # A = matrix(ba.F,len(ms),len(ps),A)
+            # B = matrix(ba.F,len(ms),len(qs),B)
+            # return B.solve_right(A)
             
         Q = DiGraph(multiedges=True)
         P = Poset((tms+tmcs,lambda a,b: all(i<=j for i,j in zip(a,b))))
