@@ -217,6 +217,14 @@ class BinaryProgramSCIPReopt:
             sol = self.M.getBestSol()
             sol = [ (x, int(sol[v])) for x, v in self.vars.items() ]
             return sol
+    def feasible(self):
+        from pyscipopt import quicksum
+        self.M.freeReoptSolve()
+        self.M.chgReoptObjective(quicksum( self.vars[x] if v == 1 else -self.vars[x] for x,v in self.psol),"maximize")
+        target = len([_ for _,v in self.psol if v==1])
+        # self.M.hideOutput(False)
+        self.M.optimize()
+        return not (self.M.getStatus() != 'optimal' or int(self.M.getObjVal()) < target)
         
 # function to enumerate integer points of a polytope defined by input linear program
 # (sage MixedIntegerLinearProgram). If xs, a subset of variables, is provided,
