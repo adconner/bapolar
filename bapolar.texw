@@ -1075,7 +1075,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         assert Rg >= tg or all(next(tt.exponents()[0].sparse_iter())[0] < Rg for tt in t.variables())
         return R(t(R.gens()[self.nvarsx:self.nvarsx+tg]+(R.zero(),)*(tg-Rg)))
     
-    def get_ideals_for_tm(self, tms=[], tmcs=[], Jxi = None, lp_interval_length_bound=oo, precise_lp=False,
+    def get_ideals_for_tm(self, tms=[], tmcs=[], Jxi = None, lp_interval_length_bound=oo, 
                           preset_choices = {}, mod=None, simplify_existing=True, modify_lp = lambda lp: None, 
                           square_tests=[]):
         if mod is None:
@@ -1084,6 +1084,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             Jxi = (self.R0.ideal([liftR(p,self.R0) for p in mod.J.gens()],side='twosided'), 0)
         tms = tuple(tms)
         tmcs = tuple(tmcs)
+        square_tests = tuple(square_tests)
         tmsall = set(tms+tmcs)
 
         gbbound = max([sum(tm) for tm in tms+tmcs])
@@ -1099,7 +1100,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
             return mod.get_vss(vk[0])[vk[1]][vk[2]].lm()
                         
         lp = copy(mod.get_linear_program(tms,tmcs,
-             interval_length_bound=lp_interval_length_bound,precise=precise_lp))
+             interval_length_bound=lp_interval_length_bound,square_tests=square_tests))
         modify_lp(lp)
         bp = BinaryProgramSCIPReopt(lp)
         # bp = BinaryProgram(lp)
@@ -1796,7 +1797,7 @@ class JDat:
                     Q.add_edge((tm,wt),(tm,wtup),get_matrix(self.get_vss(tm)[wtup],xvs))
         return Q
     
-    def get_linear_program(self, tms, tmcs=(), interval_length_bound=oo, precise=False):
+    def get_linear_program(self, tms, tmcs=(), interval_length_bound=oo, square_tests=()):
         lp = MixedIntegerLinearProgram(solver='SCIP')
         lp.set_binary(lp.default_variable())
 
@@ -1829,8 +1830,8 @@ class JDat:
                     return False
             if deduplp is not None:
                 from sage.numerical.mip import MIPSolverException
-                cc = deduplp.sum(deduplp[self.get_vss(tm)[vk][i].lm()] for tm,vk,i in rowvks) + kerdim - \
-                     deduplp.sum(deduplp[self.get_vss(tm)[vk][i].lm()] for tm,vk,i in colvks)
+                cc = deduplp.sum(deduplp[self.get_vss(tm)[wt][i].lm()] for tm,wt,i in rowvks) + kerdim - \
+                     deduplp.sum(deduplp[self.get_vss(tm)[wt][i].lm()] for tm,wt,i in colvks)
                 deduplp.set_objective(cc)
                 deduplp.set_min(deduplp.default_variable(),0)
                 deduplp.set_max(deduplp.default_variable(),1)
@@ -1839,17 +1840,17 @@ class JDat:
                 if s >= -1e-9:
                     return False
                 deduplp.add_constraint(cc >= 0)
-            prows = [self.get_vss(tm)[vk][i] for tm,vk,i in rowvks]
-            pcols = [self.get_vss(tm)[vk][i] for tm,vk,i in colvks]
+            prows = [self.get_vss(tm)[wt][i] for tm,wt,i in rowvks]
+            pcols = [self.get_vss(tm)[wt][i] for tm,wt,i in colvks]
             if len(prows) > 1:
                 print(prows,pcols,kerdim)
             nonlocal nconstraints
             constraints.add_set(S, (nconstraints,kerdim))
             nconstraints += 1
-            lp.add_constraint(lp.sum(lp[self.get_vss(tm)[vk][i].lm()]
-                                         for tm,vk,i in colvks)
-                             <= lp.sum(lp[self.get_vss(tm)[vk][i].lm()] 
-                                         for tm,vk,i in rowvks) + kerdim)
+            lp.add_constraint(lp.sum(lp[self.get_vss(tm)[wt][i].lm()]
+                                         for tm,wt,i in colvks)
+                             <= lp.sum(lp[self.get_vss(tm)[wt][i].lm()] 
+                                         for tm,wt,i in rowvks) + kerdim)
             return True
         
         Q = self.get_quiver_representation(tms,tmcs)
@@ -1880,6 +1881,98 @@ class JDat:
                     rowvkscur = [rowvks[i] for i in rows]
                     colvkscur = [colvks[j] for j in cols]
                     add_constraint(colvkscur, rowvkscur, 0, deduplp)
+            
+        def square_tm_bound(tm):
+            return (1+sum(d-1 for d,k in zip(ba.dims,tm) if k>0))*ba.r
+        for tm in square_tests:
+            lp.add_constraint(lp.sum(1-lp[v.lm()] 
+                    for v in self.get_vs(tm)) >= square_tm_bound(tm))
+            
+        @cache
+        def conjunction_variable(vks):
+            vs = tuple( self.get_vss(tm)[wt][i].lm() for tm,wt,i in vks )
+            if len(vs) == 1:
+                return lp[vs[0]]
+            lp.add_constraint(lp.sum(lp[v] for v in vs) <= lp[vs] + len(vs)-1)
+            for v in vs:
+                lp.add_constraint(lp[vs] <= lp[v])
+            return lp[vs]
+            
+        pair_constraints = SetSystem()
+        def add_square_constraint(rowvks,colvkss,kerdim):
+            assert kerdim <= len(colvkss)
+            if len(colvkss) == kerdim:
+                return False
+            colvkss = [tuple(sorted(vks)) for vks in colvkss]
+            S = [('r',vk) for vk in rowvks]+[('c',vks) for vks in colvkss]
+            for Ss,ks in pair_constraints.iter_unions(S):
+                if kerdim-len(colvkss) >= sum(ks)-len([None for R in Ss for tag,_ in R if tag == 'c']):
+                    # this condition is one we have added plus conditions 
+                    # x <= 1 or 0 <= x
+                    assert len(rowvks) > 1
+                    return False
+            prows = [self.get_vss(tm)[wt][i] for tm,wt,i in rowvks]
+            pcols = [[self.get_vss(tm)[wt][i] for tm,wt,i in vks] for vks in colvkss]
+            if len(prows) > 1:
+                print(prows,pcols,kerdim)
+            pair_constraints.add_set(S, kerdim)
+            lp.add_constraint(lp.sum(lp[conjunction_variable(vks)] for vks in colvkss)
+                             <= lp.sum(lp[(self.get_vss(tm)[wt][i].lm(),2)] for tm,wt,i in rowvks) + kerdim)
+            return True
+
+        wtspaces = {}
+        for tm1,tm2 in combinations_with_replacement(tms,2):
+            from operator import add
+            tm = tuple(map(add,tm1,tm2))
+            if tm in square_tests:
+                for (wt1,vs1),(wt2,vs2) in product(self.get_vss(tm1).items(),self.get_vss(tm2).items()):
+                    if tm1 == tm2 and wt1 > wt2:
+                        continue
+                    wt = tuple(map(add,wt1,wt2))
+                    vs = self.get_vss(tm)[wt]
+                    if (tm1,wt1) == (tm2,wt2):
+                        prods = [v*w for v,w in combinations_with_replacement(vs1,2)]
+                    else:
+                        prods = [v*w for v,w in product(vs1,vs2)]
+                    m = ff.lift(self.ba.R0.ideal(vs), self.ba.R0.ideal(prods)).apply_map(lambda e: e.constant_coefficient())
+                    wtspaces.setdefault((tm,wt),[]).append(((tm1,wt1),(tm2,wt2),m))
+        for alpha,below_pairs in wtspaces.items():
+            M = block_matrix([[m for beta1,beta2,m in below_pairs]])
+            g = DiGraph()
+            c = 0
+            colvkss = []
+            for (tm1,wt1),(tm2,wt2),_ in below_pairs:
+                if (tm1,wt1) == (tm2,wt2):
+                    cnt = len(self.get_vss(tm1)[wt1])
+                    colvkss.extend([ [(tm1,wt1,i),(tm1,wt1,j)]  for i,j in combinations_with_replacement(range(cnt),2)])
+                    ixmap = { (i,j) : c+k for k,(i,j) in enumerate(combinations_with_replacement(range(cnt),2)) }
+                    for k in range(binomial(cnt+1,2)):
+                        g.add_vertex(c+k)
+                    for i,j in combinations_with_replacement(range(cnt),2):
+                        if j < cnt-1:
+                            g.add_edge( ixmap[(i,j)], ixmap[(i,j+1)] )
+                        if i < j:
+                            g.add_edge( ixmap[(i,j)], ixmap[(i+1,j)] )
+                    c += binomial(cnt+1,2)
+                else:
+                    cnt1 = len(self.get_vss(tm1)[wt1])
+                    cnt2 = len(self.get_vss(tm2)[wt2])
+                    colvkss.extend([ [(tm1,wt1,i),(tm2,wt2,j)]  for i,j in product(range(cnt1),range(cnt2))])
+                    for i in range(cnt1):
+                        g.add_vertex(c+i*cnt2)
+                        for j in range(cnt2-1):
+                            g.add_edge(c+i*cnt2+j, c+i*cnt2+j+1)
+                    for j in range(cnt2):
+                        g.add_vertex(c+j)
+                        for i in range(cnt1-1):
+                            g.add_edge(c+i*cnt2+j, c+(i+1)*cnt2+j)
+                    c += cnt1 * cnt2
+            rowvks = [alpha+(i,) for i in range(len(self.get_vss(alpha[0])[alpha[1]]))]
+            for rows,cols in sorted(get_flag_inequalities2(M,g,interval_length_bound=3),key=lambda f: len(f[0])):
+                rowvkscur = [rowvks[i] for i in rows]
+                colvksscur = [colvkss[j] for j in cols]
+                add_square_constraint(rowvkscur, colvksscur, 0)
+                              
             
         # subspace_pairs = {}
         # for alpha in Q.topological_sort():
