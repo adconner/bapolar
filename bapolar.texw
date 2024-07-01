@@ -1174,30 +1174,46 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                             J = gb(J)
                             gb_needed = False
                         JJ,_ = square(self,(J,yi),square_tests)
-                        have = {}
-                        leading_coefficient_count = {}
+                        leading_coefficient_by_monomial = {}
                         for p in JJ.gens():
                             if p.is_zero():
                                 continue
                             m = self.lm(p,True)
-                            tm = self.polynomial_tm(m)
-                            if m.is_one() or tm not in square_tests:
+                            if m.is_one() or self.polynomial_tm(m) not in square_tests:
                                 continue
-                            t = p.coefficient(self.lm(p))
-                            if t.is_constant():
-                                have[tm] = have.get(tm,0) + 1
-                            else:
-                                leading_coefficient_count.setdefault(tm,{}).setdefault(t,set()).add(m)
-                        def tm_bound(tm):
-                            return (1+sum(d-1 for d,k in zip(ba.dims,tm) if k>0))*ba.r
-                        if any(self.tm_dim(tm) - have.get(tm,0) < tm_bound(tm) for tm in square_tests):
-                            return
-                        for tm in square_tests:
-                            for t,c in leading_coefficient_count.get(tm,{}).items():
-                                if self.tm_dim(tm) - (len(c) + have.get(tm,0)) < tm_bound(tm):
+                            if bp.get_min((m,2)) == 0:
+                                t = p.coefficient(self.lm(p))
+                                if bp.get_max((m,2)) == 0:
                                     J += t
                                     newrel = True
                                     gb_needed = True
+                                elif t.is_constant():
+                                    bp.set_min((m,2),1)
+                                    bp_restore.append(((m,2),1))
+                                    newrel = True
+                                else:
+                                    bp.set_min((m,2),1)
+                                    if bp.extend() is None:
+                                        bp.set_min((m,2),0)
+                                        bp.set_max((m,2),0)
+                                        bp_restore.append(((m,2),0))
+                                        J += t
+                                        newrel = True
+                                        gb_needed = True
+                                    else:
+                                        bp.set_min((m,2),0)
+                                        leading_coefficient_by_monomial.setdefault(t,[]).append(m)
+                        for t, ms in leading_coefficient_by_monomial.items():
+                            if len(ms) > 1:
+                                for m in ms:
+                                    bp.set_min((m,2),1)
+                                if bp.extend() is None:
+                                    J += t
+                                    newrel = True
+                                    gb_needed = True
+                                for m in ms:
+                                    bp.set_min((m,2),0)
+                                    
                 J,_,yi = self.quick_simplify((J,[J.ring().one()],yi),0 if simplify_existing else xiorig)
                 yield (J,yi)
             finally:
