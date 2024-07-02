@@ -22,7 +22,7 @@ def echelonize_graph(m,g):
     pivots = [pivots[j] for j in range(m.ncols())]
     return m,pivots
 
-def get_flag_inequalities2(m,g,interval_length_bound=oo):
+def get_flag_inequalities2(m,g,relation_size_bound=oo):
     m,pivots = echelonize_graph(m[::-1],g)
     m = m[::-1]
     pivots = [[m.nrows()-1-j for j in jxs] for jxs in pivots]
@@ -62,8 +62,8 @@ def get_flag_inequalities2(m,g,interval_length_bound=oo):
     #         #             if i2 not in implied:
     #         #                 components_lower_bound -= conjunction((vs[(i1,j)],1-lpcols[j2]))
     # M.addCons(components_lower_bound <= 1)
-    # if interval_length_bound < oo:
-    #     M.addCons(quicksum(v for v in vs.values()) <= interval_length_bound)
+    # if relation_size_bound < oo:
+    #     M.addCons(quicksum(v for v in vs.values()) <= relation_size_bound)
     def extendible_to_irredundant(jxs,jxsout):
         return True
         # cols = []
@@ -92,7 +92,7 @@ def get_flag_inequalities2(m,g,interval_length_bound=oo):
     g2.add_vertex(m.ncols())
     for j in range(m.ncols(),m2.ncols()-1):
         g2.add_edge(j,j+1)
-    for jxs in get_fillings(m2,g2,[1]*m.ncols()+[0]*m.nrows(),interval_length_bound,extendible_to_irredundant):
+    for jxs in get_fillings(m2,g2,[1]*m.ncols()+[0]*m.nrows(),relation_size_bound,extendible_to_irredundant):
         rows = set(range(m.nrows()))
         cols = []
         for j in jxs:
