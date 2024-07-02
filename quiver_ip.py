@@ -1,3 +1,5 @@
+from functools import cache
+
 def echelonize_graph(m,g):
     m = copy(m)
     below = {}
@@ -40,17 +42,29 @@ def get_flag_inequalities2(m,g,interval_length_bound=oo):
     for j in range(m.ncols()):
         lpcols.append(quicksum(vs[(i-m.ncols(),j)] for i in bp.neighbors(j)))
         M.addCons(lpcols[-1] <= 1)
+    # P = Poset(g)
+    # def conjunction(es):
+    #     c = M.addVar(str(es))
+    #     for v in es:
+    #         M.addCons(c <= v)
+    #     M.addCons(quicksum(v for v in es) <= c + len(es) - 1)
+    #     return c
     components_lower_bound = 0
     for j,c in enumerate(m.columns()):
         for i1 in c.nonzero_positions():
-            implied = [i2 for i2 in c.nonzero_positions() + pivots[j] if i2 > i1]
-            components_lower_bound += (1 - len(implied)) * vs[(i1,j)]
+            implied = pivots[j] + [i2 for i2 in c.nonzero_positions() if i2 > i1]
             for i2 in implied:
                 M.addCons(vs[(i1,j)] <= lprows[i2])
+            components_lower_bound += (1 - len(implied)) * vs[(i1,j)]
+            # for j2 in P.order_ideal([j]):
+            #     if j2 != j:
+            #         for i2 in m.column(j2).nonzero_positions():
+            #             if i2 not in implied:
+            #                 components_lower_bound -= conjunction((vs[(i1,j)],1-lpcols[j2]))
     M.addCons(components_lower_bound <= 1)
     if interval_length_bound < oo:
         M.addCons(quicksum(v for v in vs.values()) <= interval_length_bound)
-    def extendible_to_irredundant(jxs):
+    def extendible_to_irredundant(jxs,jxsout):
         return True
         cols = []
         rows = []
@@ -59,11 +73,19 @@ def get_flag_inequalities2(m,g,interval_length_bound=oo):
                 cols.append(j)
             else:
                 rows.append(j - m.ncols())
+        colsout = []
+        rowsout = []
+        for j in jxsout:
+            if j < m.ncols():
+                colsout.append(j)
+            else:
+                rowsout.append(j - m.ncols())
         M.freeReoptSolve()
-        M.chgReoptObjective(quicksum(lpcols[j] for j in cols)-quicksum(lprows[i] for i in rows),"maximize")
+        M.chgReoptObjective(quicksum(lpcols[j] for j in cols) - quicksum(lpcols[j] for j in colsout) -\
+                quicksum(lprows[i] for i in rows) + quicksum(lprows[i] for i in rowsout),"maximize")
         M.hideOutput(True)
         M.optimize()
-        return M.getStatus() == 'optimal' and int(M.getObjVal()) == len(cols)
+        return M.getStatus() == 'optimal' and int(M.getObjVal()) == len(cols) + len(rowsout)
     
     m2 = block_matrix([[m,identity_matrix(m.base_ring(),m.nrows())]])
     g2 = copy(g)
@@ -80,7 +102,7 @@ def get_flag_inequalities2(m,g,interval_length_bound=oo):
                 rows.remove(j - m.ncols())
         yield (list(rows),cols)
 
-def get_fillings(m,g,costs=None,cost_bound=0,prunef=lambda cols: True):
+def get_fillings(m,g,costs=None,cost_bound=0,prunef=lambda cols,skip: True):
     assert(len(g) == m.ncols())
     if costs is None:
         costs = [0]*m.ncols()
@@ -104,11 +126,10 @@ def get_fillings(m,g,costs=None,cost_bound=0,prunef=lambda cols: True):
     while any(m[:,kx := k].is_zero() for k in minelts):
         ideal_push(kx)
     cols = []
-    cols_sets_seen = set()
     skip = set()
     def dfs(c):
         nonlocal m
-        if not prunef(cols):
+        if not prunef(cols,skip):
             return
         if len(minelts) == 0:
             yield list(cols)
@@ -118,11 +139,6 @@ def get_fillings(m,g,costs=None,cost_bound=0,prunef=lambda cols: True):
                 if c + costs[j] > cost_bound:
                     continue
                 cols.append(j)
-                frozen_cols = frozenset(cols)
-                if frozen_cols in cols_sets_seen:
-                    cols.pop()
-                    continue
-                cols_sets_seen.add(frozen_cols)
                 col = m.column(j)
                 i = next(i for i,e in enumerate(col) if e != 0)
                 row = m.row(i)
