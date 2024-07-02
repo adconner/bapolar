@@ -1794,7 +1794,7 @@ class JDat:
                     Q.add_edge((tm,wt),(tm,wtup),get_matrix(self.get_vss(tm)[wtup],xvs))
         return Q
     
-    def get_linear_program(self, tms, tmcs=(), relation_size_bound=oo, square_tests=(), search_bound=2000):
+    def get_linear_program(self, tms, tmcs=(), relation_size_bound=oo, square_tests=(), search_bound=500):
         lp = MixedIntegerLinearProgram(solver='SCIP')
         lp.set_binary(lp.default_variable())
 
@@ -1851,10 +1851,15 @@ class JDat:
             return True
         
         def relation_size_bound_ncols(ncols):
-            if binomial(ncols, ncols // 2) <= search_bound:
+            if 2**ncols <= search_bound:
                 bound = ncols
             else:
-                bound = next(k for k in count() if binomial(ncols,k) > search_bound) - 1
+                cur = 0
+                for bound in count():
+                    cur += binomial(ncols,bound)
+                    if cur > search_bound:
+                        bound -= 1
+                        break
             bound = min(max(bound,1),relation_size_bound)
             return bound
         
