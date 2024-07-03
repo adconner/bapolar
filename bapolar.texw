@@ -1744,30 +1744,6 @@ class JDat:
         return vkstart,vkbelowcnt,wkabove
     
     def get_quiver_representation(self,tms,tmcs=()):
-        # ps in span of qs, find matrix expressing each 
-        # p as a linear combination of the qs
-        def get_matrix(qs,ps):
-            return ff.lift(self.ba.R0.ideal(qs), self.ba.R0.ideal(ps)).apply_map(lambda e: e.constant_coefficient())
-            # ms = []
-            # mdict = {}
-            # A = {}
-            # for pi,p in enumerate(ps):
-            #     for m in p.monomials():
-            #         if m not in mdict:
-            #             mdict[m] = len(ms)
-            #             ms.append(m)
-            #         A[(mdict[m],pi)] = p.monomial_coefficient(m)
-            # B = {}
-            # for pi,p in enumerate(qs):
-            #     for m in p.monomials():
-            #         if m not in mdict:
-            #             mdict[m] = len(ms)
-            #             ms.append(m)
-            #         B[(mdict[m],pi)] = p.monomial_coefficient(m)
-            # A = matrix(ba.F,len(ms),len(ps),A)
-            # B = matrix(ba.F,len(ms),len(qs),B)
-            # return B.solve_right(A)
-            
         Q = DiGraph(multiedges=True)
         P = Poset((tms+tmcs,lambda a,b: all(i<=j for i,j in zip(a,b))))
         for tm,tmr in P.cover_relations():
@@ -1782,7 +1758,7 @@ class JDat:
                         continue
                     wtup = ba.polynomial_weight(next(vm for vm in vms if not vm.is_zero()))
                     ws = self.get_vss(tmr)[wtup]
-                    Q.add_edge((tm,wt),(tmr,wtup),get_matrix(ws,vms))
+                    Q.add_edge((tm,wt),(tmr,wtup),get_matrix_for_submodule(ws,vms))
         for tm in tms:
             for wt,vs in self.get_vss(tm).items():
                 for x in ba.R0.gens()[ba.nvars:]:
@@ -1791,7 +1767,7 @@ class JDat:
                     if all(xv.is_zero() for xv in xvs):
                         continue
                     wtup = ba.polynomial_weight(next(vm for vm in xvs if not vm.is_zero()))
-                    Q.add_edge((tm,wt),(tm,wtup),get_matrix(self.get_vss(tm)[wtup],xvs))
+                    Q.add_edge((tm,wt),(tm,wtup),get_matrix_for_submodule(self.get_vss(tm)[wtup],xvs))
         return Q
     
     def get_linear_program(self, tms, tmcs=(), relation_size_bound=oo, square_tests=(), search_bound=500):
@@ -1944,7 +1920,7 @@ class JDat:
                         prods = [v*w for v,w in combinations_with_replacement(vs1,2)]
                     else:
                         prods = [v*w for v,w in product(vs1,vs2)]
-                    m = ff.lift(self.ba.R0.ideal(vs), self.ba.R0.ideal(prods)).apply_map(lambda e: e.constant_coefficient())
+                    m = get_matrix_for_submodule(vs,prods)
                     wtspaces.setdefault((tm,wt),[]).append(((tm1,wt1),(tm2,wt2),m))
         for alpha,below_pairs in wtspaces.items():
             M = block_matrix([[m for beta1,beta2,m in below_pairs]])
@@ -2514,6 +2490,30 @@ def bounded_gb(J, d):
         opt['deg_bound'] = 100*(d+1)-1
         return J.ring().ideal(J.twostd().gens()+tuple(sav),side='twosided')
     return res
+
+# ps in span of qs, find matrix expressing each 
+# p as a linear combination of the qs
+def get_matrix_for_submodule(qs,ps):
+    # return ff.lift(self.ba.R0.ideal(qs), self.ba.R0.ideal(ps)).apply_map(lambda e: e.constant_coefficient())
+    ms = []
+    mdict = {}
+    A = {}
+    for pi,p in enumerate(ps):
+        for m in p.monomials():
+            if m not in mdict:
+                mdict[m] = len(ms)
+                ms.append(m)
+            A[(mdict[m],pi)] = p.monomial_coefficient(m)
+    B = {}
+    for pi,p in enumerate(qs):
+        for m in p.monomials():
+            if m not in mdict:
+                mdict[m] = len(ms)
+                ms.append(m)
+            B[(mdict[m],pi)] = p.monomial_coefficient(m)
+    A = matrix(ba.F,len(ms),len(ps),A)
+    B = matrix(ba.F,len(ms),len(qs),B)
+    return B.solve_right(A)
 
 def basis_of_lie_algebra(xs):
     n = xs[0].dimensions()[0]
