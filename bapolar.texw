@@ -2279,9 +2279,9 @@ class JDat:
         queue = []
         Q = DiGraph()
         def queue_add(v,M):
-            print(M)
             assert M.degree() == len(self.get_vss(v[0])[v[1]])
             if M not in Q.get_vertex(v):
+                print(M.matrix())
                 queue.append((v,M))
         for v in self.get_quiver_representation(tms,tmcs).vertices(sort=False):
             Q.add_vertex(v)
@@ -2293,64 +2293,92 @@ class JDat:
             Q.add_edge(v,w,linear_transformation(f,side="right"))
         while queue:
             v,M = queue.pop()
+            Q.get_vertex(v).add(M)
             for N in Q.get_vertex(v):
                 queue_add(v,M.intersection(N))
-                queue_add(v,M + N)
-            Q.get_vertex(v).add(M)
+                # queue_add(v,M + N)
             for _,w,f in Q.outgoing_edges(v):
                 queue_add(w,f(M))
             for w,_,f in Q.incoming_edges(v):
                 queue_add(w,f.inverse_image(M))
         return Q
     
-    def get_linear_program_preserved_subspaces(self,tms,tmcs=()):
+    def get_linear_program_preserved_subspaces(self,tms,tmcs=(),relation_size_bound=4):
+        def subspaces_to_graph(Vs):
+            g = DiGraph()
+            cols = []
+            tops = {}
+            P = Poset([Vs,lambda a,b: a.is_subspace(b)]).hasse_diagram()
+            c = 0
+            for W in P.topological_sort():
+                tops[W] = []
+                for V,_,_ in P.incoming_edges(W):
+                    nvert = len(g)
+                    ixs = block_matrix([ [V.matrix()], [W.matrix()[::-1]] ]).pivot_rows()
+                    ixs = [V.dimension()+W.dimension()-1-i for i in ixs[V.dimension():]]
+                    ixs.reverse()
+                    for i in ixs:
+                        cols.append(W.matrix().row(i))
+                    g.add_vertex(c)
+                    for i in range(len(ixs)-1):
+                        g.add_edge(c+i,c+i+1)
+                    for i in tops[V]:
+                        g.add_edge(i,c)
+                    tops[W].append(c+len(ixs)-1)
+                    c += len(ixs)
+            M = matrix(self.ba.F,cols).T
+            return M,g
+                    
         Q = self.get_quiver_representation_with_preserved_subspaces(tms,tmcs)
         lp = MixedIntegerLinearProgram(solver='SCIP')
-        lp.set_integer(lp.default_variable())
-        lp.set_min(lp.default_variable(),0)
-        def get_var(v,s):
-            if s.dimension() > 0:
-                if (v,s) not in lp.default_variable().keys():
-                    lp.set_max(lp[(v,s)],s.dimension())
-                return lp[(v,s)]
-            else:
-                return 0
-        for v in Q.vertices(sort=False):
-            print(v)
-            P = Poset((Q.get_vertex(v),lambda a,b: a.is_subspace(b)))
-            for s1,s2 in P.cover_relations():
-                if s1.dimension() > 0:
-                    lp.add_constraint( get_var(v,s1) <= get_var(v,s2) )
-            # for s in P:
-            #     Plow = P.subposet(set(P.principal_order_ideal(s)) - set([s]))
-            #     if len(Plow) == 0:
-            #         continue
-            #     # for rs in Plow.maximal_antichains():
-            #     rs = Plow.maximal_elements()
-            #     term = 0
-            #     queue = [(s,())]
-            #     while queue:
-            #         rcur,ris = queue.pop()
-            #         if rcur.dimension() == 0:
-            #             continue
-            #         term += (-1)**len(ris) * get_var(v,rcur)
-            #         starti = ris[-1]+1 if len(ris) > 0 else 0
-            #         for ri,r in enumerate(rs[starti:]):
-            #             queue.append((rcur.intersection(r),ris+(starti+ri,)))
-            #     print(term)
-            #     lp.add_constraint(term >= 0)
-            for s1,s2,_ in P.incomparability_graph().edges(sort=False):
-                lp.add_constraint( get_var(v,s1) + get_var(v,s2) - get_var(v,s1.intersection(s2)) <= get_var(v,P.join(s1,s2)) )
-        for v,w,f in Q.edges(sort=False):
-            print(v,w)
-            im = f.image()
-            ker = f.kernel()
-            for s in Q.get_vertex(v):
-                if ker.is_subspace(s) and s != ker:
-                    lp.add_constraint(get_var(v,s) - get_var(v,ker) <= get_var(w,f(s)))
+        lp.set_binary(lp.default_variable())
+        space_graphs = {}
+        space_dim = {}
+        for alpha in Q:
+            M,g = subspaces_to_graph(Q.get_vertex(alpha))
+            space_graphs[alpha] = (M,g)
+            g.add_vertices(['bottom','top'])
+            for i in g:
+                if i != 'bottom' and i != 'top':
+                    if g.in_degree(i) == 0:
+                        g.add_edge('bottom',i)
+                    if g.out_degree(i) == 0:
+                        g.add_edge(i,'top')
+            for c in g.to_undirected().cycle_basis():
+                cons = 0
+                for i,v in enumerate(c):
+                    prev = c[(i-1+len(c)) % len(c)] in g.neighbors_out(v)
+                    nex = c[(i+1) % len(c)] in g.neighbors_out(v)
+                    if not prev and nex:
+                        cons += lp[alpha + (v,)]
+                    elif prev and not nex:
+                        cons -= lp[alpha + (v,)]
+                lp.add_constraint(cons == 0)
+            space_dim[alpha] = lp.sum(lp[alpha+(v,)] for v in next(g.all_paths_iterator(['bottom'],['top']))[1:-1])
+            g.delete_vertices(['bottom','top'])
         for tm in tms+tmcs:
-            lp.add_constraint(lp.sum( len(vs) - get_var((tm,wt),VectorSpace(self.ba.F,len(vs)).subspace(identity_matrix(self.ba.F,len(vs))))
-                for wt,vs in self.get_vss(tm).items()) == self.ba.tm_target_out(tm))
+            lp.add_constraint(lp.sum(space_dim[(tm,wt)] for wt in self.get_vss(tm)) == self.ba.tm_dim_tperp(tm) - self.ba.tm_target_out(tm))
+        def combine_graphs(gs):
+            gout = DiGraph()
+            map_back = [None for _ in range(sum(len(g) for g in gs))]
+            c = 0
+            for gi,g in enumerate(gs):
+                for i in g:
+                    gout.add_vertex(c+i)
+                    map_back[c+i] = (gi,i)
+                for i,j,_ in g.edges(sort=False):
+                    gout.add_edge(c+i,c+j)
+                c += len(g)
+            return gout,map_back
+        for alpha in Q:
+            print(alpha)
+            es = Q.incoming_edges(alpha)
+            M = block_matrix([[space_graphs[alpha][0]] + [f.matrix(side='right') * space_graphs[beta][0] for beta,_,f in es]])
+            g,map_back = combine_graphs([space_graphs[alpha][1]] + [space_graphs[beta][1] for beta,_,_ in es])
+            alphas = [alpha] + [beta for beta,_,_ in es]
+            curcols = space_graphs[alpha][0].ncols()
+            for jxs in get_fillings(M,g,[0]*curcols+[1]*(M.ncols()-curcols),relation_size_bound):
+                lp.add_constraint(space_dim[alpha] >= lp.sum([lp[alphas[gi]+(i,)] for j in jxs for gi,i in [map_back[j]]]))
         return lp
 
 class JxiDat:
