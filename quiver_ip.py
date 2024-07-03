@@ -23,76 +23,33 @@ def echelonize_graph(m,g):
     return m,pivots
 
 def get_flag_inequalities2(m,g,relation_size_bound=oo):
-    m,pivots = echelonize_graph(m[::-1],g)
-    m = m[::-1]
-    pivots = [[m.nrows()-1-j for j in jxs] for jxs in pivots]
-        
-    # bp = BipartiteGraph(m)
-    # from pyscipopt import quicksum,Model
-    # M = Model()
-    # M.enableReoptimization()
-    # vs = {}
-    # for i,j in m.nonzero_positions():
-    #     vs[(i,j)] = M.addVar(str((i,j)),'B')
-    # lprows = []
-    # for i in range(m.nrows()):
-    #     lprows.append(quicksum(vs[(i,j)] for j in bp.neighbors(m.ncols() + i)))
-    #     M.addCons(lprows[-1] <= 1)
-    # lpcols = []
-    # for j in range(m.ncols()):
-    #     lpcols.append(quicksum(vs[(i-m.ncols(),j)] for i in bp.neighbors(j)))
-    #     M.addCons(lpcols[-1] <= 1)
-    # # P = Poset(g)
-    # # def conjunction(es):
-    # #     c = M.addVar(str(es))
-    # #     for v in es:
-    # #         M.addCons(c <= v)
-    # #     M.addCons(quicksum(v for v in es) <= c + len(es) - 1)
-    # #     return c
-    # components_lower_bound = 0
-    # for j,c in enumerate(m.columns()):
-    #     for i1 in c.nonzero_positions():
-    #         implied = pivots[j] + [i2 for i2 in c.nonzero_positions() if i2 > i1]
-    #         for i2 in implied:
-    #             M.addCons(vs[(i1,j)] <= lprows[i2])
-    #         components_lower_bound += (1 - len(implied)) * vs[(i1,j)]
-    #         # for j2 in P.order_ideal([j]):
-    #         #     if j2 != j:
-    #         #         for i2 in m.column(j2).nonzero_positions():
-    #         #             if i2 not in implied:
-    #         #                 components_lower_bound -= conjunction((vs[(i1,j)],1-lpcols[j2]))
-    # M.addCons(components_lower_bound <= 1)
-    # if relation_size_bound < oo:
-    #     M.addCons(quicksum(v for v in vs.values()) <= relation_size_bound)
-    def extendible_to_irredundant(jxs,jxsout):
-        return True
-        # cols = []
-        # rows = []
-        # for j in jxs:
-        #     if j < m.ncols():
-        #         cols.append(j)
-        #     else:
-        #         rows.append(j - m.ncols())
-        # colsout = []
-        # rowsout = []
-        # for j in jxsout:
-        #     if j < m.ncols():
-        #         colsout.append(j)
-        #     else:
-        #         rowsout.append(j - m.ncols())
-        # M.freeReoptSolve()
-        # M.chgReoptObjective(quicksum(lpcols[j] for j in cols) - quicksum(lpcols[j] for j in colsout) -\
-        #         quicksum(lprows[i] for i in rows) + quicksum(lprows[i] for i in rowsout),"maximize")
-        # M.hideOutput(True)
-        # M.optimize()
-        # return M.getStatus() == 'optimal' and int(M.getObjVal()) == len(cols) + len(rowsout)
+    # m,pivots = echelonize_graph(m[::-1],g)
+    # m = m[::-1]
+    # pivots = [[m.nrows()-1-j for j in jxs] for jxs in pivots]
     
     m2 = block_matrix([[m,identity_matrix(m.base_ring(),m.nrows())]])
     g2 = copy(g)
     g2.add_vertex(m.ncols())
     for j in range(m.ncols(),m2.ncols()-1):
         g2.add_edge(j,j+1)
-    for jxs in get_fillings(m2,g2,[1]*m.ncols()+[0]*m.nrows(),relation_size_bound,extendible_to_irredundant):
+
+    lastnzs = [None for _ in range(m2.ncols())]
+    for j in g2.topological_sort():
+        col = m2.column(j)
+        lastnz = 0 if col.is_zero() else next(len(col)-i for i,e in enumerate(col[::-1]) if e != 0)
+        lastnzs[j] = max(lastnz,max((lastnzs[j2] for j2,_,_ in g2.incoming_edges(j)),default=0))
+    def prunef(jxs,jxsout):
+        nzs = [(lastnzs[j],j) for j in jxs]
+        nzs.sort()
+        complete = False
+        for i,(nz,j) in enumerate(nzs):
+            assert nz >= i+1
+            if complete and j < m.ncols():
+                return False
+            if nz == i+1 and j < m.ncols():
+                complete = True
+        return True
+    for jxs in get_fillings(m2,g2,[1]*m.ncols()+[0]*m.nrows(),relation_size_bound,prunef,lambda j: lastnzs[j]):
         rows = set(range(m.nrows()))
         cols = []
         for j in jxs:
@@ -102,13 +59,13 @@ def get_flag_inequalities2(m,g,relation_size_bound=oo):
                 rows.remove(j - m.ncols())
         yield (list(rows),cols)
 
-def get_fillings(m,g,costs=None,cost_bound=0,prunef=lambda cols,skip: True):
+def get_fillings(m,g,costs=None,cost_bound=0,prunef=lambda cols,skip: True,sortkey = None):
     assert(len(g) == m.ncols())
     if costs is None:
         costs = [0]*m.ncols()
     g = g.transitive_reduction()
     below_cnts = [0 for _ in range(m.ncols())]
-    for i,j,_ in g.edges():
+    for i,j,_ in g.edges(sort=False):
         below_cnts[j] += 1
     minelts = set([j for j,cnt in enumerate(below_cnts) if cnt == 0])
     def ideal_push(j):
@@ -134,7 +91,7 @@ def get_fillings(m,g,costs=None,cost_bound=0,prunef=lambda cols,skip: True):
         if len(minelts) == 0:
             yield list(cols)
         skiphere = []
-        for j in sorted(minelts-skip):
+        for j in sorted(minelts-skip,key=sortkey):
             try:
                 if c + costs[j] > cost_bound:
                     continue
