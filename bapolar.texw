@@ -2316,7 +2316,7 @@ class JDat:
         #     #     queue_add(w,f.inverse_image(M))
         return Q
     
-    def get_linear_program_preserved_subspaces(self,tms,tmcs=(),relation_size_bound=1):
+    def get_linear_program_preserved_subspaces(self,tms,tmcs=()):
         def subspaces_to_graph(Vs):
             g = DiGraph()
             cols = []
