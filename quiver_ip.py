@@ -86,16 +86,15 @@ def get_fillings(m,g,costs=None,cost_bound=0,prunef=lambda cols,skip: True,sortk
     skip = set()
     def dfs(c):
         nonlocal m
-        if not prunef(cols,skip):
-            return
         if len(minelts) == 0:
             yield list(cols)
         skiphere = []
         for j in sorted(minelts-skip,key=sortkey):
             try:
-                if c + costs[j] > cost_bound:
-                    continue
                 cols.append(j)
+                if c + costs[j] > cost_bound or not prunef(cols,skip):
+                    cols.pop()
+                    continue
                 col = m.column(j)
                 i = next(i for i,e in enumerate(col) if e != 0)
                 row = m.row(i)
