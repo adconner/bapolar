@@ -1770,6 +1770,66 @@ class JDat:
                     Q.add_edge((tm,wt),(tm,wtup),get_matrix_for_submodule(self.get_vss(tm)[wtup],xvs))
         return Q
     
+    def get_linear_program2(self, tms, tmcs=(), relation_size_bound=oo, square_tests=()):
+        Q = copy(self.get_quiver_representation(tms,tmcs))
+        for v,w,m in Q.edges(sort=False):
+            Q.set_edge_label(v,w,linear_transformation(m,side='right'))
+        queue = []
+        def queue_add(v,M,unconditionally=False):
+            assert M.degree() == len(self.get_vss(v[0])[v[1]])
+            if unconditionally or M not in Q.get_vertex(v):
+                print(v)
+                print(M.matrix())
+                Q.get_vertex(v).add(M)
+                queue.append((v,M))
+        distinguished_pairs = {}
+        for v in Q:
+            Q.set_vertex(v,set())
+            dim = len(self.get_vss(v[0])[v[1]])
+            I = identity_matrix(self.ba.F,dim)
+            F = [VectorSpace(self.ba.F,dim).subspace(I[:i]) for i in range(dim+1)]
+            for i,(V1,V2) in enumerate(zip(F,F[1:])):
+                distinguished_pairs[(v,V1,V2)] = self.get_vss(v[0])[v[1]][i].lm()
+            for V in F:
+                queue_add(v,V)
+        while queue:
+            v,M = queue.pop()
+            for N in list(Q.get_vertex(v)):
+            #     queue_add(v,M.intersection(N))
+                queue_add(v,M + N)
+            for _,w,f in Q.outgoing_edges(v):
+                queue_add(w,f(M))
+            # for w,_,f in Q.incoming_edges(v):
+            #     queue_add(w,f.inverse_image(M))
+        lp = MixedIntegerLinearProgram(solver='SCIP')
+        lp.set_binary(lp.default_variable())
+        def x(v,V,W):
+            assert V.ambient_vector_space().dimension() == W.ambient_vector_space().dimension() and \
+                W.ambient_vector_space().dimension() == len(self.get_vss(v[0])[v[1]])
+            assert V.is_subspace(W) and V.dimension() + 1 == W.dimension()
+            return lp[distinguished_pairs.get((v,V,W),(v,V,W))]
+        tmsummands = {}
+        for v,V1,V2 in distinguished_pairs:
+            tmsummands.setdefault(v[0],[]).append( x(v,V1,V2) )
+        for tm, summands in tmsummands.items():
+            lp.add_constraint(lp.sum(summands) == self.ba.tm_dim_tperp(tm) - self.ba.tm_target_out(tm))
+        for v in Q:
+            P = Poset([Q.get_vertex(v),lambda a,b: a.is_subspace(b)])
+            print(v,len(self.get_vss(v[0])[v[1]]), P)
+            diamonds, all_completable = P.diamonds()
+            assert all_completable
+            for W,X,Y,Z in diamonds:
+                lp.add_constraint( x(v,W,X) + x(v,X,Z) == x(v,W,Y) + x(v,Y,Z))
+                lp.add_constraint( x(v,X,Z) >= x(v,W,Y) )
+                lp.add_constraint( x(v,Y,Z) >= x(v,W,X) )
+            for _,w,f in Q.outgoing_edges(v):
+                for V,W in P.cover_relations_iterator():
+                    fV,fW = f(V), f(W)
+                    if fV != fW:
+                        lp.add_constraint( x(w,fV,fW) >= x(v,V,W) )
+        return lp
+                
+                
     def get_linear_program(self, tms, tmcs=(), relation_size_bound=oo, square_tests=(), search_bound=500):
         lp = MixedIntegerLinearProgram(solver='SCIP')
         lp.set_binary(lp.default_variable())
