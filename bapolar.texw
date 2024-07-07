@@ -2673,8 +2673,8 @@ def get_matrix_for_submodule(qs,ps):
                 mdict[m] = len(ms)
                 ms.append(m)
             B[(mdict[m],pi)] = p.monomial_coefficient(m)
-    A = matrix(ba.F,len(ms),len(ps),A)
-    B = matrix(ba.F,len(ms),len(qs),B)
+    A = matrix(ps[0].base_ring(),len(ms),len(ps),A)
+    B = matrix(ps[0].base_ring(),len(ms),len(qs),B)
     return B.solve_right(A)
 
 def basis_of_lie_algebra(xs):
