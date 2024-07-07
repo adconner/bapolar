@@ -1102,8 +1102,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         lp = copy(mod.get_linear_program(tms,tmcs,
              relation_size_bound=lp_interval_length_bound,square_tests=square_tests))
         modify_lp(lp)
-        bp = BinaryProgramSCIPReopt(lp)
-        # bp = BinaryProgram(lp)
+        # bp = BinaryProgramSCIPReopt(lp)
+        bp = BinaryProgram(lp)
             
         def is_unset(vk):
             m = vktolm(vk)
