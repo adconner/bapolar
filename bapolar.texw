@@ -2736,6 +2736,8 @@ def read_JS(ba,f):
 
 def square(ba,Jxi,tms=None,k=2):
     J,xi = Jxi
+    if J.is_zero():
+        return (J,xi)
     gs = [p for p in J.gens() if not ba.lm(p).is_constant()]
     J = J.ring().ideal([p for p in J.gens() if ba.lm(p).is_constant()] + [prod(es) for es in combinations_with_replacement(gs,k) if 
                       tms is None or reduce(lambda e,f: tuple(map(lambda e,f: e+f, e, ba.polynomial_tm(f))),es,(0,)*len(ba.dims)) in tms],side='twosided')
