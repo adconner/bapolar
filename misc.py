@@ -112,12 +112,14 @@ class SetSystem:
 class BinaryProgram:
     def __init__(self,lp):
         self.lp = copy(lp)
-        self.infeas = SetSystem()
-        self.sols = SetSystem()
+        import pyscipopt
+        self.lp.get_backend()._get_model().freeTransform()
+        self.lp.get_backend()._get_model().setEmphasis(pyscipopt.SCIP_PARAMEMPHASIS.FEASIBILITY)
         self.psol = set()
     def set_min(self, x, v):
         assert x in self.lp.default_variable().keys()
         v = int(v)
+        self.lp.get_backend()._get_model().freeTransform()
         self.lp.set_min(self.lp[x], v)
         if v == 1:
             assert (x,1) not in self.psol
@@ -128,6 +130,7 @@ class BinaryProgram:
     def set_max(self, x, v):
         assert x in self.lp.default_variable().keys()
         v = int(v)
+        self.lp.get_backend()._get_model().freeTransform()
         self.lp.set_max(self.lp[x], v)
         if v == 0:
             assert (x,0) not in self.psol
@@ -142,34 +145,21 @@ class BinaryProgram:
         assert x in self.lp.default_variable().keys()
         return int(self.lp.get_max(self.lp[x]))
     def extend(self):
-        contr = list(islice(self.infeas.iter_sets(Shi=self.psol),1))
-        if len(contr) == 1:
-            return None
-        sol = list(islice(self.sols.iter_sets(Slo=self.psol),1))
-        if len(sol) == 1:
-            return sol[0][0]
-        #res = ip_to_scipy(self.lp)
-        #res = [{x: res.x[next(iter(self.lp[x].dict().keys()))] for x in self.lp.default_variable().keys()}] if res.success else []
-        #res = list(islice(lp_integer_points(self.lp,fullsol=True),1))
+        if self.feasible():
+            sol = self.lp.get_values(self.lp.default_variable())
+            sol = [(x,int(round(v))) for x,v in sol.items()]
+            return sol
+    def feasible(self):
         from sage.numerical.mip import MIPSolverException
         try:
+            self.lp.get_backend()._get_model().freeTransform()
             self.lp.solve()
-            res = [self.lp.get_values(self.lp.default_variable())]
-            self.lp.get_backend()._get_model().freeTransform()
+            return True
         except MIPSolverException:
-            res = []
-            self.lp.get_backend()._get_model().freeTransform()
-        if len(res) == 0:
-            rem = list(self.infeas.iter_sets(Slo=self.psol))
-            for r,_ in rem:
-                self.infeas.remove_set(r)
-            self.infeas.add_set(self.psol)
+            # self.lp.get_backend()._get_model().freeTransform()
             # self.lp.add_constraint( self.lp.sum(self.lp[x] if v==1 else 1-self.lp[x] for x,v in self.psol) 
             #                        <= len(self.psol) - 1 )
-        else:
-            sol = [(x,int(round(v))) for x,v in res[0].items()]
-            self.sols.add_set(sol)
-            return sol
+            return False
         
 class BinaryProgramSCIPReopt:
     def __init__(self,lp):
