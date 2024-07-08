@@ -1089,7 +1089,11 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
 
         gbbound = max([sum(tm) for tm in tms+tmcs])
         def gb(J):
-            return bounded_gb(J,gbbound)
+            xi = J.ring().ngens() - self.nvarsx
+            I,goback = JxiDat(self,(J,xi)).forget_xs()
+            I = I.ring().ideal(I.groebner_basis(deg_bound = 100*(gbbound+1)-1,algorithm='singular:std') + \
+                    [p for p in I.gens() if p.degree() >= 100*(gbbound+1)])
+            return goback(I)[0]
         
         xiorig = Jxi[1]
 
@@ -1305,7 +1309,22 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     R = J.ring()
                     p = liftR(v,R) + R.sum([liftR(w,R)*R.gen(self.nvarsx+xi+wi)
                                 for wi,w in enumerate(w for w in vs[:vi] if bp.get_min(w.lm()) == 0)])
-                    return (J+p,yi)
+                    ptm = self.polynomial_tm(p)
+                    I,_ = JxiDat(self,(J,xi)).forget_xs()
+                    toI = I.ring().gens()[:self.nvars]+(I.ring().zero(),)*(self.nvarsx-self.nvars)+I.ring().gens()[self.nvars:]
+                    I = Sequence([q for q in I.gens() if self.polynomial_tm(q) == ptm])
+                    queue = [p]
+                    while queue: 
+                        p = queue.pop()
+                        Ilast = I
+                        I = Sequence(I + [p(toI)]).reduced()
+                        if I != Ilast:
+                            J += p
+                            for x in R.gens()[self.nvars:self.nvarsx]:
+                                xp = x*p - p*x
+                                if not xp.is_zero():
+                                    queue.append(xp)
+                    return (J,yi)
                 
                 # rem = self.tm_dim_tperp(tm)-num_in[tm]-num_out[tm]
                 # assert rem > 0
