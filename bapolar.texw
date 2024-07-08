@@ -1091,7 +1091,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         def gb(J):
             xi = J.ring().ngens() - self.nvarsx
             I,goback = JxiDat(self,(J,xi)).forget_xs()
-            I = I.ring().ideal(I.groebner_basis(deg_bound = 10*(gbbound+1)-1,algorithm='singular:std') + \
+            I = I.ring().ideal(I.groebner_basis(deg_bound = 10*(gbbound+1)-1,algorithm='libsingular:std') + \
                     [p for p in I.gens() if p.degree() >= 10*(gbbound+1)])
             return goback(I)[0]
         
