@@ -1007,7 +1007,7 @@ caches the results for the future.
             if not xy.is_zero():
                 xyv = sum(e*yv for e,yv in zip(xy.list(),yvs))
                 rels[xv*yv] = yv*xv + xyv
-        order = TermOrder('wdegrevlex',[100]*(sum(self.dims)+len(self.Bxs)))
+        order = TermOrder('wdegrevlex',[10]*(sum(self.dims)+len(self.Bxs)))
         if params > 0:
             order = order + TermOrder('degrevlex',params)
         return A.g_algebra(rels,order=order)
@@ -1091,8 +1091,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         def gb(J):
             xi = J.ring().ngens() - self.nvarsx
             I,goback = JxiDat(self,(J,xi)).forget_xs()
-            I = I.ring().ideal(I.groebner_basis(deg_bound = 100*(gbbound+1)-1,algorithm='singular:std') + \
-                    [p for p in I.gens() if p.degree() >= 100*(gbbound+1)])
+            I = I.ring().ideal(I.groebner_basis(deg_bound = 10*(gbbound+1)-1,algorithm='singular:std') + \
+                    [p for p in I.gens() if p.degree() >= 10*(gbbound+1)])
             return goback(I)[0]
         
         xiorig = Jxi[1]
@@ -1576,7 +1576,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         deg = max(sum(tm) for tm in tms)
         from sage.libs.singular.option import opt,opt_ctx
         with opt_ctx:
-            opt['deg_bound'] = 100*(deg+1)-1
+            opt['deg_bound'] = 10*(deg+1)-1
             syz = ff.syz(J)
             if syz[0].is_zero():
                 syz = []
@@ -2599,7 +2599,7 @@ class JxiDat:
     #     # return ltI
     #     from sage.libs.singular.option import opt,opt_ctx
     #     with opt_ctx:
-    #         opt['deg_bound'] = 100*(deg+1)-1
+    #         opt['deg_bound'] = 10*(deg+1)-1
     #         return ff.syz(self.J)
     #     return res
     
@@ -2618,7 +2618,7 @@ class JxiDat:
     #     deg = max(sum(tm) for tm in tms)
     #     from sage.libs.singular.option import opt,opt_ctx
     #     with opt_ctx:
-    #         opt['deg_bound'] = 100*(deg+1)-1
+    #         opt['deg_bound'] = 10*(deg+1)-1
     #         syz = ff.syz(J)
     #     degsyz = lambda s: next(tuple(map(lambda a,b: a+b, self.polynomial_tm(p), self.polynomial_tm(e)))
     #                   for p,e in zip(J.gens(),s) if not e.is_zero())
@@ -2666,9 +2666,9 @@ def emultiset(p):
 def bounded_gb(J, d):
     # return J.twostd()
     from sage.libs.singular.option import opt,opt_ctx
-    sav = [p for p in J.gens() if p.degree() >= 100*(d+1)]
+    sav = [p for p in J.gens() if p.degree() >= 10*(d+1)]
     with opt_ctx:
-        opt['deg_bound'] = 100*(d+1)-1
+        opt['deg_bound'] = 10*(d+1)-1
         return J.ring().ideal(J.twostd().gens()+tuple(sav),side='twosided')
     return res
 
