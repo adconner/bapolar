@@ -941,7 +941,6 @@ class BorderApolarity:
         self.F = self.T.base_ring()
         self.nvars = sum(self.dims)
         self.nvarsx = self.nvars + len(self.Bxs)
-        self.R0 = self.get_ring()
         self.vixs = [0]
         for s in self.dims:
             self.vixs.append(self.vixs[-1] + s)
@@ -952,8 +951,9 @@ class BorderApolarity:
                             if i < sum(self.dims[:j+1])) ] += k
         self.Tdeg = tuple(self.Tdeg)
 
+        self.get_ring = cache(self.get_ring)
+        self.R0 = self.get_ring()
         self.zero = JDat(self,self.R0.ideal())
-        self.get_ring_exact = cache(self.get_ring_exact)
         self.tm_dim = cache(self.tm_dim)
         self.tm_dim_tperp = cache(self.tm_dim_tperp)
         self.tm_codim_tperp = cache(self.tm_codim_tperp)
@@ -979,13 +979,9 @@ next power of two number of parameters larger than the requested number and
 caches the results for the future. 
 
 <<complete=False>>=
-    def get_ring(self,params=0):
-        if params > 0:
-            params = next(1<<k for k in range(32) if 1<<k >= params )
-        return self.get_ring_exact(params)
 
-    def get_ring_exact(self, params=0):
-        print("get_ring_exact",params)
+    def get_ring(self, params=0):
+        print("get_ring",params)
         if params > 0:
             params = next(1<<k for k in range(32) if 1<<k >= params )
         # should give cached rings of power of two size
