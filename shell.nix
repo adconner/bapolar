@@ -1,5 +1,5 @@
 let
-  pkgs = import (fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-23.11") { config = {}; overlays = []; };
+  pkgs = import (fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-24.05") { config = {}; overlays = []; };
   
   papilo = pkgs.stdenv.mkDerivation {
     pname = "papilo";
@@ -194,8 +194,8 @@ in
       frobby
       scip
       pyscipopt
-      roundingsat
-      exact
+      #roundingsat
+      #exact
     ];
 }
 		
