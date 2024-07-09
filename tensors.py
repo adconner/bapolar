@@ -1,15 +1,17 @@
 from sage.all import PolynomialRing
 from itertools import product
 
-def matrixmult(m,n,l):
-    dims = (m*n,n*l,l*m)
-    R = PolynomialRing(QQ,['u%d%d' % (i,j) for i,j in product(range(m),range(n))]
-                      +['v%d%d' % (i,j) for i,j in product(range(n),range(l))]
-                      +['w%d%d' % (i,j) for i,j in product(range(l),range(m))])
-    u = R.gens()[:m*n]
-    v = R.gens()[m*n:m*n+n*l]
-    w = R.gens()[m*n+n*l:]
-    T = sum(u[i*n+j]*v[j*l+k]*w[k*m+i] for i,j,k in product(range(m),range(n),range(l)))
+def matrixmult(*idims):
+    dims = tuple(a*b for a,b in zip(idims,idims[1:]+(idims[0],)))
+    R = PolynomialRing(QQ,['%s%d%d' % (c,i,j) for c,a,b in zip('uvwxyzabcdefghijklmnopqrst', idims,idims[1:]+(idims[0],)) 
+                           for i,j in product(range(a),range(b))])
+    xs = []
+    c = 0
+    for a,b in zip(idims,idims[1:]+(idims[0],)):
+        xs.append(R.gens()[c:c+a*b])
+        c += a*b
+    T = sum(prod(u[i*a+j] for u,i,j,a in zip(xs,ixs,ixs[1:]+(ixs[0],),idims[1:]+(idims[0],)))
+            for ixs in product(*map(range,idims)))
     return (T,dims)
 
 def matrixmult_ti(m,n,l):
