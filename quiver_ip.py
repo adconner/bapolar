@@ -38,6 +38,77 @@ def get_flag_inequalities2(m,g,relation_size_bound=oo):
         col = m2.column(j)
         lastnz = 0 if col.is_zero() else next(len(col)-i for i,e in enumerate(col[::-1]) if e != 0)
         lastnzs[j] = max(lastnz,max((lastnzs[j2] for j2,_,_ in g2.incoming_edges(j)),default=0))
+        
+    # lp = MixedIntegerLinearProgram(solver="SCIP")
+    # lp.set_binary(lp.default_variable())
+    # vs = {}
+    # for j,r in product(range(m2.ncols()),range(m2.nrows())):
+    #     if r <= lastnzs[j]-1:
+    #         vs[(j,r)] = lp[(j,r)]
+    #     else:
+    #         vs[(j,r)] = lp.linear_functions_parent().zero()
+    # for j in range(m2.ncols()):
+    #     lp.add_constraint(lp.sum(vs[(j,r)] for r in range(lastnzs[j])) == lp[j])
+    # for (_,j1),(_,j2) in combinations(sorted([(nz,i) for i,nz in enumerate(lastnzs)]),2):
+    #     for r2 in range(lastnzs[j2]):
+    #         for r1 in range(r2+1,lastnzs[j1]):
+    #             lp.add_constraint( vs[(j1,r1)] + vs[(j2,r2)] <= 1 )
+    # for r in range(m2.nrows()):
+    #     lp.add_constraint(lp.sum(vs[(j,r)] for j in range(m2.ncols())) <= 1)
+    # for r1,r2 in combinations(range(m2.nrows()),2):
+    #     lp.add_constraint(lp.sum(vs[(j,r1)] for j in range(m2.ncols())) >= 
+    #                       lp.sum(vs[(j,r2)] for j in range(m2.ncols())))
+    # lp.add_constraint(lp.sum(lp[j] for j in range(m2.ncols())) <= relation_size_bound)
+    # lp.add_constraint(lp.sum(vs[(j,lastnzs[j]-1)] for j in range(m.ncols()) if lastnzs[j] > 0) == 1)
+    # import pyscipopt
+    # lp.get_backend()._get_model().setEmphasis(pyscipopt.SCIP_PARAMEMPHASIS.FEASIBILITY)
+    # from sage.numerical.mip import MIPSolverException
+    # def prunef(jxs,jxsout):
+    #     lp.get_backend()._get_model().freeTransform()
+    #     lp.set_min(lp.default_variable(),0)
+    #     lp.set_max(lp.default_variable(),1)
+    #     for j in jxs:
+    #         lp.set_min(lp[j],1)
+    #     for j in jxsout:
+    #         lp.set_max(lp[j],0)
+    #     # lp.get_backend()._get_model().hideOutput(False)
+    #     try:
+    #         lp.solve()
+    #         return True
+    #     except MIPSolverException:
+    #         return False
+        
+    # from pyscipopt import quicksum,Model
+    # M = Model()
+    # M.enableReoptimization()
+    # vs = {}
+    # for j,r in product(range(m2.ncols()),range(m2.nrows())):
+    #     if r <= lastnzs[j]-1:
+    #         vs[(j,r)] = M.addVar(str((j,r)),'B')
+    #     else:
+    #         vs[(j,r)] = 0
+    # lpcols = []
+    # for j in range(m2.ncols()):
+    #     lpcols.append(quicksum(vs[(j,r)] for r in range(lastnzs[j])))
+    #     M.addCons(lpcols[-1] <= 1)
+    # for (_,j1),(_,j2) in combinations(sorted([(nz,i) for i,nz in enumerate(lastnzs)]),2):
+    #     for r2 in range(lastnzs[j2]):
+    #         for r1 in range(r2+1,lastnzs[j1]):
+    #             M.addCons( vs[(j1,r1)] + vs[(j2,r2)] <= 1 )
+    # for r in range(m2.nrows()):
+    #     M.addCons(quicksum(vs[(j,r)] for j in range(m2.ncols())) <= 1)
+    # for r1,r2 in combinations(range(m2.nrows()),2):
+    #     M.addCons(quicksum(vs[(j,r1)] for j in range(m2.ncols())) >= 
+    #               quicksum(vs[(j,r2)] for j in range(m2.ncols())))
+    # M.addCons(quicksum(lpcols[j] for j in range(m2.ncols())) <= relation_size_bound)
+    # M.addCons(quicksum(vs[(j,lastnzs[j]-1)] for j in range(m.ncols()) if lastnzs[j] > 0) == 1)
+    # def prunef(jxs,jxsout):
+    #     M.freeReoptSolve()
+    #     M.chgReoptObjective(quicksum(lpcols[j] for j in jxs) - quicksum(lpcols[j] for j in jxsout),"maximize")
+    #     M.hideOutput(True)
+    #     M.optimize()
+    #     return M.getStatus() == 'optimal' and int(M.getObjVal()) == len(jxs)
+    
     def prunef(jxs,jxsout):
         nzs = [(lastnzs[j],j) for j in jxs]
         nzs.sort()
@@ -49,6 +120,7 @@ def get_flag_inequalities2(m,g,relation_size_bound=oo):
             if nz == i+1 and j < m.ncols():
                 complete = True
         return True
+        
     for jxs in get_fillings(m2,g2,[1]*m.ncols()+[0]*m.nrows(),relation_size_bound,prunef,lambda j: lastnzs[j]):
         rows = set(range(m.nrows()))
         cols = []
