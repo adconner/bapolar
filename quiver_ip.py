@@ -15,6 +15,7 @@ def echelonize_graph(m,g):
             pivots[j] = ()
         col = m.column(j)
         col -= vector([col[i] for i in pivots[j]])*M
+        col /= next(e for e in tuple(col)+(1,) if e != 0)
         m[:,j] = col.column()
         M = M.T.augment(col.column()).T
         M.echelonize()
@@ -62,6 +63,8 @@ def get_flag_inequalities2(m,g,relation_size_bound=oo):
     # for j in range(m2.ncols()):
     #     lp.add_constraint(lp.sum(vs[(j,r)] for r in range(lastnzs[j])) == lp[j])
     # for (_,j1),(_,j2) in combinations(sorted([(nz,i) for i,nz in enumerate(lastnzs)]),2):
+    #     if m2.column(j1) == m2.column(j2):
+    #         lp.add_constraint( lp[j1] + lp[j2] <= 1 )
     #     for r2 in range(lastnzs[j2]):
     #         for r1 in range(r2+1,lastnzs[j1]):
     #             lp.add_constraint( vs[(j1,r1)] + vs[(j2,r2)] <= 1 )
