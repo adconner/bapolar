@@ -39,6 +39,18 @@ def get_flag_inequalities2(m,g,relation_size_bound=oo):
         lastnz = 0 if col.is_zero() else next(len(col)-i for i,e in enumerate(col[::-1]) if e != 0)
         lastnzs[j] = max(lastnz,max((lastnzs[j2] for j2,_,_ in g2.incoming_edges(j)),default=0))
         
+    def prunef(jxs,jxsout):
+        nzs = [(lastnzs[j],j) for j in jxs]
+        nzs.sort()
+        complete = False
+        for i,(nz,j) in enumerate(nzs):
+            assert nz >= i+1
+            if complete and j < m.ncols():
+                return False
+            if nz == i+1 and j < m.ncols():
+                complete = True
+        return True
+        
     # lp = MixedIntegerLinearProgram(solver="SCIP")
     # lp.set_binary(lp.default_variable())
     # vs = {}
@@ -55,10 +67,10 @@ def get_flag_inequalities2(m,g,relation_size_bound=oo):
     #             lp.add_constraint( vs[(j1,r1)] + vs[(j2,r2)] <= 1 )
     # for r in range(m2.nrows()):
     #     lp.add_constraint(lp.sum(vs[(j,r)] for j in range(m2.ncols())) <= 1)
-    # for r1,r2 in combinations(range(m2.nrows()),2):
+    # for r1,r2 in zip(range(m2.nrows()-1),range(1,m2.nrows())):
     #     lp.add_constraint(lp.sum(vs[(j,r1)] for j in range(m2.ncols())) >= 
     #                       lp.sum(vs[(j,r2)] for j in range(m2.ncols())))
-    # lp.add_constraint(lp.sum(lp[j] for j in range(m2.ncols())) <= relation_size_bound)
+    # lp.add_constraint(lp.sum(lp[j] for j in range(m.ncols())) <= relation_size_bound)
     # lp.add_constraint(lp.sum(vs[(j,lastnzs[j]-1)] for j in range(m.ncols()) if lastnzs[j] > 0) == 1)
     # import pyscipopt
     # lp.get_backend()._get_model().setEmphasis(pyscipopt.SCIP_PARAMEMPHASIS.FEASIBILITY)
@@ -73,7 +85,7 @@ def get_flag_inequalities2(m,g,relation_size_bound=oo):
     #         lp.set_max(lp[j],0)
     #     # lp.get_backend()._get_model().hideOutput(False)
     #     try:
-    #         lp.solve()
+    #         lp.solve(objective_only=True)
     #         return True
     #     except MIPSolverException:
     #         return False
@@ -97,10 +109,10 @@ def get_flag_inequalities2(m,g,relation_size_bound=oo):
     #             M.addCons( vs[(j1,r1)] + vs[(j2,r2)] <= 1 )
     # for r in range(m2.nrows()):
     #     M.addCons(quicksum(vs[(j,r)] for j in range(m2.ncols())) <= 1)
-    # for r1,r2 in combinations(range(m2.nrows()),2):
+    # for r1,r2 in zip(range(m2.nrows()-1),range(1,m2.nrows())):
     #     M.addCons(quicksum(vs[(j,r1)] for j in range(m2.ncols())) >= 
     #               quicksum(vs[(j,r2)] for j in range(m2.ncols())))
-    # M.addCons(quicksum(lpcols[j] for j in range(m2.ncols())) <= relation_size_bound)
+    # M.addCons(quicksum(lpcols[j] for j in range(m.ncols())) <= relation_size_bound)
     # M.addCons(quicksum(vs[(j,lastnzs[j]-1)] for j in range(m.ncols()) if lastnzs[j] > 0) == 1)
     # def prunef(jxs,jxsout):
     #     M.freeReoptSolve()
@@ -109,18 +121,6 @@ def get_flag_inequalities2(m,g,relation_size_bound=oo):
     #     M.optimize()
     #     return M.getStatus() == 'optimal' and int(M.getObjVal()) == len(jxs)
     
-    def prunef(jxs,jxsout):
-        nzs = [(lastnzs[j],j) for j in jxs]
-        nzs.sort()
-        complete = False
-        for i,(nz,j) in enumerate(nzs):
-            assert nz >= i+1
-            if complete and j < m.ncols():
-                return False
-            if nz == i+1 and j < m.ncols():
-                complete = True
-        return True
-        
     for jxs in get_fillings(m2,g2,[1]*m.ncols()+[0]*m.nrows(),relation_size_bound,prunef,lambda j: lastnzs[j]):
         rows = set(range(m.nrows()))
         cols = []
