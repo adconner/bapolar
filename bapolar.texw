@@ -1499,7 +1499,9 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
 
     def codimension_bounds(self,Jxi,total_degree):
         J,xi = Jxi
-        Jxi = (bounded_gb(J,total_degree), xi)
+        I,goback = JxiDat(self,(J,xi)).forget_xs()
+        I = I.ring().ideal(I.groebner_basis(deg_bound = 10*(total_degree+1)-1,algorithm='libsingular:std'))
+        J,xi = goback(I)
         ltIlb = self.contained_leading_term_ideal(Jxi)
         ltIub = self.containing_leading_term_ideal(Jxi)
         res = {}
