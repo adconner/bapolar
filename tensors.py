@@ -82,6 +82,25 @@ def cw(q=2):
         (0 if sigma(i+1) == 1 else 1+(q//2)*(sigma(i+1)-2)+rho )) for i in range(3))
              for sigma in SymmetricGroup(3) for rho in range(q//2)])
     return T,dims
+
+def yao(dims):
+    F = GF(32003)
+    xss = get_defining_variables(F,dims)
+    T = sum(F.random_element()*prod(xs[k] for xs,k in zip(xss,ks) ) 
+            for ks in IntegerVectors(sum(dims) // 2, len(dims), outer = [e-1 for e in dims]))
+    return T,dims
+
+def get_defining_variables(F,dims):
+    R = PolynomialRing(F,['%s%d' % (x,i) 
+                      for x,b in zip('abcdefghijklmnopqrstuvwxyz',dims)
+                      for i in range(b)])
+    xss = []
+    c = 0
+    for d in dims:
+        xss.append(R.gens()[c:c+d])
+        c += d
+    return xss
+    
     
 def tensor_kronecker_product(Sdat,Tdat):
     S,Sdim = Sdat
