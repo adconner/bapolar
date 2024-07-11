@@ -1306,6 +1306,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     p = liftR(v,R) + R.sum([liftR(w,R)*R.gen(self.nvarsx+xi+wi)
                                 for wi,w in enumerate(w for w in vs[:vi] if bp.get_min(w.lm()) == 0)])
                     ptm = self.polynomial_tm(p)
+                    return (bounded_gb(J+p, gbbound),yi)
                     I,_ = JxiDat(self,(J,xi)).forget_xs()
                     toI = I.ring().gens()[:self.nvars]+(I.ring().zero(),)*(self.nvarsx-self.nvars)+I.ring().gens()[self.nvars:]
                     I = Sequence([q for q in I.gens() if self.polynomial_tm(q) == ptm])
