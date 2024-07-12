@@ -518,7 +518,7 @@ def search_by_sequence(ba,tmss,Jxi=None,mode='togetherlp'):
             for res in dfs(Jxi, tmsi+1):
                 yield res
             return
-        maxdincrease = d-1
+        maxdincrease = max(d-2,0) + max(ba.T.degree()-2,0)
         # maxdincrease = d
         # maxdincrease = max(1, min(d, 9-d))
         tmcs = tuple(sorted(set([tuple(map(add,tm,tma)) for tm in tms for k in range(1,maxdincrease+1)
