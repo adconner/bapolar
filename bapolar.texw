@@ -1374,7 +1374,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         return self.tm_dim(tm) - self.tm_dim_tperp(tm)
     
     def tm_target_out(self, tm): 
-        return min(ba.tm_dim_tperp(tm),ba.r-ba.tm_codim_tperp(tm))
+        return min(self.tm_dim_tperp(tm),self.r-self.tm_codim_tperp(tm))
 
     def polynomial_tm(self, p):
         if p.is_zero():
@@ -1921,7 +1921,8 @@ class JDat:
             return bound
         
         Q = self.get_quiver_representation(tms,tmcs)
-        for alpha in Q:
+        for alpha in Q.vertices(sort=True):
+            print(alpha)
             es = [(beta,m) for beta,_,m in Q.incoming_edges(alpha)]
             if len(es) > 0:
                 colvks = [(tm,wt,i) for (tm,wt),m in es for i in range(len(self.get_vss(tm)[wt]))]
@@ -1950,7 +1951,7 @@ class JDat:
                     add_constraint(colvkscur, rowvkscur, 0, deduplp)
             
         def square_tm_bound(tm):
-            return (1+sum(d-1 for d,k in zip(ba.dims,tm) if k>0))*ba.r
+            return (1+sum(d-1 for d,k in zip(ba.dims,tm) if k>0))*self.ba.r
         for tm in square_tests:
             lp.add_constraint(lp.sum(1-lp[(v.lm(),2)] 
                     for v in self.get_vs(tm)) >= square_tm_bound(tm))
