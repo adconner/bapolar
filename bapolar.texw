@@ -492,7 +492,7 @@ from functools import cache
 
 <<complete=False>>=
 
-def search_by_sequence(ba,tmss,Jxi=None,mode='togetherlp'):
+def search_by_sequence(ba,r,tmss,Jxi=None,mode='togetherlp'):
     together = mode == 'together'
     individual = mode == 'individual'
     togetherlp = mode == 'togetherlp'
@@ -505,26 +505,27 @@ def search_by_sequence(ba,tmss,Jxi=None,mode='togetherlp'):
             return
         d = sum(tms[0])
         bounds, ltIlb, ltIub = ba.codimension_bounds(Jxi,d)
-        if ltIlb.hilbert_series() == ba.target_hilbert_series_td() and \
-                ltIub.hilbert_series() == ba.target_hilbert_series_td():
+        if ltIlb.hilbert_series() == ba.target_hilbert_series_td(r) and \
+                ltIub.hilbert_series() == ba.target_hilbert_series_td(r):
             yield Jxi
             return
         J,xi = Jxi
         core = ba.ideal_constant_generators(J)
         mod = ba.zero if core.is_zero() else JDat(ba,core) 
         tms = tuple(sorted([tm for tm in tms if 
-            not all(bound == min(ba.tm_dim(tm),ba.r) for bound in bounds[tm]) ]))
+            not all(bound == min(ba.tm_dim(tm),r) for bound in bounds[tm]) ]))
         if len(tms) == 0:
             for res in dfs(Jxi, tmsi+1):
                 yield res
             return
-        maxdincrease = max(d-2,0) + max(ba.T.degree()-2,0)
+        # maxdincrease = max(d-2,0) + max(ba.T.degree()-2,0)
+        maxdincrease = max(d-1, ba.T.degree()-d)
         # maxdincrease = d
         # maxdincrease = max(1, min(d, 9-d))
         tmcs = tuple(sorted(set([tuple(map(add,tm,tma)) for tm in tms for k in range(1,maxdincrease+1)
                              for tma in IntegerVectors(k,len(ba.dims)) ])))
         if together:
-            for Jxiup in ba.get_ideals_for_tm(tms, tmcs, Jxi, mod=mod):
+            for Jxiup in ba.get_ideals_for_tm(r, tms, tmcs, Jxi, mod=mod):
                                               # lp_interval_length_bound=4 if len(J.gens()) == 0 else 4):
                 for res in dfs(Jxiup,tmsi+1):
                     yield res
@@ -537,12 +538,12 @@ def search_by_sequence(ba,tmss,Jxi=None,mode='togetherlp'):
             tmcs_last_check = tuple([tmc for tmc in tmcs
                           if len([tm for tm in tms if all(e <= f for e,f in zip(tm,tmc))]) > 1 ])
             if individual:
-                gens = [ba.get_ideals_for_tm((tm,),tmcscur,Jxi,mod=mod,simplify_existing=False) 
+                gens = [ba.get_ideals_for_tm(r,(tm,),tmcscur,Jxi,mod=mod,simplify_existing=False) 
                         for tm,tmcscur in zip(tms,tmcss)]
                 for Jxis in lproduct(*map(enumerate,gens)):
                     print ('index choice %d' % tmsi,[i for i,Ixi in Jxis])
                     Ixi = ba.sum_ideals([Ixi for i,Ixi in Jxis],xi)
-                    for Jxiup in ba.get_ideals_for_tm((), tms+tmcs_last_check, Ixi, mod=mod):
+                    for Jxiup in ba.get_ideals_for_tm(r, (), tms+tmcs_last_check, Ixi, mod=mod):
                         for res in dfs(Jxiup,tmsi+1):
                             yield res
             elif togetherlp:
@@ -559,22 +560,22 @@ def search_by_sequence(ba,tmss,Jxi=None,mode='togetherlp'):
                     def modify_lp(lp):
                         for tm, constrs in zip(tms,constrsscur):
                             add_positive_constraints(lp, [v.lm() for v in mod.get_vs(tm)], constrs)
-                    # for Jxiup in ba.get_ideals_for_tm(tms,tmcs,Jxi,mod=mod,modify_lp=modify_lp):
+                    # for Jxiup in ba.get_ideals_for_tm(r, tms,tmcs,Jxi,mod=mod,modify_lp=modify_lp):
                     #     for res in dfs(Jxiup,tmsi+1):
                     #         yield res
-                    for Jxiup in ba.get_ideals_for_tm(tms,tmcs_last_check,Jxi,mod=mod,modify_lp=modify_lp):
-                        for Jxiup2 in ba.get_ideals_for_tm((),tms+tmcs,Jxiup,mod=mod):
+                    for Jxiup in ba.get_ideals_for_tm(r, tms,tmcs_last_check,Jxi,mod=mod,modify_lp=modify_lp):
+                        for Jxiup2 in ba.get_ideals_for_tm(r, (),tms+tmcs,Jxiup,mod=mod):
                             for res in dfs(Jxiup2,tmsi+1):
                                 yield res
             else:
                 raise ValueError('mode invalid')
     return dfs((ba.R0.ideal(side='twosided'),0) if Jxi is None else Jxi,0)
 
-def lp_look_strict_by_deg(ba,deg_bound=2,Jxi=None,mode='individual'):
+def lp_look_strict_by_deg(ba,r,deg_bound=2,Jxi=None,mode='individual'):
     tmss = [list(map(tuple,IntegerVectors(k,len(ba.dims)))) for k in range(1,deg_bound+1)]
-    return search_by_sequence(ba,tmss,Jxi,mode=mode)
+    return search_by_sequence(ba,r,tmss,Jxi,mode=mode)
 
-def lp_look_strict(ba,deg_bound=2,tm_max_bound=oo,Jxi=None,mode='individual'):
+def lp_look_strict(ba,r,deg_bound=2,tm_max_bound=oo,Jxi=None,mode='individual'):
     tmss = [[tuple(tm) for tm in IntegerVectors(k,len(ba.dims)) if max(tm) == tmm] for k in range(1,deg_bound+1)
             for tmm in range( (k-1)//len(ba.dims)+1, min(tm_max_bound,k)+1 ) ]
     # tmss = [[tm for tm in tms if all( e<=f for e,f in zip(tm,(3,1,1)))] for tms in tmss]
@@ -586,7 +587,7 @@ def lp_look_strict(ba,deg_bound=2,tm_max_bound=oo,Jxi=None,mode='individual'):
     # tmss = [[(1,1,0),(1,0,1),(0,1,1),(2,0,0)]] + tmss
     # tmss = [[(1,1,0),(1,0,1),(0,1,1)],[(2,0,0)]] + tmss
     print(tmss)
-    return search_by_sequence(ba,tmss,Jxi,mode=mode)
+    return search_by_sequence(ba,r,tmss,Jxi,mode=mode)
 
 def three_place_ideals_up_to(ba,d=1,Jxi=None):
     def dfs(Jxi,tms,mod=ba.zero): 
@@ -929,7 +930,7 @@ routines of this file which depend on the input data (see \S\ref{sec:input}).
 <<complete=False>>=
 
 class BorderApolarity:
-    def __init__(self, Tinfo, r, basis=True):
+    def __init__(self, Tinfo, basis=True):
         self.T, self.dims, self.vwts, self.xs = Tinfo
         self.xs = [-x.T for x in self.xs]
         self.vwts = -self.vwts
@@ -937,7 +938,6 @@ class BorderApolarity:
             self.Bxs = self.xs
         else:
             self.Bxs = basis_of_lie_algebra(self.xs)
-        self.r = r
         self.F = self.T.base_ring()
         self.nvars = sum(self.dims)
         self.nvarsx = self.nvars + len(self.Bxs)
@@ -1071,7 +1071,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         assert Rg >= tg or all(next(tt.exponents()[0].sparse_iter())[0] < Rg for tt in t.variables())
         return R(t(R.gens()[self.nvarsx:self.nvarsx+tg]+(R.zero(),)*(tg-Rg)))
     
-    def get_ideals_for_tm(self, tms=[], tmcs=[], Jxi = None, lp_interval_length_bound=oo, 
+    def get_ideals_for_tm(self, r, tms=[], tmcs=[], Jxi = None, lp_interval_length_bound=oo, 
                           preset_choices = {}, mod=None, simplify_existing=True, modify_lp = lambda lp: None, 
                           square_tests=[]):
         if mod is None:
@@ -1099,8 +1099,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         def vktolm(vk):
             return mod.get_vss(vk[0])[vk[1]][vk[2]].lm()
                         
-        lp = copy(mod.get_linear_program(tms,tmcs,
-             relation_size_bound=lp_interval_length_bound,square_tests=square_tests))
+        lp = mod.get_linear_program(r,tms,tmcs,
+             relation_size_bound=lp_interval_length_bound,square_tests=square_tests)
         modify_lp(lp)
         # bp = BinaryProgramSCIPReopt(lp)
         bp = BinaryProgram(lp)
@@ -1287,8 +1287,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 assert is_unset(vk)
                 
                 def printstep(extra=''):
-                    remhi = len(mod.get_vs(tm)) - self.tm_target_out(tm) - num_in[tm]
-                    remlo = self.tm_target_out(tm) - num_out[tm]
+                    remhi = len(mod.get_vs(tm)) - self.tm_target_out(r,tm) - num_in[tm]
+                    remlo = self.tm_target_out(r,tm) - num_out[tm]
                     vstr = str(v.lm())
                     vstr_width[0] = max(vstr_width[0],len(vstr))
                     print ('%s %s xi=%d %.2f %s%d %d %s' % (str(tm),vstr.rjust(vstr_width[0]),
@@ -1373,8 +1373,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
     def tm_codim_tperp(self, tm):
         return self.tm_dim(tm) - self.tm_dim_tperp(tm)
     
-    def tm_target_out(self, tm): 
-        return min(self.tm_dim_tperp(tm),self.r-self.tm_codim_tperp(tm))
+    def tm_target_out(self, r, tm): 
+        return min(self.tm_dim_tperp(tm),r-self.tm_codim_tperp(tm))
 
     def polynomial_tm(self, p):
         if p.is_zero():
@@ -1540,25 +1540,25 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         return self.R0.ideal([liftR(p,self.R0) for p in J.gens() if 
               all(e[self.nvars:].is_constant() for e in p.exponents())],side='twosided')
         
-    def target_hilbert_series(self):
+    def target_hilbert_series(self,r):
         ts = FractionField(PolynomialRing(QQ,'t',len(self.dims))).gens()
-        hs = self.r/prod(1-t for t in ts)
+        hs = r/prod(1-t for t in ts)
         k = 0
         while True:
             done = True
             for tm in IntegerVectors(k,len(self.dims)):
                 tm = tuple(tm)
-                if self.tm_dim(tm) < self.r:
-                    hs -= (self.r-self.tm_dim(tm))*prod(t**e for t,e in zip(ts,tm))
+                if self.tm_dim(tm) < r:
+                    hs -= (r-self.tm_dim(tm))*prod(t**e for t,e in zip(ts,tm))
                     done = False
             if done:
                 break
             k += 1
         return hs
 
-    def target_hilbert_series_td(self):
+    def target_hilbert_series_td(self,r):
         t = FractionField(PolynomialRing(QQ,'t')).gen()
-        hs = self.target_hilbert_series()
+        hs = self.target_hilbert_series(r)
         return hs((t,)*hs.parent().ngens())
 
     def Tperp(self):
@@ -1618,28 +1618,6 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 for n in self.all_monomials(map(sub,tm,self.polynomial_tm(m))):
                     msin.add(m*n)
         return [m for m in self.all_monomials(tm) if m not in msin]
-
-    def simple_greedy_extend(self, J, tm):
-        assert J.ring() is self.get_ring()
-        cod = len(self.generic_codim(J,tm))
-        assert cod >= self.r
-        for v in ba.get_vorder(tm)[0]:
-            if v not in J:
-                K = (J + v).twostd()
-
-                codcur = len(self.generic_codim(K,tm))
-                if codcur < self.r:
-                    continue
-                ok = True
-                for s in range(len(tm)):
-                    if len(self.generic_codim(K, tm[:s]+(tm[s]+1,)+tm[s+1:])) < self.r:
-                        ok = False
-                        break
-                if not ok:
-                    continue
-                J = K
-                if codcur == self.r:
-                    return J
     
 class JDat:
     def __init__(self, ba, J):
@@ -1654,7 +1632,7 @@ class JDat:
         self.get_poset = cache(self.get_poset)
         self.get_poset_info_for_search = cache(self.get_poset_info_for_search)
         self.get_quiver_representation = cache(self.get_quiver_representation)
-        self.get_linear_program = cache(self.get_linear_program)
+        self.get_linear_program_except_r = cache(self.get_linear_program_except_r)
         
     def normal_basis(self,d):
         return [liftR(m,ba.R0) for m in self.J.normal_basis(d)]
@@ -1850,17 +1828,28 @@ class JDat:
                         lp.add_constraint( x(w,fV,fW) >= x(v,V,W) )
         return lp
                 
-                
-    def get_linear_program(self, tms, tmcs=(), relation_size_bound=oo, square_tests=(), search_bound=500):
-        lp = MixedIntegerLinearProgram(solver='SCIP')
-        lp.set_binary(lp.default_variable())
-
+    def get_linear_program(self, r, tms, tmcs=(), relation_size_bound=oo, square_tests=(), search_bound=500):
+        lp = self.get_linear_program_except_r(tms, tmcs, relation_size_bound, square_tests, search_bound)
+        lp = copy(lp)
+        
         for tm in tms:
             lp.add_constraint(lp.sum(1-lp[v.lm()] 
-                    for v in self.get_vs(tm)) == self.ba.tm_target_out(tm))
+                    for v in self.get_vs(tm)) == self.ba.tm_target_out(r,tm))
         for tm in tmcs:
             lp.add_constraint(lp.sum(1-lp[v.lm()] 
-                    for v in self.get_vs(tm)) >= self.ba.tm_target_out(tm))
+                    for v in self.get_vs(tm)) >= self.ba.tm_target_out(r,tm))
+            
+        def square_tm_bound(tm):
+            return (1+sum(d-1 for d,k in zip(ba.dims,tm) if k>0))*r
+        for tm in square_tests:
+            lp.add_constraint(lp.sum(1-lp[(v.lm(),2)] 
+                    for v in self.get_vs(tm)) >= square_tm_bound(tm))
+            
+        return lp
+
+    def get_linear_program_except_r(self, tms, tmcs=(), relation_size_bound=oo, square_tests=(), search_bound=500):
+        lp = MixedIntegerLinearProgram(solver='SCIP')
+        lp.set_binary(lp.default_variable())
 
         constraints = SetSystem()
         nconstraints = 0
@@ -1949,12 +1938,6 @@ class JDat:
                     rowvkscur = [rowvks[i] for i in rows]
                     colvkscur = [colvks[j] for j in cols]
                     add_constraint(colvkscur, rowvkscur, 0, deduplp)
-            
-        def square_tm_bound(tm):
-            return (1+sum(d-1 for d,k in zip(ba.dims,tm) if k>0))*self.ba.r
-        for tm in square_tests:
-            lp.add_constraint(lp.sum(1-lp[(v.lm(),2)] 
-                    for v in self.get_vs(tm)) >= square_tm_bound(tm))
             
         @cache
         def conjunction_variable(vks):
