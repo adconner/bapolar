@@ -116,7 +116,7 @@ class BinaryProgram:
         self.lp.get_backend()._get_model().freeTransform()
         self.lp.get_backend()._get_model().setEmphasis(pyscipopt.SCIP_PARAMEMPHASIS.FEASIBILITY)
         # self.lp.get_backend()._get_model().setPresolve(pyscipopt.SCIP_PARAMSETTING.OFF)
-        self.lp.get_backend()._get_model().setPresolve(pyscipopt.SCIP_PARAMSETTING.FAST)
+        # self.lp.get_backend()._get_model().setPresolve(pyscipopt.SCIP_PARAMSETTING.FAST)
         self.psol = set()
     def set_min(self, x, v):
         assert x in self.lp.default_variable().keys()
@@ -155,6 +155,7 @@ class BinaryProgram:
         from sage.numerical.mip import MIPSolverException
         try:
             self.lp.get_backend()._get_model().freeTransform()
+            # self.lp.get_backend()._get_model().hideOutput(False)
             self.lp.solve()
             return True
         except MIPSolverException:
