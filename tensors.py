@@ -83,6 +83,30 @@ def cw(q=2):
              for sigma in SymmetricGroup(3) for rho in range(q//2)])
     return T,dims
 
+def det(n):
+    m = matrix(n,n,PolynomialRing(QQ,['x%d%d' % (i+1,j+1) for i,j in product(range(n),range(n))]).gens())
+    dims = (n**2,)  
+    T = m.det()
+    vwts = matrix(ZZ,2*(n-1),n**2)
+    for i in range(n-1):
+        for j in range(n):
+            vwts[i, i*n+j] = 1
+            vwts[i, (i+1)*n+j] = -1
+            vwts[n-1+i, j*n+i] = 1
+            vwts[n-1+i, j*n+i+1] = -1
+    xs = []
+    for i in range(n):
+        for j in range(i+1,n):
+            x = matrix(QQ,n*n,n*n,sparse=True)
+            for k in range(n):
+                x[i*n+k, j*n+k] = 1
+            xs.append(x)
+            x = matrix(QQ,n*n,n*n,sparse=True)
+            for k in range(n):
+                x[k*n+i, k*n+j] = 1
+            xs.append(x)
+    return (T,dims,vwts,xs)
+
 def yao(dims):
     F = GF(32003)
     xss = get_defining_variables(F,dims)
@@ -100,7 +124,11 @@ def get_defining_variables(F,dims):
         xss.append(R.gens()[c:c+d])
         c += d
     return xss
-    
+
+def hermitian_symmetric_space(a,b):
+    X,Y,Z,U = [matrix(a,b,xs) for xs in get_defining_variables(QQ,(a*b,)*4)]
+    T = (X*Y.T).trace()* (Z*U.T).trace() - (X*U.T).trace()* (Y*Z.T).trace()
+    return T, (a*b,)*4
     
 def tensor_kronecker_product(Sdat,Tdat):
     S,Sdim = Sdat
