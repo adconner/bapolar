@@ -1398,25 +1398,21 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     zip((k for e in y for k in e),R.gens()) if k>0)
 
     def sum_ideals(self,Jxis,xi_common=0):
-        assert xi_common == 0 or all(xi >= xi_common for J,S,xi in Jxis)
-        sxis = xi_common + sum(xi-xi_common for J,S,xi in Jxis)
+        assert xi_common == 0 or all(xi >= xi_common for J,xi in Jxis)
+        sxis = xi_common + sum(xi-xi_common for J,xi in Jxis)
         R = self.get_ring(sxis)
         gens = []
         Sgens = []
         xcum = xi_common
-        for J,S,xi in Jxis:
+        for J,xi in Jxis:
             xi_new = xi - xi_common
             gens.extend([p(R.gens()[:self.nvarsx+xi_common] +
                 R.gens()[self.nvarsx+xcum:self.nvarsx+xcum+xi_new] +
                 (R.zero(),) * (J.ring().ngens()-self.nvarsx-xi))
                 for p in J.gens()])
-            Sgens.extend([ p(R.gens()[:self.nvarsx+xi_common] +
-                R.gens()[self.nvarsx+xcum:self.nvarsx+xcum+xi_new] +
-                (R.zero(),) * (J.ring().ngens()-self.nvarsx-xi))
-                for p in S ])
             xcum += xi_new
         assert xcum == sxis
-        return (R.ideal(gens,side='twosided'),Sgens,xcum)
+        return (R.ideal(gens,side='twosided'),xcum)
 
     def quick_simplify(self,Jxi,starti=0):
         J,S,xi = Jxi
