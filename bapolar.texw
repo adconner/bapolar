@@ -1084,12 +1084,13 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         tmsall = set(tms+tmcs)
 
         gbbound = max([sum(tm) for tm in tms+tmcs])
+        square_gbbound = max([sum(tm) for tm in square_tests])
         def gb(J):
             xi = J.ring().ngens() - self.nvarsx
-            I,goback = JxiDat(self,(J,xi)).forget_xs()
+            I,subs = JxiDat(self,(J,xi)).forget_xs()
             I = I.ring().ideal(I.groebner_basis(deg_bound = 10*(gbbound+1)-1,algorithm='libsingular:std') + \
                     [p for p in I.gens() if p.degree() >= 10*(gbbound+1)])
-            return goback(I)[0]
+            return J.ring().ideal([p(subs) for p in I.gens()],side='twosided')
         
         xiorig = Jxi[1]
 
@@ -1174,11 +1175,13 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         if gb_needed:
                             J = gb(J)
                             gb_needed = False
-                        JJ,_ = square(self,(J,yi),square_tests)
+                        I,subs = JxiDat(self,(J,yi)).forget_xs()
+                        II = I.ring().ideal((I*I).groebner_basis(deg_bound = 10*(square_gbbound+1)-1,algorithm='libsingular:std'))
                         leading_coefficient_by_monomial = {}
-                        for p in JJ.gens():
+                        for p in II.gens():
                             if p.is_zero():
                                 continue
+                            p = p(subs)
                             m = self.lm(p,True)
                             if m.is_one() or self.polynomial_tm(m) not in square_tests:
                                 continue
@@ -1507,9 +1510,9 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
 
     def codimension_bounds(self,Jxi,total_degree):
         J,xi = Jxi
-        I,goback = JxiDat(self,(J,xi)).forget_xs()
+        I,subs = JxiDat(self,(J,xi)).forget_xs()
         I = I.ring().ideal(I.groebner_basis(deg_bound = 10*(total_degree+1)-1,algorithm='libsingular:std'))
-        J,xi = goback(I)
+        J = J.ring().ideal([p(subs) for p in I.gens()],side='twosided')
         ltIlb = self.contained_leading_term_ideal(Jxi)
         ltIub = self.containing_leading_term_ideal(Jxi)
         res = {}
@@ -1978,6 +1981,12 @@ class JDat:
                              <= lp.sum(lp[(self.get_vss(tm)[wt][i].lm(),2)] for tm,wt,i in rowvks) + kerdim)
             return True
 
+        Psquare = Poset((square_tests,lambda a,b: all(i<=j for i,j in zip(a,b))))
+        for tm1,tm2 in Psquare.cover_relations():
+            for m in self.ba.all_monomials(tuple(map(sub,tm2,tm1))):
+                for n in self.ba.all_monomials(tm1):
+                    lp.add_constraint(lp[(n,2)] <= lp[(m*n,2)])
+                    
         wtspaces = {}
         for tm1,tm2 in combinations_with_replacement(tms,2):
             from operator import add
@@ -2548,9 +2557,7 @@ class JxiDat:
         R = PolynomialRing(self.ba.F,self.J.ring().gens()[:self.ba.nvars]+self.J.ring().gens()[self.ba.nvarsx:],order=order)
         subs = R.gens()[:self.ba.nvars] + (R.zero(),)*(self.ba.nvarsx-self.ba.nvars) + R.gens()[self.ba.nvars:]
         subsr = self.J.ring().gens()[:self.ba.nvars] + self.J.ring().gens()[self.ba.nvarsx:]
-        def goback(I):
-            return (self.J.ring().ideal([p(subsr) for p in I.gens()],side='twosided'),self.xi)
-        return R.ideal([p(subs) for p in self.J.gens()]),goback
+        return R.ideal([p(subs) for p in self.J.gens()]),subsr
     
     # def __init__(self, ba, Jxi):
     #     J,xi = Jxi
@@ -2750,8 +2757,8 @@ def square(ba,Jxi,tms=None,k=2):
     gs = [p for p in J.gens() if not ba.lm(p).is_constant()]
     J = J.ring().ideal([p for p in J.gens() if ba.lm(p).is_constant()] + [prod(es) for es in combinations_with_replacement(gs,k) if 
                       tms is None or reduce(lambda e,f: tuple(map(lambda e,f: e+f, e, ba.polynomial_tm(f))),es,(0,)*len(ba.dims)) in tms],side='twosided')
-    I,goback = JxiDat(ba,(J,xi)).forget_xs()
-    return goback(ideal(I.interreduced_basis()))
+    I,subs = JxiDat(ba,(J,xi)).forget_xs()
+    return J.ring().ideal([p(subs) for p in I.interreduced_basis()],side='twosided')
 
 # remove when added to itertools
 def batched(iterable, n):
