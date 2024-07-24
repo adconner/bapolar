@@ -1115,6 +1115,10 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 if any(t.is_constant() for _,t in tss.iter_sets(Shi=emultiset(v.lm()))):
                     bp.set_min(v.lm(),1)
         
+        tmabove = {}
+        for tm1,tm2 in Poset([tms,lambda tm1,tm2: all(e <= f for e,f in zip(tm1,tm2))]).relations():
+            tmabove.setdefault(tm1,[]).append(tm2)
+            
         def fixed_point(Jxi,gb_needed=True,do_square_tests=False):
             J,yi = Jxi
             bp_restore = []
@@ -1144,6 +1148,13 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                                 gb_needed = True
                             elif t.is_constant():
                                 bp.set_min(m,1)
+                                tm = self.polynomial_tm(m)
+                                for tma in tmabove.get(tm,()):
+                                    for n in self.all_monomials( map(sub,tma,tm) ):
+                                        n *= m
+                                        if bp.get_min(n) == 0:
+                                            bp.set_min(n,1)
+                                            bp_restore.append((n,1))
                                 bp_restore.append((m,1))
                                 newrel = True
                             else:
