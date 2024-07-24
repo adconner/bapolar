@@ -111,7 +111,7 @@ def yao(dims):
     F = GF(32003)
     xss = get_defining_variables(F,dims)
     T = sum(F.random_element()*prod(xs[k] for xs,k in zip(xss,ks) ) 
-            for ks in IntegerVectors(sum(dims) // 2, len(dims), outer = [e-1 for e in dims]))
+            for ks in IntegerVectors((sum(dims)-3) // 2, len(dims), outer = [e-1 for e in dims]))
     return T,dims
 
 def get_defining_variables(F,dims):
@@ -129,6 +129,20 @@ def hermitian_symmetric_space(a,b):
     X,Y,Z,U = [matrix(a,b,xs) for xs in get_defining_variables(QQ,(a*b,)*4)]
     T = (X*Y.T).trace()* (Z*U.T).trace() - (X*U.T).trace()* (Y*Z.T).trace()
     return T, (a*b,)*4
+
+def octonion():
+    triads = [(1,2,4), (1,3,7), (1,5,6), (2,3,5), (2,6,7), (3,4,6), (4,5,7)]
+    xs,ys,zs = get_defining_variables(QQ,(7,7,7))
+    T = 0
+    for ixs in triads:
+        ixs = [i-1 for i in ixs]
+        for a,b,c in zip(ixs,ixs[1:]+ixs[:1],ixs[2:]+ixs[:2]):
+            T -= xs[a]*ys[b]*zs[c]
+        ixs = [ixs[0],ixs[2],ixs[1]]
+        for a,b,c in zip(ixs,ixs[1:]+ixs[:1],ixs[2:]+ixs[:2]):
+            T += xs[a]*ys[b]*zs[c]
+    return T,(7,7,7)
+    
     
 def tensor_kronecker_product(Sdat,Tdat):
     S,Sdim = Sdat
