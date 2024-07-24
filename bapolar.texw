@@ -1084,7 +1084,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         tmsall = set(tms+tmcs)
 
         gbbound = max([sum(tm) for tm in tms+tmcs])
-        square_gbbound = max([sum(tm) for tm in square_tests])
+        square_gbbound = max([0]+[sum(tm) for tm in square_tests])
         def gb(J):
             xi = J.ring().ngens() - self.nvarsx
             I,subs = JxiDat(self,(J,xi)).forget_xs()
