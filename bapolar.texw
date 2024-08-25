@@ -492,10 +492,9 @@ from functools import cache
 
 <<complete=False>>=
 
-def search_by_sequence(ba,r,tmss,Jxi=None,mode='togetherlp'):
+def search_by_sequence(ba,r,tmss,Jxi=None,mode=('individual',10)):
     together = mode == 'together'
-    individual = mode == 'individual'
-    togetherlp = mode == 'togetherlp'
+    individual = type(mode) is tuple and mode[0] == 'individual'
     from operator import add
     def dfs(Jxi,tmsi):
         try:
@@ -529,7 +528,8 @@ def search_by_sequence(ba,r,tmss,Jxi=None,mode='togetherlp'):
                                               # lp_interval_length_bound=4 if len(J.gens()) == 0 else 4):
                 for res in dfs(Jxiup,tmsi+1):
                     yield res
-        else:
+        elif individual:
+            ibatch = mode[1]
             tmcss = [tuple([tmc for tmc in tmcs if all(e <= f for e,f in zip(tm,tmc))])
                           for tm in tms]
             if J.is_zero():
@@ -537,38 +537,41 @@ def search_by_sequence(ba,r,tmss,Jxi=None,mode='togetherlp'):
                          for tmcscur,tm in zip(tmcss,tms)]
             tmcs_last_check = tuple([tmc for tmc in tmcs
                           if len([tm for tm in tms if all(e <= f for e,f in zip(tm,tmc))]) > 1 ])
-            if individual:
-                gens = [ba.get_ideals_for_tm(r,(tm,),tmcscur,Jxi,mod=mod,simplify_existing=False) 
-                        for tm,tmcscur in zip(tms,tmcss)]
-                for Jxis in lproduct(*map(enumerate,gens)):
-                    print ('index choice %d' % tmsi,[i for i,Ixi in Jxis])
-                    Ixi = ba.sum_ideals([Ixi for i,Ixi in Jxis],xi)
+            gens = [ba.get_ideals_for_tm(r,(tm,),tmcscur,Jxi,mod=mod,simplify_existing=False) 
+                    for tm,tmcscur in zip(tms,tmcss)]
+            def constrs(tm,sols):
+                from sage.libs.singular.groebner_strategy import NCGroebnerStrategy
+                xs = [x.lm() for x in mod.get_vs(tm)]
+                pts = [ tuple(sorted([ x for x in xs if Jn.normal_form( liftR(x,J.ring()) ) == liftR(x,J.ring()) ]))
+                        for J,_ in sols for Jn in [NCGroebnerStrategy(J)] ]
+                return (pts,get_positive_constraints(pts,xs))
+            
+            batched_gen = lambda tm,gen: ((sols,)+ constrs(tm,sols) for sols in batched(gen,ibatch))
+            gens = [batched_gen(tm,gen) for tm,gen in zip(tms,gens)]
+            
+            for solss in lproduct(*map(enumerate,gens)):
+                print ('index choice %d' % tmsi,[i for i,_ in solss])
+                lp = mod.get_linear_program(r,(),tms+tmcs_last_check,square_tests=())
+                pttosol = {}
+                for tm,(_,(sols,pts,curconstrs)) in zip(tms,solss):
+                    xs = [x.lm() for x in mod.get_vs(tm) ]
+                    add_positive_constraints(lp,xs,curconstrs)
+                    for sol,pt in zip(sols,pts):
+                        pttosol[pt] = sol
+                bp = BinaryProgram(lp)
+                for sol in bp_integer_points(bp,[x.lm() for tm in tms for x in mod.get_vs(tm)]):
+                    tmpt = {}
+                    for x,v in sol.items():
+                        if v == 0:
+                            tm = ba.polynomial_tm(x)
+                            if tm in tms:
+                                tmpt.setdefault(tm,[]).append(x)
+                    Ixi = ba.sum_ideals([pttosol[tuple(sorted(pt))] for _,pt in tmpt.items()],xi)
                     for Jxiup in ba.get_ideals_for_tm(r, (), tms+tmcs_last_check, Ixi, mod=mod):
                         for res in dfs(Jxiup,tmsi+1):
                             yield res
-            elif togetherlp:
-                def constrs_gen(tm,tmscur):
-                    xs = [v.lm() for v in mod.get_vs(tm)]
-                    lp = mod.get_linear_program((tm,),tmscur)
-                    solgen = (tuple(m for m,v in sol.items() if v == 0) for sol in lp_integer_points(lp,xs=xs,fullsol=False))
-                    return (get_positive_constraints(pts,xs) for pts in batched(solgen,1000))
-                constrss = [constrs_gen(tm,tmscur) for tm,tmscur in zip(tms,tmcss)]
-                for constrsscur in lproduct(*map(enumerate,constrss)):
-                    constrsscurix = [i for i,_ in constrsscur]
-                    constrsscur = [constrs for _,constrs in constrsscur]
-                    print('lp constraint group',constrsscurix)
-                    def modify_lp(lp):
-                        for tm, constrs in zip(tms,constrsscur):
-                            add_positive_constraints(lp, [v.lm() for v in mod.get_vs(tm)], constrs)
-                    # for Jxiup in ba.get_ideals_for_tm(r, tms,tmcs,Jxi,mod=mod,modify_lp=modify_lp):
-                    #     for res in dfs(Jxiup,tmsi+1):
-                    #         yield res
-                    for Jxiup in ba.get_ideals_for_tm(r, tms,tmcs_last_check,Jxi,mod=mod,modify_lp=modify_lp):
-                        for Jxiup2 in ba.get_ideals_for_tm(r, (),tms+tmcs,Jxiup,mod=mod):
-                            for res in dfs(Jxiup2,tmsi+1):
-                                yield res
-            else:
-                raise ValueError('mode invalid')
+        else:
+            raise ValueError('mode invalid')
     return dfs((ba.R0.ideal(side='twosided'),0) if Jxi is None else Jxi,0)
 
 def lp_look_strict_by_deg(ba,r,deg_bound=2,Jxi=None,mode='individual'):

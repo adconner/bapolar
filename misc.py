@@ -220,25 +220,30 @@ class BinaryProgramSCIPReopt:
         return not (self.M.getStatus() != 'optimal' or int(self.M.getObjVal()) < target)
     
 def bp_integer_points(bp,xs=None):
-    xs = xs or list(bp.vars.keys())
+    xs = xs or list(bp.lp.default_variable().keys())
+    st = []
     def dfs(psol):
+        if not bp.feasible():
+            return
         if len(psol) == len(xs):
             yield copy(psol)
             return
         x = xs[len(psol)]
+        print('%s %s' % (''.join(st),str(x)))
+        st.append(' ')
         bp.set_min(x,1)
-        if bp.feasible():
-            psol[x] = 1
-            for sol in dfs(psol):
-                yield sol
+        psol[x] = 1
+        for sol in dfs(psol):
+            yield sol
         bp.set_min(x,0)
+        st[-1] = '.'
         bp.set_max(x,0)
-        if bp.feasible():
-            psol[x] = 0
-            for sol in dfs(psol):
-                yield sol
+        psol[x] = 0
+        for sol in dfs(psol):
+            yield sol
         bp.set_max(x,1)
         del psol[x]
+        st.pop()
     return dfs({})
         
 # function to enumerate integer points of a polytope defined by input linear program
