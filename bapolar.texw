@@ -944,8 +944,9 @@ routines of this file which depend on the input data (see \S\ref{sec:input}).
 <<complete=False>>=
 
 class BorderApolarity:
-    def __init__(self, Tinfo, basis=True):
+    def __init__(self, Tinfo, basis=True, nonparam_weight=10):
         self.T, self.dims, self.vwts, self.xs = Tinfo
+        self.nonparam_weight = nonparam_weight
         self.xs = [-x.T for x in self.xs]
         self.vwts = -self.vwts
         if basis:
@@ -1017,7 +1018,7 @@ caches the results for the future.
             if not xy.is_zero():
                 xyv = sum(e*yv for e,yv in zip(xy.list(),yvs))
                 rels[xv*yv] = yv*xv + xyv
-        order = TermOrder('wdegrevlex',[10]*(sum(self.dims)+len(self.Bxs)))
+        order = TermOrder('wdegrevlex',[self.nonparam_weight]*(sum(self.dims)+len(self.Bxs)))
         if params > 0:
             order = order + TermOrder('degrevlex',params)
         return A.g_algebra(rels,order=order)
@@ -1102,8 +1103,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         def gb(J):
             xi = J.ring().ngens() - self.nvarsx
             I,subs = JxiDat(self,(J,xi)).forget_xs()
-            I = I.ring().ideal(I.groebner_basis(deg_bound = 10*(gbbound+1)-1,algorithm='libsingular:std') + \
-                    [p for p in I.gens() if p.degree() >= 10*(gbbound+1)])
+            I = I.ring().ideal(I.groebner_basis(deg_bound = self.nonparam_weight*(gbbound+1)-1,algorithm='libsingular:std') + \
+                    [p for p in I.gens() if p.degree() >= self.nonparam_weight*(gbbound+1)])
             return J.ring().ideal([p(subs) for p in I.gens()],side='twosided')
         
         xiorig = Jxi[1]
@@ -1190,7 +1191,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                             J = gb(J)
                             gb_needed = False
                         I,subs = JxiDat(self,(J,yi)).forget_xs()
-                        II = I.ring().ideal((I*I).groebner_basis(deg_bound = 10*(square_gbbound+1)-1,algorithm='libsingular:std'))
+                        II = I.ring().ideal((I*I).groebner_basis(deg_bound = self.nonparam_weight*(square_gbbound+1)-1,algorithm='libsingular:std'))
                         leading_coefficient_by_monomial = {}
                         for p in II.gens():
                             if p.is_zero():
@@ -1599,7 +1600,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         deg = max(sum(tm) for tm in tms)
         from sage.libs.singular.option import opt,opt_ctx
         with opt_ctx:
-            opt['deg_bound'] = 10*(deg+1)-1
+            opt['deg_bound'] = self.nonparam_weight*(deg+1)-1
             syz = ff.syz(J)
             if syz[0].is_zero():
                 syz = []
@@ -1856,12 +1857,9 @@ class JDat:
         lp = self.get_linear_program_except_r(tms, tmcs, relation_size_bound, square_tests, search_bound)
         lp = copy(lp)
         
-        for tm in tms:
+        for tm in tms + tmcs:
             lp.add_constraint(lp.sum(1-lp[v.lm()] 
                     for v in self.get_vs(tm)) == self.ba.tm_target_out(r,tm))
-        for tm in tmcs:
-            lp.add_constraint(lp.sum(1-lp[v.lm()] 
-                    for v in self.get_vs(tm)) >= self.ba.tm_target_out(r,tm))
             
         def square_tm_bound(tm):
             return (1+sum(d-1 for d,k in zip(ba.dims,tm) if k>0))*r
@@ -2610,7 +2608,7 @@ class JxiDat:
     #     # return ltI
     #     from sage.libs.singular.option import opt,opt_ctx
     #     with opt_ctx:
-    #         opt['deg_bound'] = 10*(deg+1)-1
+    #         opt['deg_bound'] = self.ba.nonparam_weight*(deg+1)-1
     #         return ff.syz(self.J)
     #     return res
     
@@ -2629,7 +2627,7 @@ class JxiDat:
     #     deg = max(sum(tm) for tm in tms)
     #     from sage.libs.singular.option import opt,opt_ctx
     #     with opt_ctx:
-    #         opt['deg_bound'] = 10*(deg+1)-1
+    #         opt['deg_bound'] = self.ba.nonparam_weight*(deg+1)-1
     #         syz = ff.syz(J)
     #     degsyz = lambda s: next(tuple(map(lambda a,b: a+b, self.polynomial_tm(p), self.polynomial_tm(e)))
     #                   for p,e in zip(J.gens(),s) if not e.is_zero())
@@ -2677,9 +2675,10 @@ def emultiset(p):
 def bounded_gb(J, d):
     # return J.twostd()
     from sage.libs.singular.option import opt,opt_ctx
-    sav = [p for p in J.gens() if p.degree() >= 10*(d+1)]
+    nonparam_weight = J.ring().term_order().weights()[0]
+    sav = [p for p in J.gens() if p.degree() >= nonparam_weight*(d+1)]
     with opt_ctx:
-        opt['deg_bound'] = 10*(d+1)-1
+        opt['deg_bound'] = nonparam_weight*(d+1)-1
         return J.ring().ideal(J.twostd().gens()+tuple(sav),side='twosided')
     return res
 
