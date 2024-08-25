@@ -485,17 +485,16 @@ algebra system.
 
 <<complete=False>>=
 from itertools import *
-from operator import sub
+from operator import add,sub
 from functools import cache
 
 @
 
 <<complete=False>>=
 
-def search_by_sequence(ba,r,tmss,Jxi=None,mode=('individual',10)):
+def search_by_sequence(ba,r,tmss,Jxi=None,mode=('individual',10),test_squares=True):
     together = mode == 'together'
     individual = type(mode) is tuple and mode[0] == 'individual'
-    from operator import add
     def dfs(Jxi,tmsi):
         try:
             tms = tmss[tmsi]
@@ -518,27 +517,38 @@ def search_by_sequence(ba,r,tmss,Jxi=None,mode=('individual',10)):
                 yield res
             return
         # maxdincrease = max(d-2,0) + max(ba.T.degree()-2,0)
-        maxdincrease = max(d-1, ba.T.degree()-d)
+        maxdincrease = max(0,min(max(d-1, ba.T.degree()-d),r-d))
         # maxdincrease = d
         # maxdincrease = max(1, min(d, 9-d))
         tmcs = tuple(sorted(set([tuple(map(add,tm,tma)) for tm in tms for k in range(1,maxdincrease+1)
                              for tma in IntegerVectors(k,len(ba.dims)) ])))
+        extra_square_increase = 0
+        def get_square_tests(tms):
+            if not test_squares:
+                return []
+            existing_tms = list(set(list(tms)+[ba.polynomial_tm(p) for p in mod.J.gens() if not p.is_zero()]))
+            mindegree = min(sum(tm) for tm in existing_tms)
+            return tuple(set([ tuple(map(add,tm1,tm2)) for tm1,tm2 in combinations_with_replacement(existing_tms,2)
+                                     if sum(tm1) + sum(tm2) <= d + mindegree + extra_square_increase ]))
+        square_tests = get_square_tests(tms)
         if together:
-            for Jxiup in ba.get_ideals_for_tm(r, tms, tmcs, Jxi, mod=mod):
-                                              # lp_interval_length_bound=4 if len(J.gens()) == 0 else 4):
+            for Jxiup in ba.get_ideals_for_tm(r, tms, tmcs, Jxi, mod=mod, square_tests=square_tests):
                 for res in dfs(Jxiup,tmsi+1):
                     yield res
         elif individual:
             ibatch = mode[1]
             tmcss = [tuple([tmc for tmc in tmcs if all(e <= f for e,f in zip(tm,tmc))])
                           for tm in tms]
+            square_testss = [get_square_tests([tm]) for tm in tms]
             if J.is_zero():
                 tmcss = [tuple([tmc for tmc in tmcscur if all(e > 0 or f == 0 for e,f in zip(tm,tmc)) ]) 
                          for tmcscur,tm in zip(tmcss,tms)]
             tmcs_last_check = tuple([tmc for tmc in tmcs
                           if len([tm for tm in tms if all(e <= f for e,f in zip(tm,tmc))]) > 1 ])
-            gens = [ba.get_ideals_for_tm(r,(tm,),tmcscur,Jxi,mod=mod,simplify_existing=False) 
-                    for tm,tmcscur in zip(tms,tmcss)]
+            square_tests_last_check = tuple([tm for tm in square_tests if 
+                                       [tm in square_tests_cur for square_tests_cur in square_testss ].count(True) != 1 ])
+            gens = [ba.get_ideals_for_tm(r,(tm,),tmcscur,Jxi,mod=mod,simplify_existing=False,square_tests=square_tests_cur) 
+                    for tm,tmcscur,square_tests_cur in zip(tms,tmcss,square_testss)]
             def constrs(tm,sols):
                 from sage.libs.singular.groebner_strategy import NCGroebnerStrategy
                 xs = [x.lm() for x in mod.get_vs(tm)]
@@ -551,7 +561,7 @@ def search_by_sequence(ba,r,tmss,Jxi=None,mode=('individual',10)):
             
             for solss in lproduct(*map(enumerate,gens)):
                 print ('index choice %d' % tmsi,[i for i,_ in solss])
-                lp = mod.get_linear_program(r,(),tms+tmcs_last_check,square_tests=())
+                lp = mod.get_linear_program(r,(),tms+tmcs_last_check,square_tests=square_tests_last_check)
                 pttosol = {}
                 for tm,(_,(sols,pts,curconstrs)) in zip(tms,solss):
                     xs = [x.lm() for x in mod.get_vs(tm) ]
@@ -567,7 +577,8 @@ def search_by_sequence(ba,r,tmss,Jxi=None,mode=('individual',10)):
                             if tm in tms:
                                 tmpt.setdefault(tm,[]).append(x)
                     Ixi = ba.sum_ideals([pttosol[tuple(sorted(pt))] for _,pt in tmpt.items()],xi)
-                    for Jxiup in ba.get_ideals_for_tm(r, (), tms+tmcs_last_check, Ixi, mod=mod):
+                    for Jxiup in ba.get_ideals_for_tm(r, (), tms+tmcs_last_check, Ixi, 
+                                                      mod=mod, square_tests=square_tests_last_check):
                         for res in dfs(Jxiup,tmsi+1):
                             yield res
         else:
