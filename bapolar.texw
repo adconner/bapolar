@@ -567,7 +567,7 @@ def search_by_sequence(ba,r,tmss,Jxi=None,mode=('individual',10),test_squares=Tr
                     xs = [x.lm() for x in mod.get_vs(tm) ]
                     add_positive_constraints(lp,xs,curconstrs)
                     for sol,pt in zip(sols,pts):
-                        pttosol[pt] = sol
+                        pttosol.setdefault(pt,[]).append(sol)
                 bp = BinaryProgram(lp)
                 for sol in bp_integer_points(bp,[x.lm() for tm in tms for x in mod.get_vs(tm)]):
                     tmpt = {}
@@ -576,11 +576,12 @@ def search_by_sequence(ba,r,tmss,Jxi=None,mode=('individual',10),test_squares=Tr
                             tm = ba.polynomial_tm(x)
                             if tm in tms:
                                 tmpt.setdefault(tm,[]).append(x)
-                    Ixi = ba.sum_ideals([pttosol[tuple(sorted(pt))] for _,pt in tmpt.items()],xi)
-                    for Jxiup in ba.get_ideals_for_tm(r, (), tms+tmcs_last_check, Ixi, 
-                                                      mod=mod, square_tests=square_tests_last_check):
-                        for res in dfs(Jxiup,tmsi+1):
-                            yield res
+                    for solscur in product(*[pttosol[tuple(sorted(pt))] for _,pt in tmpt.items()]):
+                        Ixi = ba.sum_ideals(solscur,xi)
+                        for Jxiup in ba.get_ideals_for_tm(r, (), tms+tmcs_last_check, Ixi, 
+                                                          mod=mod, square_tests=square_tests_last_check):
+                            for res in dfs(Jxiup,tmsi+1):
+                                yield res
         else:
             raise ValueError('mode invalid')
     return dfs((ba.R0.ideal(side='twosided'),0) if Jxi is None else Jxi,0)
