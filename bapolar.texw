@@ -1973,24 +1973,26 @@ class JDat:
             return lp[vs]
             
         pair_constraints = SetSystem()
-        def add_square_constraint(rowvks,colvkss,kerdim):
-            assert kerdim <= len(colvkss)
-            if len(colvkss) == kerdim:
+        def add_square_constraint(rowvks,colvks,colvkss,kerdim):
+            ncols = len(colvks) + len(colvkss)
+            assert kerdim <= ncols
+            if ncols == kerdim:
                 return False
             colvkss = [tuple(sorted(vks)) for vks in colvkss]
-            S = [('r',vk) for vk in rowvks]+[('c',vks) for vks in colvkss]
+            S = [('r',vk) for vk in rowvks]+[('c',vk) for vk in colvks]+[('cp',vks) for vks in colvkss]
             for Ss,ks in pair_constraints.iter_unions(S):
-                if kerdim-len(colvkss) >= sum(ks)-len([None for R in Ss for tag,_ in R if tag == 'c']):
+                if kerdim-ncols >= sum(ks)-len([None for R in Ss for tag,_ in R if tag in ['c','cp']]):
                     # this condition is one we have added plus conditions 
                     # x <= 1 or 0 <= x
                     assert len(rowvks) > 1
                     return False
             prows = [self.get_vss(tm)[wt][i] for tm,wt,i in rowvks]
-            pcols = [[self.get_vss(tm)[wt][i] for tm,wt,i in vks] for vks in colvkss]
+            pcols = [self.get_vss(tm)[wt][i] for tm,wt,i in colvks]+[[self.get_vss(tm)[wt][i] for tm,wt,i in vks] for vks in colvkss]
             if len(prows) > 1:
                 print(prows,pcols,kerdim)
             pair_constraints.add_set(S, kerdim)
-            lp.add_constraint(lp.sum(lp[conjunction_variable(vks)] for vks in colvkss)
+            lp.add_constraint(lp.sum(lp[(self.get_vss(tm)[wt][i].lm(),2)] for tm,wt,i in colvks) + \
+                              lp.sum(lp[conjunction_variable(vks)] for vks in colvkss)
                              <= lp.sum(lp[(self.get_vss(tm)[wt][i].lm(),2)] for tm,wt,i in rowvks) + kerdim)
             return True
 
@@ -2051,7 +2053,7 @@ class JDat:
             for rows,cols in sorted(get_flag_inequalities2(M,g,relation_size_bound=relation_size_bound_ncols(M.ncols())),key=lambda f: len(f[0])):
                 rowvkscur = [rowvks[i] for i in rows]
                 colvksscur = [colvkss[j] for j in cols]
-                add_square_constraint(rowvkscur, colvksscur, 0)
+                add_square_constraint(rowvkscur, [], colvksscur, 0)
                               
             
         # subspace_pairs = {}
@@ -2793,3 +2795,4 @@ def batched(iterable, n):
   Universit\"at Kaiserslautern, 2005. Available online at http://kluedo.ub.uni-kl.de/volltexte/2005/1883/.articular 
 \end{thebibliography}
 \end{document}
+% vim: ft=python
