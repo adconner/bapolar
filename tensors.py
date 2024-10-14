@@ -14,6 +14,34 @@ def matrixmult(*idims):
             for ixs in product(*map(range,idims)))
     return (T,dims)
 
+def slpart110(p,n):
+    xs = p.parent().gens()
+    def mon(m):
+        (i,_),(j,_) = list(m.exponents()[0].sparse_iter())
+        j -= n*n
+        if i % n == j // n:
+            return m - sum(xs[(i//n)*n+k]*xs[n*n+k*n+j%n] for k in range(n))/n
+        return m
+    return sum(mon(m)*p.monomial_coefficient(m) for m in p.monomials())
+
+def slpart111(p,n):
+    xs = p.parent().gens()
+    def mon(m):
+        (i,_),(j,_),(k,_) = list(m.exponents()[0].sparse_iter())
+        ixs = (i,j-n*n,k-2*n*n)
+        
+        nn = sum(
+            prod(xs[e*n*n+(ixs[e]//n
+                           if jxs[(e+2) % 3] is None else
+                           jxs[(e+2)%3])*n+ (ixs[e]%n
+                                 if jxs[e] is None
+                                 else jxs[e])]
+            for e in range(3))
+                for jxs in product(*[range(n) if ixs[e] % n == ixs[(e+1)%3] // n else [None] 
+                      for e in range(3)]))
+        return m - nn/len(nn.monomials())
+    return sum(mon(m)*p.monomial_coefficient(m) for m in p.monomials())
+
 def matrixmult_ti(m,n,l):
     T,dims = matrixmult(m,n,l)
     vwts = matrix(ZZ,n+l+m-1,T.parent().ngens())
