@@ -49,12 +49,12 @@ let
   };
   scip = pkgs.stdenv.mkDerivation {
     pname = "scip";
-    version = "9.0.0";
+    version = "9.1.1";
     src = pkgs.fetchFromGitHub {
       owner = "scipopt";
       repo = "scip";
-      rev = "v900";
-      hash = "sha256-V3NaYoH+4GIv4MWJwgmqIJTfEdsKnPxaYLl7qznejp0=";
+      rev = "v911";
+      hash = "sha256-whBbY8Smuh63bd/luCa7vZPKvi11F1+KnMd0RzpTeDw=";
     };
 
     cmakeFlags = [ "-DAUTOBUILD=on" ];
