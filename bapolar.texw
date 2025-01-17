@@ -586,11 +586,11 @@ def search_by_sequence(ba,r,tmss,Jxi=None,mode=('individual',10),test_squares=Tr
             raise ValueError('mode invalid')
     return dfs((ba.R0.ideal(side='twosided'),0) if Jxi is None else Jxi,0)
 
-def lp_look_strict_by_deg(ba,r,deg_bound=2,Jxi=None,mode='individual'):
+def lp_look_strict_by_deg(ba,r,deg_bound=2,Jxi=None,mode=('individual',10)):
     tmss = [list(map(tuple,IntegerVectors(k,len(ba.dims)))) for k in range(1,deg_bound+1)]
     return search_by_sequence(ba,r,tmss,Jxi,mode=mode)
 
-def lp_look_strict(ba,r,deg_bound=2,tm_max_bound=oo,Jxi=None,mode='individual'):
+def lp_look_strict(ba,r,deg_bound=2,tm_max_bound=oo,Jxi=None,mode=('individual',10)):
     tmss = [[tuple(tm) for tm in IntegerVectors(k,len(ba.dims)) if max(tm) == tmm] for k in range(1,deg_bound+1)
             for tmm in range( (k-1)//len(ba.dims)+1, min(tm_max_bound,k)+1 ) ]
     # tmss = [[tm for tm in tms if all( e<=f for e,f in zip(tm,(3,1,1)))] for tms in tmss]
