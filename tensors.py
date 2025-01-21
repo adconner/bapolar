@@ -10,7 +10,8 @@ def Tdict(T):
             while i >= dims[f]:
                 i -= dims[f]
                 f += 1
-            deg[f].append(i)
+            for _ in range(k):
+                deg[f].append(i)
         yield (deg,e)
 
 def tensor_deg(T):
