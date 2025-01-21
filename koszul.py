@@ -79,22 +79,6 @@ def generic_restrict(L,newa):
         M = random_matrix(ZZ,newa,len(L),x=-1000,y=1000)
     return tensor_restrict(L,M)
 
-def summary1(L,p,restrict=True):
-    if p > len(L)-1:
-        raise ValueError("koszul flattening: dim A=%d too small for p=%d" % (len(L),p))
-
-    if not restrict or 2*p+1 >= len(L):
-        if restrict:
-            print ('warning: TAp: a = %d <= %d = 2*p+1' % (len(L),2*p+1))
-        r = TAp(L,p).rank()
-        d = binomial(len(L)-1,p)
-        return [p,r,d,ceil(r/d)]
-
-    m = TAp(generic_restrict(L,2*p+1),p)
-    r = m.rank()
-    d = binomial(2*p,p)
-    return [p,r,d,ceil(r/d)]
-
 def koszul_lower_bound(T,p,known_bound = 0):
     Tp,dims = T
     # change to modular ring to improve rank computation speed
@@ -105,7 +89,9 @@ def koszul_lower_bound(T,p,known_bound = 0):
         TApnrows = prod(factordims[i] for i in Bixs)*binomial(newa,p)
         TApncols = prod(factordims[i] for i in Cixs)*binomial(newa,p+1)
         return min(TApnrows, TApncols) / binomial(newa-1,p)
-    tests = [(Bixs,Cixs,newa,a) for Aixs,Bixs,Cixs in OrderedSetPartitions(range(len(dims)),3) 
+    ordered_set_partitions = [ [[j for j,e in enumerate(facmapping) if e==i ] for i in range(3)]
+           for facmapping in product(*[range(3)]*len(dims)) ]
+    tests = [(Bixs,Cixs,newa,a) for Aixs,Bixs,Cixs in ordered_set_partitions
              for a in [prod(factordims[i] for i in Aixs)]
              for newa in range(p+1, a+1) ]
     tests.sort(key = lambda rec: bound_upper_bound(rec[0],rec[1],rec[2]), reverse = True)
@@ -127,7 +113,7 @@ def koszul_lower_bound(T,p,known_bound = 0):
         known_bound = max(bound,known_bound)
     return known_bound
 
-def summarize(T,pmin=1,pmax=10,known_bound=0):
+def summarize(T,pmin=0,pmax=10,known_bound=0):
     for p in range(pmin,pmax+1):
         known_bound = koszul_lower_bound(T,p,known_bound)
     return known_bound
