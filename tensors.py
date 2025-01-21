@@ -1,6 +1,68 @@
 from sage.all import PolynomialRing
 from itertools import product
 
+def Tdict(T):
+    T,dims = T
+    for ks,e in T.dict().items():
+        deg = [[] for _ in range(len(dims))]
+        for i,k in ks.sparse_iter():
+            f = 0
+            while i >= dims[f]:
+                i -= dims[f]
+                f += 1
+            deg[f].append(i)
+        yield (deg,e)
+
+def tensor_deg(T):
+    return tuple(map(len,next(Tdict(T))[0]))
+
+# given a (partially) symmetric tensor T, forget some of the implied factor
+# symmetry to view as a less symmetric tensor. dimsto is a list of lists of
+# numbers which flattens to the new desired deg of T and whose groupings
+# correspond to the old dims of T
+def tensor_polarize(T, dimsto):
+    initial_deg = tensor_deg(T)
+    T,dims = T
+    assert len(dimsto) == len(dims)
+    assert all(d == sum(ds) for d,ds in zip(initial_deg,dimsto))
+    newdims = [d for d,degs in zip(dims,dimsto) for _ in degs]
+    xss = get_defining_variables(T.base_ring(),newdims)
+    from operator import concat
+    xi = 0
+    ys = []
+    for d,degs in zip(dims,dimsto):
+        ys.extend(xss[xi])
+        for _ in degs:
+            xi += 1
+    T = T(ys)
+    xi = 0
+    for curdeg,degs in zip(initial_deg,dimsto):
+        xs = xss[xi]
+        xi += 1
+        for k in degs[1:]:
+            ys = xss[xi]
+            assert len(xs) == len(ys)
+            Tnext = T.parent().zero()
+            for x,y in zip(xs,ys):
+                Tnext += y*T.derivative(x) / curdeg
+            T = Tnext
+            curdeg -= 1
+            xi += 1
+    return (T,newdims)
+
+# obtain tensor by symmetrizing over some equidimensional factors determined by
+# dimsfrom, which is a list of lists of factor indices defining the groups over
+# which to symmetrize
+def tensor_symmetrize(T, dimsfrom):
+    T,dims = T
+    assert all(dims[i] == dims[ixs[0]] for ixs in dimsfrom for i in ixs)
+    newdims = tuple([dims[ixs[0]] for ixs in dimsfrom])
+    xss = get_defining_variables(T.base_ring(),newdims)
+    dimsto = [next(i for i,ixs in enumerate(dimsfrom) if j in ixs) for 
+              j in range(len(dims))]
+    ys = [x for i in dimsto for x in xss[i]]
+    return (T(ys),newdims)
+
 def matrixmult(*idims):
     dims = tuple(a*b for a,b in zip(idims,idims[1:]+idims[:1]))
     R = PolynomialRing(QQ,['%s%d%d' % (c,i,j) for c,a,b in zip('uvwxyzabcdefghijklmnopqrst', idims,idims[1:]+idims[:1]) 
@@ -246,8 +308,8 @@ def unextendible_supports_333():
     Ts.append((T,dims))
     return Ts
 
-def fromT(T):
-    dims = (len(T),) + T[0].dimensions()
-    R = PolynomialRing(T[0].base_ring(),['%s%d' % (c,i+1) 
+def tensor_fromL(T):
+    dims = (len(L),) + L[0].dimensions()
+    R = PolynomialRing(L[0].base_ring(),['%s%d' % (c,i+1) 
                  for c,d in zip('abc',dims) for i in range(d)])
-    return (R.sum([e*R.gen(i)*R.gen(dims[0]+j)*R.gen(dims[0]+dims[1]+k) for i,m in enumerate(T) for (j,k),e in m.dict().items()]),dims)
+    return (R.sum([e*R.gen(i)*R.gen(dims[0]+j)*R.gen(dims[0]+dims[1]+k) for i,m in enumerate(L) for (j,k),e in m.dict().items()]),dims)
