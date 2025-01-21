@@ -127,7 +127,7 @@ def koszul_lower_bound(T,p,known_bound = 0):
         known_bound = max(bound,known_bound)
     return known_bound
 
-def summarize(T,pmin=1,pmax=3,known_bound=0):
+def summarize(T,pmin=1,pmax=10,known_bound=0):
     for p in range(pmin,pmax+1):
         known_bound = koszul_lower_bound(T,p,known_bound)
     return known_bound
