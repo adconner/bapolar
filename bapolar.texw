@@ -2678,7 +2678,7 @@ def emultiset(p):
 def bounded_gb(J, d):
     # return J.twostd()
     from sage.libs.singular.option import opt,opt_ctx
-    nonparam_weight = J.ring().term_order().weights()[0]
+    nonparam_weight = J.ring().term_order()[0].weights()[0]
     sav = [p for p in J.gens() if p.degree() >= nonparam_weight*(d+1)]
     with opt_ctx:
         opt['deg_bound'] = nonparam_weight*(d+1)-1
