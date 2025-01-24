@@ -21,9 +21,10 @@ def tensor_deg(T):
 # symmetry to view as a less symmetric tensor. dimsto is a list of lists of
 # numbers which flattens to the new desired deg of T and whose groupings
 # correspond to the old dims of T
-def tensor_polarize(T, dimsto):
+def tensor_polarize(T, dimsto=None):
     initial_deg = tensor_deg(T)
     T,dims = T
+    dimsto = dimsto or [[1]*d for d in initial_deg]
     assert len(dimsto) == len(dims)
     assert all(d == sum(ds) for d,ds in zip(initial_deg,dimsto))
     newdims = [d for d,degs in zip(dims,dimsto) for _ in degs]
@@ -54,8 +55,9 @@ def tensor_polarize(T, dimsto):
 # obtain tensor by symmetrizing over some equidimensional factors determined by
 # dimsfrom, which is a list of lists of factor indices defining the groups over
 # which to symmetrize
-def tensor_symmetrize(T, dimsfrom):
+def tensor_symmetrize(T, dimsfrom=None):
     T,dims = T
+    dimsfrom = dimsfrom or [range(len(dims))]
     assert all(dims[i] == dims[ixs[0]] for ixs in dimsfrom for i in ixs)
     newdims = tuple([dims[ixs[0]] for ixs in dimsfrom])
     xss = get_defining_variables(T.base_ring(),newdims)
