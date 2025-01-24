@@ -16,26 +16,26 @@ def flatten_to_matrix_subspace(T,row_factor_indices,col_factor_indices):
     assert len(set(row_factor_indices).intersection(set(col_factor_indices))) == 0
     Afactor_indices = sorted(set(range(len(dims))) - set(row_factor_indices) - set(col_factor_indices))
     deg = tensor_deg(T)
-    ix_sets = [ Subsets([i for i in range(dmax) for _ in range(dcnt)],dcnt,submultiset=True) 
-               for dcnt,dmax in zip(deg,dims) ]
-    L = [{} for _ in range(prod(ix_sets[i].cardinality() for i in Afactor_indices))]
-    for deg,e in Tdict(T):
+    def multi_subset_rank(s):
+        return sum(binomial(e+i,i+1) for i,e in enumerate(sorted(s)))
+    L = [{} for _ in range(prod(binomial(dims[i]+deg[i]-1,deg[i]) for i in Afactor_indices))]
+    for ks,e in Tdict(T):
         Ai = 0
         for i in Afactor_indices:
-            Ai *= ix_sets[i].cardinality()
-            Ai += ix_sets[i].rank(deg[i])
+            Ai *= binomial(dims[i]+deg[i]-1,deg[i])
+            Ai += multi_subset_rank(ks[i])
         rowi = 0
         for i in row_factor_indices:
-            rowi *= ix_sets[i].cardinality()
-            rowi += ix_sets[i].rank(deg[i])
+            rowi *= binomial(dims[i]+deg[i]-1,deg[i])
+            rowi += multi_subset_rank(ks[i])
         coli = 0
         for i in col_factor_indices:
-            coli *= ix_sets[i].cardinality()
-            coli += ix_sets[i].rank(deg[i])
+            coli *= binomial(dims[i]+deg[i]-1,deg[i])
+            coli += multi_subset_rank(ks[i])
         L[Ai][(rowi,coli)] = e
     return [ matrix(p.base_ring(),
-                    prod(ix_sets[i].cardinality() for i in row_factor_indices),
-                    prod(ix_sets[i].cardinality() for i in col_factor_indices),m) 
+                    prod(binomial(dims[i]+deg[i]-1,deg[i]) for i in row_factor_indices),
+                    prod(binomial(dims[i]+deg[i]-1,deg[i]) for i in col_factor_indices),m) 
             for m in L ]
 
 def TAp(L,p):
@@ -43,19 +43,15 @@ def TAp(L,p):
     b,c = L[0].dimensions()
     F = L[0].base_ring()
     That = {}
-    try:
-        left_ixs = Subsets(range(a),p)
-    except:
-        embed()
-        raise
-        
-    right_ixs = Subsets(range(a),p+1)
+    from itertools import combinations
+    def subset_rank(s):
+        return sum(binomial(e,i+1) for i,e in enumerate(sorted(s)))
     for ii,m in enumerate(L):
-        for S in Subsets(chain(range(ii),range(ii+1,a)),p):
-            P = S+Set([ii])
+        for S in combinations(chain(range(ii),range(ii+1,a)),p):
+            P = S+(ii,)
             sg = (-1)^len([_ for i in S if i < ii])
-            br = right_ixs.rank(P)
-            bc = left_ixs.rank(S)
+            br = subset_rank(P)
+            bc = subset_rank(S)
             for (i,j),e in m.dict().items():
                 That[(br*c + j,bc*b + i)] = sg * e
     return matrix(F,binomial(a,p+1)*c, binomial(a,p)*b,That)
