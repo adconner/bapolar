@@ -14,4 +14,5 @@ attach('symmetry.py')
 attach('hyperplane.py')
 attach('tensors.py')
 attach('quiver_ip.py')
+attach('koszul.py')
 
