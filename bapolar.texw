@@ -2566,7 +2566,8 @@ class JxiDat:
         return [m for m in self.normal_basis(sum(tm)) if self.ba.polynomial_tm(m) == tm]
     
     def forget_xs(self):
-        order = TermOrder('degrevlex',sum(self.ba.dims))
+        order = TermOrder('wdegrevlex',[self.ba.nonparam_weight]*sum(self.ba.dims))
+        # order = TermOrder('degrevlex',sum(self.ba.dims))
         if self.xi > 0:
             order = order + TermOrder('degrevlex',self.J.ring().ngens()-self.ba.nvarsx)
         R = PolynomialRing(self.ba.F,self.J.ring().gens()[:self.ba.nvars]+self.J.ring().gens()[self.ba.nvarsx:],order=order)
