@@ -32,24 +32,27 @@ def tensor_polarize(T, dimsto=None):
     from operator import concat
     xi = 0
     ys = []
-    for d,degs in zip(dims,dimsto):
-        ys.extend(xss[xi])
-        for _ in degs:
-            xi += 1
+    for d,deg in zip(dims,initial_deg):
+        if deg == 0:
+            ys.extend([xss[0][0].parent().zero()]*d)
+        else:
+            ys.extend(xss[xi])
+            xi += deg
     T = T(ys)
     xi = 0
     for curdeg,degs in zip(initial_deg,dimsto):
-        xs = xss[xi]
-        xi += 1
-        for k in degs[1:]:
-            ys = xss[xi]
-            assert len(xs) == len(ys)
-            Tnext = T.parent().zero()
-            for x,y in zip(xs,ys):
-                Tnext += y*T.derivative(x) / curdeg
-            T = Tnext
-            curdeg -= 1
+        if len(degs) > 0:
+            xs = xss[xi]
             xi += 1
+            for k in degs[1:]:
+                ys = xss[xi]
+                assert len(xs) == len(ys)
+                Tnext = T.parent().zero()
+                for x,y in zip(xs,ys):
+                    Tnext += y*T.derivative(x) / curdeg
+                T = Tnext
+                curdeg -= 1
+                xi += 1
     return (T,newdims)
 
 # obtain tensor by symmetrizing over some equidimensional factors determined by
