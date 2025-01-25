@@ -49,7 +49,7 @@ def TAp(L,p):
     for ii,m in enumerate(L):
         for S in combinations(chain(range(ii),range(ii+1,a)),p):
             P = S+(ii,)
-            sg = (-1)^len([_ for i in S if i < ii])
+            sg = (-1)**len([_ for i in S if i < ii])
             br = subset_rank(P)
             bc = subset_rank(S)
             for (i,j),e in m.dict().items():
