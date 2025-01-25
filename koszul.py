@@ -86,10 +86,10 @@ def koszul_lower_bound(T,p,known_bound = 0):
         TApncols = prod(factordims[i] for i in Cixs)*binomial(newa,p+1)
         return min(TApnrows, TApncols) / binomial(newa-1,p)
     ordered_set_partitions = [ [[j for j,e in enumerate(facmapping) if e==i ] for i in range(3)]
-           for facmapping in product(*[range(3)]*len(dims)) ]
+           for facmapping in product(*[range(3) if p > 0 else range(1,3)]*len(dims)) ]
     tests = [(Bixs,Cixs,newa,a) for Aixs,Bixs,Cixs in ordered_set_partitions
              for a in [prod(factordims[i] for i in Aixs)]
-             for newa in range(p+1, a+1) ]
+             for newa in range(p+1 if p > 0 else a, a+1) ]
     tests.sort(key = lambda rec: bound_upper_bound(rec[0],rec[1],rec[2]), reverse = True)
     for Bixs,Cixs,newa,a in tests:
         if bound_upper_bound(Bixs,Cixs,newa) <= known_bound:
