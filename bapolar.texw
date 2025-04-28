@@ -1663,31 +1663,36 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         # ms = [m[kl,kr] for m, kl, kr in zip(ms, keep, keep[1:])]
 
         from sage.libs.singular.option import opt,opt_ctx
+        Jflat,subs = Jxi.forget_xs()
         with opt_ctx:
             opt['deg_bound'] = self.nonparam_weight*(deg+1)-1
-            opt['returnSB'] = False
-            Jflat,subs = Jxi.forget_xs()
             ms = [matrix(ff.minbase(Jflat))]
-            degs = [[(0,)*len(self.Tdeg)],[self.polynomial_tm(e) for e in ms[0].list()]]
-            for _ in range(k+1):
+        degs = [[(0,)*len(self.Tdeg)],[self.polynomial_tm(e) for e in ms[0].list()]]
+        for _ in range(k+1):
+            with opt_ctx:
+                # opt['deg_bound'] = self.nonparam_weight*(deg+1)-1
+                opt['deg_bound'] = self.nonparam_weight*(deg-min(sum(tm) for tm in degs[-2])+1)-1
+                opt['returnSB'] = False
                 m = ff.syz(ms[-1])
-                mr = []
-                curdeg = []
-                for j,c in enumerate(m):
-                    cur = None
-                    for i,e in enumerate(c):
-                        if e != 0:
-                            edeg = tuple(map(add,self.polynomial_tm(e),degs[-1][i]))
-                            if cur is None:
-                                cur = edeg
-                            else:
-                                assert cur == edeg
-                    if tm_in(cur):
-                        mr.append(c)
-                        curdeg.append(cur)
-                degs.append(curdeg)
-                ms.append(matrix(mr).T)
-            ms = [m.apply_map(lambda e: e(subs), subs[0].parent()) for m in ms]
+            mr = []
+            curdeg = []
+            for j,c in enumerate(m):
+                if c.is_zero():
+                    continue
+                cur = None
+                for i,e in enumerate(c):
+                    if e != 0:
+                        edeg = tuple(map(add,self.polynomial_tm(e),degs[-1][i]))
+                        if cur is None:
+                            cur = edeg
+                        else:
+                            assert cur == edeg
+                if tm_in(cur):
+                    mr.append(c)
+                    curdeg.append(cur)
+            degs.append(curdeg)
+            ms.append(matrix(mr).T)
+        ms = [m.apply_map(lambda e: e(subs), subs[0].parent()) for m in ms]
         
         @cache
         def canonical_index(m,tm):
@@ -1710,6 +1715,9 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         
         out = []
         for m,dsr,dsc in zip(ms[1:],degs[1:],degs[2:]):
+            if len(dsc) == 0:
+                out.append(matrix(R, sum(len(Jxi.normal_basis_tm(dr)) for dr in dsr), 0, sparse=True))
+                continue
             M = {}
             row_offset = 0
             col_offset = None
