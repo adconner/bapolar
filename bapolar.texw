@@ -1104,9 +1104,9 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         def gb(J):
             xi = J.ring().ngens() - self.nvarsx
             I,subs = JxiDat(self,(J,xi)).forget_xs()
-            I = I.ring().ideal(I.groebner_basis(deg_bound = self.nonparam_weight*(gbbound+1)-1,algorithm='libsingular:std') + \
-                    [p for p in I.gens() if p.degree() >= self.nonparam_weight*(gbbound+1)])
-            return J.ring().ideal([p(subs) for p in I.gens()],side='twosided')
+            I = I.groebner_basis(deg_bound = self.nonparam_weight*(gbbound+1)-1,algorithm='libsingular:std') + \
+                    [p for p in I.gens() if p.degree() >= self.nonparam_weight*(gbbound+1)]
+            return J.ring().ideal([p(subs) for p in I],side='twosided')
         
         xiorig = Jxi[1]
 
