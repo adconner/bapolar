@@ -1629,6 +1629,103 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         eqs[(eqsi[(si,lm)], vari[(gi,m)])] = t(Rsubs)
                         me -= t*lm
         return matrix(R,len(eqsi),len(vari),eqs)
+    
+    # 
+    def bounded_Hom_complex0(self, Jxi, tms, k=0):
+        J,xi = Jxi
+        tm_in = lambda tm: any( all(e<=f for e,f in zip(tm, tmh)) for tmh in tms)
+        J = J.ring().ideal([p for p in J.gens() if tm_in(self.polynomial_tm(p))],side='twosided')
+        Jxi = JxiDat(self,(J,xi))
+        deg = max(sum(tm) for tm in tms)
+        
+        # from sage.libs.singular.option import opt,opt_ctx
+        # with opt_ctx:
+        #     opt['deg_bound'] = self.nonparam_weight*(deg+1)-1
+        #     res = ff.mres(ff.module(J),k+1)
+        # from sage.libs.singular.singular import si2sa_resolution_graded
+        # ms, _ = si2sa_resolution_graded(res,())
+        # degs = [[(0,)*len(self.Tdeg)]]
+        # for m in ms:
+        #     curdeg = []
+        #     for j in range(m.ncols()):
+        #         cur = None
+        #         for i,e in enumerate(m.column(j)):
+        #             if e != 0:
+        #                 edeg = tuple(map(add,self.polynomial_tm(e),degs[-1][i]))
+        #                 if cur is None:
+        #                     cur = edeg
+        #                 else:
+        #                     assert cur == edeg
+        #         curdeg.append(cur)
+        #     degs.append(curdeg)
+        # keep = [[i for i,tm in enumerate(ds) if tm_in(tm) ] for ds in degs]
+        # degs = [ [d[i] for i in k] for d,k in zip(degs, keep) ]
+        # ms = [m[kl,kr] for m, kl, kr in zip(ms, keep, keep[1:])]
+
+        from sage.libs.singular.option import opt,opt_ctx
+        with opt_ctx:
+            opt['deg_bound'] = self.nonparam_weight*(deg+1)-1
+            opt['returnSB'] = False
+            Jflat,subs = Jxi.forget_xs()
+            ms = [matrix(ff.minbase(Jflat))]
+            degs = [[(0,)*len(self.Tdeg)],[self.polynomial_tm(e) for e in ms[0].list()]]
+            for _ in range(k+1):
+                m = ff.syz(ms[-1])
+                mr = []
+                curdeg = []
+                for j,c in enumerate(m):
+                    cur = None
+                    for i,e in enumerate(c):
+                        if e != 0:
+                            edeg = tuple(map(add,self.polynomial_tm(e),degs[-1][i]))
+                            if cur is None:
+                                cur = edeg
+                            else:
+                                assert cur == edeg
+                    if tm_in(cur):
+                        mr.append(c)
+                        curdeg.append(cur)
+                degs.append(curdeg)
+                ms.append(matrix(mr).T)
+            ms = [m.apply_map(lambda e: e(subs), subs[0].parent()) for m in ms]
+        
+        @cache
+        def canonical_index(m,tm):
+            return Jxi.normal_basis_tm(tm).index(m)
+        
+        R = self.F if xi == 0 else PolynomialRing(self.F,'t',xi,implementation='singular')
+        Rsubs = (R.zero(),)*self.nvarsx+(R.gens() if R is not self.F else ())+\
+                (R.zero(),)*(J.ring().ngens()-self.nvarsx-xi)
+        from sage.libs.singular.groebner_strategy import NCGroebnerStrategy
+        Jn = NCGroebnerStrategy(J)
+        def mult_mapT(e, tm_to, tm_from, row_offset, cur_col_offset, M):
+            emat = {}
+            for mi,m in enumerate(Jxi.normal_basis_tm(tm_from)):
+                me = Jn.normal_form(liftR(m,J.ring())*e)
+                while not me.is_zero():
+                    lm = self.lm(me)
+                    t = me.coefficient(lm)
+                    M[ (row_offset + mi, cur_col_offset + canonical_index(lm,tm_to)) ] = t(Rsubs)
+                    me -= t*lm
+        
+        out = []
+        for m,dsr,dsc in zip(ms[1:],degs[1:],degs[2:]):
+            M = {}
+            row_offset = 0
+            col_offset = None
+            for dr,r in zip(dsr, m):
+                cur_col_offset = 0
+                for dc,e in zip(dsc, r):
+                    mult_mapT(e,dc,dr,row_offset,cur_col_offset,M)
+                    cur_col_offset += len(Jxi.normal_basis_tm(dc))
+                if col_offset is None:
+                    col_offset = cur_col_offset
+                else:
+                    assert col_offset == cur_col_offset
+                row_offset += len(Jxi.normal_basis_tm(dr))
+            out.append(matrix(R,row_offset,col_offset,M))
+        return out
+                
         
     # For testing purposes
     # This gives the monomials not in the leading term ideal for a generic point
