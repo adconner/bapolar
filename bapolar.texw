@@ -1630,68 +1630,55 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         me -= t*lm
         return matrix(R,len(eqsi),len(vari),eqs)
     
-    # 
-    def bounded_Hom_complex0(self, Jxi, tms, k=0):
+    # returns the chain complex Hom(F_i, R/(J+B))_0, where F_i is a free resolution of (J+B)/I, of length k
+    # where B is empty in all degree less or equal to one in tms, and full otherwise (if tms is None, B is 0)
+    # Use k=0 to get a matrix whose left kernel is the tangent space (B=0), and
+    # use k=1 to get matrices m1 and m2 for which 
+    # lker m2 / rim m1 = Ext_1((J+B)/I, R/(J+B))_0
+    def bounded_Hom_complex0(self, Jxi, tms=None, Ixi=None, k=0):
         J,xi = Jxi
-        tm_in = lambda tm: any( all(e<=f for e,f in zip(tm, tmh)) for tmh in tms)
+        tm_in = (lambda tm: True) if tms is None else (lambda tm: any( all(e<=f for e,f in zip(tm, tmh)) for tmh in tms))
         J = J.ring().ideal([p for p in J.gens() if tm_in(self.polynomial_tm(p))],side='twosided')
         Jxi = JxiDat(self,(J,xi))
-        deg = max(sum(tm) for tm in tms)
-        
-        # from sage.libs.singular.option import opt,opt_ctx
-        # with opt_ctx:
-        #     opt['deg_bound'] = self.nonparam_weight*(deg+1)-1
-        #     res = ff.mres(ff.module(J),k+1)
-        # from sage.libs.singular.singular import si2sa_resolution_graded
-        # ms, _ = si2sa_resolution_graded(res,())
-        # degs = [[(0,)*len(self.Tdeg)]]
-        # for m in ms:
-        #     curdeg = []
-        #     for j in range(m.ncols()):
-        #         cur = None
-        #         for i,e in enumerate(m.column(j)):
-        #             if e != 0:
-        #                 edeg = tuple(map(add,self.polynomial_tm(e),degs[-1][i]))
-        #                 if cur is None:
-        #                     cur = edeg
-        #                 else:
-        #                     assert cur == edeg
-        #         curdeg.append(cur)
-        #     degs.append(curdeg)
-        # keep = [[i for i,tm in enumerate(ds) if tm_in(tm) ] for ds in degs]
-        # degs = [ [d[i] for i in k] for d,k in zip(degs, keep) ]
-        # ms = [m[kl,kr] for m, kl, kr in zip(ms, keep, keep[1:])]
-
-        from sage.libs.singular.option import opt,opt_ctx
+        deg = None if tms is None else max(sum(tm) for tm in tms)
         Jflat,subs = Jxi.forget_xs()
+        from sage.libs.singular.option import opt,opt_ctx
         with opt_ctx:
-            opt['deg_bound'] = self.nonparam_weight*(deg+1)-1
-            ms = [matrix(ff.minbase(Jflat))]
-        degs = [[(0,)*len(self.Tdeg)],[self.polynomial_tm(e) for e in ms[0].list()]]
-        for _ in range(k+1):
+            opt['deg_bound'] = 0 if tms is None else self.nonparam_weight*(deg+1)-1
+            Jgens = ff.minbase(Jflat)
+        Jgendegs = [self.polynomial_tm(e) for e in Jgens]
+        def syz_deg(syz, edegs):
+            assert not syz.is_zero()
+            cur = None
+            for f,edeg in zip(syz,edegs):
+                if f != 0:
+                    fdeg = tuple(map(add,self.polynomial_tm(f),edeg))
+                    if cur is None:
+                        cur = fdeg
+                    else:
+                        assert cur == fdeg
+            return cur
+        degs = [Jgendegs]
+        with opt_ctx:
+            opt['deg_bound'] = 0 if tms is None else self.nonparam_weight*(deg+1)-1
+            opt['returnSB'] = False
+            if Ixi is None:
+                rels = ff.syz(matrix(Jgens))
+            else:
+                rels = ff.modulo(Jgens, JxiDat(self, Ixi).forget_xs()[0] )
+        rels = [c for c in rels if not c.is_zero() and tm_in(syz_deg(c,Jgendegs))]
+        ms = [matrix(rels).T]
+        degs.append([ syz_deg(c,Jgendegs) for c in rels ])
+        
+        for _ in range(k):
             with opt_ctx:
                 # opt['deg_bound'] = self.nonparam_weight*(deg+1)-1
-                opt['deg_bound'] = self.nonparam_weight*(deg-min(sum(tm) for tm in degs[-2])+1)-1
+                opt['deg_bound'] = 0 if tms is None else self.nonparam_weight*(deg-min(sum(tm) for tm in degs[-2])+1)-1
                 opt['returnSB'] = False
-                m = ff.syz(ms[-1])
-            mr = []
-            curdeg = []
-            for j,c in enumerate(m):
-                if c.is_zero():
-                    continue
-                cur = None
-                for i,e in enumerate(c):
-                    if e != 0:
-                        edeg = tuple(map(add,self.polynomial_tm(e),degs[-1][i]))
-                        if cur is None:
-                            cur = edeg
-                        else:
-                            assert cur == edeg
-                if tm_in(cur):
-                    mr.append(c)
-                    curdeg.append(cur)
-            degs.append(curdeg)
-            ms.append(matrix(mr).T)
+                rels = ff.syz(ms[-1])
+            rels = [c for c in rels if not c.is_zero() and tm_in(syz_deg(c,degs[-1]))]
+            ms.append(matrix(rels).T)
+            degs.append([ syz_deg(c,degs[-1]) for c in rels ])
         ms = [m.apply_map(lambda e: e(subs), subs[0].parent()) for m in ms]
         
         @cache
@@ -1714,7 +1701,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     me -= t*lm
         
         out = []
-        for m,dsr,dsc in zip(ms[1:],degs[1:],degs[2:]):
+        for m,dsr,dsc in zip(ms,degs,degs[1:]):
             if len(dsc) == 0:
                 out.append(matrix(R, sum(len(Jxi.normal_basis_tm(dr)) for dr in dsr), 0, sparse=True))
                 continue
