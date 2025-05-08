@@ -2655,11 +2655,14 @@ class JxiDat:
     def normal_basis_tm(self, tm):
         return [m for m in self.normal_basis(sum(tm)) if self.ba.polynomial_tm(m) == tm]
     
-    def forget_xs(self):
-        order = TermOrder('wdegrevlex',[self.ba.nonparam_weight]*sum(self.ba.dims))
-        # order = TermOrder('degrevlex',sum(self.ba.dims))
-        if self.xi > 0:
-            order = order + TermOrder('degrevlex',self.J.ring().ngens()-self.ba.nvarsx)
+    def forget_xs(self,simple_weights=False):
+        assert self.xi == 0 or not simple_weights
+        if simple_weights:
+            order = TermOrder('degrevlex',sum(self.ba.dims))
+        else:
+            order = TermOrder('wdegrevlex',[self.ba.nonparam_weight]*sum(self.ba.dims))
+            if self.xi > 0:
+                order = order + TermOrder('degrevlex',self.J.ring().ngens()-self.ba.nvarsx)
         R = PolynomialRing(self.ba.F,self.J.ring().gens()[:self.ba.nvars]+self.J.ring().gens()[self.ba.nvarsx:],order=order)
         subs = R.gens()[:self.ba.nvars] + (R.zero(),)*(self.ba.nvarsx-self.ba.nvars) + R.gens()[self.ba.nvars:]
         subsr = self.J.ring().gens()[:self.ba.nvars] + self.J.ring().gens()[self.ba.nvarsx:]
