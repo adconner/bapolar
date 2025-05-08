@@ -1165,6 +1165,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                                 gb_needed = True
                             elif t.is_constant():
                                 bp.set_min(m,1)
+                                bp_restore.append((m,1))
+                                newrel = True
                                 tm = self.polynomial_tm(m)
                                 for tma in tmabove.get(tm,()):
                                     for n in self.all_monomials( map(sub,tma,tm) ):
@@ -1172,20 +1174,17 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                                         if bp.get_min(n) == 0:
                                             bp.set_min(n,1)
                                             bp_restore.append((n,1))
-                                bp_restore.append((m,1))
-                                newrel = True
                             else:
                                 leading_coefficient_by_monomial.setdefault(t,[]).append(m)
                     for t, ms in leading_coefficient_by_monomial.items():
-                        if len(ms) > 1:
-                            for m in ms:
-                                bp.set_min(m,1)
-                            if not bp.feasible():
-                                J += t
-                                newrel = True
-                                gb_needed = True
-                            for m in ms:
-                                bp.set_min(m,0)
+                        for m in ms:
+                            bp.set_min(m,1)
+                        if not bp.feasible():
+                            J += t
+                            newrel = True
+                            gb_needed = True
+                        for m in ms:
+                            bp.set_min(m,0)
                     if do_square_tests and len(square_tests) > 0:
                         print("SQUARE TESTS")
                         if gb_needed:
@@ -1214,15 +1213,14 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                                 else:
                                     leading_coefficient_by_monomial.setdefault(t,[]).append(m)
                         for t, ms in leading_coefficient_by_monomial.items():
-                            if len(ms) > 1:
-                                for m in ms:
-                                    bp.set_min((m,2),1)
-                                if not bp.feasible():
-                                    J += t
-                                    newrel = True
-                                    gb_needed = True
-                                for m in ms:
-                                    bp.set_min((m,2),0)
+                            for m in ms:
+                                bp.set_min((m,2),1)
+                            if not bp.feasible():
+                                J += t
+                                newrel = True
+                                gb_needed = True
+                            for m in ms:
+                                bp.set_min((m,2),0)
                                     
                 J,_,yi = self.quick_simplify((J,[J.ring().one()],yi),0 if simplify_existing else xiorig)
                 yield (J,yi)
