@@ -118,10 +118,11 @@ class BinaryProgram:
         # self.lp.get_backend()._get_model().setPresolve(pyscipopt.SCIP_PARAMSETTING.OFF)
         # self.lp.get_backend()._get_model().setPresolve(pyscipopt.SCIP_PARAMSETTING.FAST)
         self.psol = set()
+        self.has_solution = False
     def set_min(self, x, v):
         assert x in self.lp.default_variable().keys()
         v = int(v)
-        self.lp.get_backend()._get_model().freeTransform()
+        self.make_modifiable()
         self.lp.set_min(self.lp[x], v)
         if v == 1:
             assert (x,1) not in self.psol
@@ -132,7 +133,7 @@ class BinaryProgram:
     def set_max(self, x, v):
         assert x in self.lp.default_variable().keys()
         v = int(v)
-        self.lp.get_backend()._get_model().freeTransform()
+        self.make_modifiable()
         self.lp.set_max(self.lp[x], v)
         if v == 0:
             assert (x,0) not in self.psol
@@ -154,8 +155,8 @@ class BinaryProgram:
     def feasible(self):
         from sage.numerical.mip import MIPSolverException
         try:
-            self.lp.get_backend()._get_model().freeTransform()
             # self.lp.get_backend()._get_model().hideOutput(False)
+            self.has_solution = True
             self.lp.solve()
             return True
         except MIPSolverException:
@@ -163,6 +164,10 @@ class BinaryProgram:
             # self.lp.add_constraint( self.lp.sum(self.lp[x] if v==1 else 1-self.lp[x] for x,v in self.psol) 
             #                        <= len(self.psol) - 1 )
             return False
+    def make_modifiable(self):
+        if self.has_solution:
+            self.lp.get_backend()._get_model().freeTransform()
+            self.has_solution = False
         
 class BinaryProgramSCIPReopt:
     def __init__(self,lp):
