@@ -1304,8 +1304,10 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 v = vs[vi]
 
                 if len(chosen_vks) == 1 or chosen_vks[-2][0] != tm:
-                    if len(list(fixed_point(Jxi,gb_needed=False,do_square_tests=True))) == 0:
+                    sqtest = list(fixed_point(Jxi,gb_needed=False,do_square_tests=True))
+                    if len(sqtest) == 0:
                         return
+                    Jxi = sqtest[0]
                 
                 try:
                     var_lp_val = next(v for x,v in bp.extend() if x == mod.get_vss(tm)[wt][vi].lm())
@@ -1385,9 +1387,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
 
         for Jxif in fixed_point(Jxi):
             for Jxi in dfs(Jxif):
-                if len(list(fixed_point(Jxi,gb_needed=False,do_square_tests=True))) == 0:
-                    continue
-                yield Jxi
+                for Jxis in fixed_point(Jxi,gb_needed=False,do_square_tests=True):
+                    yield Jxis
 
     def tm_dim(self, tm):
         return prod(binomial(d+t-1,t) for t,d in zip(tm,self.dims))
