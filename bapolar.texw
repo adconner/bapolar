@@ -1100,7 +1100,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         tmsall = tms+tmcs
 
         gbbound = max([sum(tm) for tm in tms+tmcs])
-        square_gbbound = max([0]+[sum(tm) for tm in square_tests])
+        # square_gbbound = max([0]+[sum(tm) for tm in square_tests])
         def gb(J):
             xi = J.ring().ngens() - self.nvarsx
             I,subs = JxiDat(self,(J,xi)).forget_xs()
@@ -1191,13 +1191,11 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         if gb_needed:
                             J = gb(J)
                             gb_needed = False
-                        I,subs = JxiDat(self,(J,yi)).forget_xs()
-                        II = I.ring().ideal((I*I).groebner_basis(deg_bound = self.nonparam_weight*(square_gbbound+1)-1,algorithm='libsingular:std'))
+                        II = square(ba,(J,yi),square_tests)
                         leading_coefficient_by_monomial = {}
                         for p in II.gens():
                             if p.is_zero():
                                 continue
-                            p = p(subs)
                             m = self.lm(p,True)
                             if m.is_one() or self.polynomial_tm(m) not in square_tests:
                                 continue
@@ -2865,15 +2863,25 @@ def read_JS(ba,f):
             J.append(R(sage_eval(l,locals=locals)))
     return R.ideal(J,side='twosided'),S,tmax
 
-def square(ba,Jxi,tms=None,k=2):
+def square(ba,Jxi,tms=None):
     J,xi = Jxi
     if J.is_zero():
-        return (J,xi)
-    gs = [p for p in J.gens() if not ba.lm(p).is_constant()]
-    J = J.ring().ideal([p for p in J.gens() if ba.lm(p).is_constant()] + [prod(es) for es in combinations_with_replacement(gs,k) if 
-                      tms is None or reduce(lambda e,f: tuple(map(lambda e,f: e+f, e, ba.polynomial_tm(f))),es,(0,)*len(ba.dims)) in tms],side='twosided')
-    I,subs = JxiDat(ba,(J,xi)).forget_xs()
-    return J.ring().ideal([p(subs) for p in I.interreduced_basis()],side='twosided')
+        return J
+    gs = {}
+    JJ = []
+    for p in J.gens():
+        if not ba.lm(p).is_constant():
+            gs.setdefault(ba.polynomial_tm(p),[]).append(p)
+        else:
+            JJ.append(p)
+    from operator import add
+    for (tm1,ps1),(tm2,ps2) in combinations_with_replacement(gs.items(), 2):
+        if tms is None or tuple(map(add,tm1,tm2)) in tms:
+            for e,f in product(ps1,ps2):
+                JJ.append(e*f)
+    JJ = J.ring().ideal(JJ,side='twosided')
+    II,subs = JxiDat(ba,(JJ,xi)).forget_xs()
+    return J.ring().ideal([p(subs) for p in II.interreduced_basis()],side='twosided')
 
 # remove when added to itertools
 def batched(iterable, n):
