@@ -1945,7 +1945,8 @@ class JDat:
         return lp
                 
     def get_linear_program(self, r, tms, tmcs=(), relation_size_bound=oo, square_tests=(), search_bound=500):
-        lp = self.get_linear_program_except_r(tms, tmcs, relation_size_bound, square_tests, search_bound)
+        lp = self.get_linear_program_except_r(tms, tmcs, relation_size_bound, 
+                                              square_tests if self.J.is_zero() else (), search_bound)
         lp = copy(lp)
         
         for tm in tms + tmcs:
@@ -1956,7 +1957,7 @@ class JDat:
             return (1+sum(d-1 for d,k in zip(ba.dims,tm) if k>0))*r
         for tm in square_tests:
             lp.add_constraint(lp.sum(1-lp[(v.lm(),2)] 
-                    for v in self.get_vs(tm)) >= square_tm_bound(tm))
+                    for v in self.ba.zero.get_vs(tm)) >= square_tm_bound(tm))
             
         return lp
 
