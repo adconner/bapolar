@@ -1097,7 +1097,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         tms = tuple(tms)
         tmcs = tuple(tmcs)
         square_tests = tuple(square_tests)
-        tmsall = set(tms+tmcs)
+        tmsall = tms+tmcs
 
         gbbound = max([sum(tm) for tm in tms+tmcs])
         square_gbbound = max([0]+[sum(tm) for tm in square_tests])
