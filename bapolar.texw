@@ -1108,6 +1108,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     [p for p in I.gens() if p.degree() >= self.nonparam_weight*(gbbound+1)]
             return J.ring().ideal([p(subs) for p in I],side='twosided')
         
+        Jxi = (gb(Jxi[0]), Jxi[1])
         xiorig = Jxi[1]
 
         # opts: 
