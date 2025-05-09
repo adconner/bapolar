@@ -1961,6 +1961,8 @@ class JDat:
         return lp
 
     def get_linear_program_except_r(self, tms, tmcs=(), relation_size_bound=oo, square_tests=(), search_bound=500):
+        if len(square_tests) > 0 and not self.J.is_zero():
+            raise NotImplementedError("square tests not yet implemented for nontrivial mod")
         lp = MixedIntegerLinearProgram(solver='SCIP')
         lp.set_binary(lp.default_variable())
 
