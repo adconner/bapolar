@@ -690,6 +690,36 @@ caches the results for the future.
         if params > 0:
             order = order + TermOrder('degrevlex',params)
         return A.g_algebra(rels,order=order)
+
+    def get_ring_order(self):
+        lets = 'abcdefghijklmnopqrsuvwyz'
+        B = matrix([x.list() for x in self.Bxs]).T
+        A = FreeAlgebra(self.F,['%s%d' % (lets[i],j) for i in range(len(self.dims))
+            for j in range(self.dims[i])] + 
+                ['x%d'%i for i in range(len(self.Bxs))])
+        yvs = A.gens()[:sum(self.dims)]
+        xvs = A.gens()[sum(self.dims):sum(self.dims)+len(self.Bxs)]
+        rels = {}
+        for (xv1,x1),(xv2,x2) in combinations(zip(xvs,self.Bxs),2):
+            x3 = x2*x1 - x1*x2
+            if not x3.is_zero():
+                xv3 = sum(e*yv for e,yv in zip(B.solve_right(vector(x3.list())).list(),xvs))
+                rels[xv2*xv1] = xv1*xv2 + xv3
+        for (xv,x),(yi,yv) in product(zip(xvs,self.Bxs),enumerate(yvs)):
+            xy = x*vector(self.F,self.Bxs[0].nrows(),{yi:1})
+            if not xy.is_zero():
+                xyv = sum(e*yv for e,yv in zip(xy.list(),yvs))
+                rels[xv*yv] = yv*xv + xyv
+                
+        Ax = block_matrix([ [matrix(1,ba.nvarsx-ba.nvars,lambda i,j: 1)], 
+                      [-identity_matrix(ba.nvarsx-ba.nvars)[::-1] ] ])
+        Ax = block_matrix([[ matrix(Ax.nrows(), ba.nvars) , Ax ]])
+        Aa = block_matrix([ [ba.vwts], [matrix(1, ba.nvars, lambda i,j: 1)], 
+                          [-identity_matrix(ba.nvars)[::-1]] ])
+        Aa = block_matrix([[ Aa, matrix(Aa.nrows(),ba.nvarsx-ba.nvars) ]])
+        Aorder = block_matrix([ [Ax], [Aa ]])
+        Aorder = Aorder[Aorder.pivot_rows(),:]
+        return A.g_algebra(rels,order=TermOrder(Aorder))
 @
 
 \code{get_vorder} takes a multidegree $ijk$ as argument and 
