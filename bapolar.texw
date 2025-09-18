@@ -492,7 +492,7 @@ from functools import cache
 
 <<complete=False>>=
 
-def search_by_sequence(ba,r,tmss,Jxi=None,mode=('individual',10),test_squares=True):
+def search_by_sequence(ba,r,tmss,Jxi=None,mode=('individual',100),test_squares=True):
     together = mode == 'together'
     individual = type(mode) is tuple and mode[0] == 'individual'
     def dfs(Jxi,tmsi):
@@ -586,11 +586,11 @@ def search_by_sequence(ba,r,tmss,Jxi=None,mode=('individual',10),test_squares=Tr
             raise ValueError('mode invalid')
     return dfs((ba.R0.ideal(side='twosided'),0) if Jxi is None else Jxi,0)
 
-def lp_look_strict_by_deg(ba,r,deg_bound=2,Jxi=None,mode=('individual',10)):
+def lp_look_strict_by_deg(ba,r,deg_bound=2,Jxi=None,mode=('individual',100)):
     tmss = [list(map(tuple,IntegerVectors(k,len(ba.dims)))) for k in range(1,deg_bound+1)]
     return search_by_sequence(ba,r,tmss,Jxi,mode=mode)
 
-def lp_look_strict(ba,r,deg_bound=2,tm_max_bound=oo,Jxi=None,mode=('individual',10)):
+def lp_look_strict(ba,r,deg_bound=2,tm_max_bound=oo,Jxi=None,mode=('individual',100)):
     tmss = [[tuple(tm) for tm in IntegerVectors(k,len(ba.dims)) if max(tm) == tmm] for k in range(1,deg_bound+1)
             for tmm in range( (k-1)//len(ba.dims)+1, min(tm_max_bound,k)+1 ) ]
     # tmss = [[tm for tm in tms if all( e<=f for e,f in zip(tm,(3,1,1)))] for tms in tmss]
@@ -1238,6 +1238,7 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
         processed = [0]
         vstr_width = [0]
         chosen_vks = []
+        pr_st = []
         def dfs(Jxi):
             def vkremove(vk,added=None):
                 # print ('%sremove1'%(' '*processed[0]),vk)
@@ -1308,11 +1309,6 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                         return
                     Jxi = sqtest[0]
                 
-                try:
-                    var_lp_val = next(v for x,v in bp.extend() if x == mod.get_vss(tm)[wt][vi].lm())
-                except StopIteration:
-                    var_lp_val = 0.5
-                
                 assert is_unset(vk)
                 
                 def printstep(extra=''):
@@ -1320,8 +1316,8 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                     remlo = self.tm_target_out(r,tm) - num_out[tm]
                     vstr = str(v.lm())
                     vstr_width[0] = max(vstr_width[0],len(vstr))
-                    print ('%s %s xi=%d %.2f %s%d %d %s' % (str(tm),vstr.rjust(vstr_width[0]),
-                                                Jxi[1],var_lp_val,' '*len(chosen_vks),remhi,remlo,extra))
+                    print ('%s %s xi=%d %s%d %d %s' % (str(tm),vstr.rjust(vstr_width[0]),
+                                                Jxi[1],''.join(pr_st),remhi,remlo,extra))
                 printstep()
 
                 def plus_cur(Jxi):
@@ -1354,28 +1350,24 @@ $(T^\perp)_{ijk}$ as described at the end of \S\ref{sec:representationlast}.
                 
                 # rem = self.tm_dim_tperp(tm)-num_in[tm]-num_out[tm]
                 # assert rem > 0
-                                    
-                if var_lp_val > 0.5 and preset_choices.get(v.lm(),True):
-                    bp.set_min(v.lm(),1)
-                    for Jxip in fixed_point(plus_cur(Jxi)):
-                    # for Jxip in fixed_point(plus_cur(Jxi),do_square_tests = rem==1):
-                        for res in dfs(Jxip):
-                            yield res
-                    bp.set_min(v.lm(),0)
                         
                 if preset_choices.get(v.lm(),False) == False:
                     bp.set_max(v.lm(),0)
+                    pr_st.append(' ')
                     for Jxip in fixed_point(Jxi,False):
                         for res in dfs(Jxip):
                             yield res
+                    pr_st.pop()
                     bp.set_max(v.lm(),1)
-                        
-                if var_lp_val <= 0.5 and preset_choices.get(v.lm(),True):
+                                    
+                if preset_choices.get(v.lm(),True):
                     bp.set_min(v.lm(),1)
+                    pr_st.append('.')
                     for Jxip in fixed_point(plus_cur(Jxi)):
                     # for Jxip in fixed_point(plus_cur(Jxi),do_square_tests = rem==1):
                         for res in dfs(Jxip):
                             yield res
+                    pr_st.pop()
                     bp.set_min(v.lm(),0)
                         
             finally:
