@@ -346,3 +346,47 @@ def add_positive_constraints(lp,xs,constraints):
         if not not_all_missing.is_zero():
             lp.add_constraint(lp.sum(lp[xs[i]] for i,_ in not_all_missing.exponents()[0].sparse_iter()) <= not_all_missing.degree()-1)
 
+def get_ideal_from_points(ba, pts):
+    A = block_matrix([ [ba.vwts], [matrix(1, ba.nvars, lambda i,j: 1)], 
+                      [-identity_matrix(ba.nvars)[::-1]] ])
+    A = A[A.pivot_rows(),:]
+    R = PolynomialRing(ba.F, ba.R0.gens()[:ba.nvars], order=TermOrder(A))
+    cur = 0
+    xss = []
+    for d in ba.dims:
+        xss.append(R.gens()[cur:cur+d])
+        cur += d
+    I = R.ideal(1)
+    for pt in pts:
+        eqs = []
+        for fac, xs in zip(pt,xss):
+            e0, x0 = next((e,x) for e,x in zip(fac,xs) if e!=0)
+            eqs.extend([e0*x - e*x0 for e,x in zip(fac, xs) if x != x0])
+        I = I.intersection(R.ideal(eqs))
+    return I
+            
+def ideal_to_borel_fixed(ba,I):
+    xs = [[liftR(e + x*e - e*x,I.ring()) for e in ba.R0.gens()[:ba.nvars]] 
+          for x in ba.R0.gens()[ba.nvars:ba.nvarsx]]
+    
+    def torus_degen(I):
+        out = []
+        for p in I.groebner_basis():
+            wt = ba.polynomial_weight(p.lm())
+            out.append(sum(m*p.monomial_coefficient(m) for m in p.monomials() if 
+                       ba.polynomial_weight(m) == wt))
+        return I.ring().ideal(out)
+        
+    while True:
+        print(I)
+        J = I
+        for x in xs:
+            J = I.ring().ideal([p(x) for p in J.gens()])
+            J = torus_degen(J)
+        if J == I:
+            return J
+        I = J
+
+            
+    
+    
